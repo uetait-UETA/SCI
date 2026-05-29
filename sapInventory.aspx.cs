@@ -613,7 +613,15 @@ public partial class sapInventory : BasePage
             if(Session["CiaLabel"].ToString() != sap_db
                 || Session["SearchItemByBarCodesarCode"].ToString() != barCode)
             {
-                dt = db.SearchItemByBarCodes(sap_db, barCode);
+                db.Connect();
+                try
+                {
+                    dt = db.SearchItemByBarCodes(sap_db, barCode);
+                }
+                finally
+                {
+                    db.Disconnect();
+                }
                 Session["SearchItemByBarCodesData"] = dt;
                 Session["CiaLabel"] = sap_db;
                 Session["SearchItemByBarCodesarCode"] = barCode;
