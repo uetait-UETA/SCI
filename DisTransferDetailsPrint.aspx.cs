@@ -185,8 +185,7 @@ public partial class DisTransferDetailsPrint : System.Web.UI.Page
     // return a single line item table row
     protected string LineItem(DataRow row, int rowIndex = 0)
     {
-        string altClass = rowIndex % 2 == 1 ? " class=\"row-alt\"" : "";
-        string str = "<tr" + altClass + ">"
+        string str = "<tr>"
             + "<td style=\"text-align:center;\">" + row["LineNumber"] + "</td>"
             + "<td style=\"text-align:center;\">" + row["ItemCode"] + "</td>"
             + "<td style=\"text-align:center;\">" + row["BarCode"] + "</td>"

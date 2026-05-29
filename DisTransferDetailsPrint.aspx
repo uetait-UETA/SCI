@@ -8,51 +8,45 @@
     <link href="Styles/StyleSheet.css" rel="stylesheet" type="text/css" />
     <style type="text/css">
         * { box-sizing: border-box; }
-        body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #222; background: #eef1f5; margin: 0; padding: 0; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; background: #fff; margin: 0; padding: 0; }
         #divContent { margin: 16px auto; width: 98%; max-width: 1060px; }
-        #Button1 { margin: 12px 0 0 14px; padding: 5px 18px; background: #1e3a5f; color: white; border: none; font-size: 9pt; font-weight: bold; cursor: pointer; border-radius: 3px; }
-        #Button1:hover { background: #2a4f82; }
+        #Button1 { margin: 12px 0 0 14px; padding: 5px 18px; background: #fff; color: #000; border: 1px solid #555; font-size: 9pt; font-weight: bold; cursor: pointer; border-radius: 3px; }
+        #Button1:hover { background: #f0f0f0; }
 
-        /* ── Document page card ── */
-        .doc-page { background: #fff; border: 1px solid #c5cad4; box-shadow: 0 2px 8px rgba(0,0,0,.11); margin-bottom: 22px; border-radius: 4px; overflow: hidden; }
+        /* ── Document page ── */
+        .doc-page { border: 1px solid #aaa; margin-bottom: 22px; }
 
-        /* Title bar */
-        .doc-title-bar { background: #1e3a5f; color: #fff; padding: 11px 18px; display: table; width: 100%; }
-        .doc-title-l { display: table-cell; font-size: 14pt; font-weight: bold; letter-spacing: .6px; vertical-align: middle; }
-        .doc-title-r { display: table-cell; text-align: right; font-size: 11pt; font-weight: bold; opacity: .88; vertical-align: middle; }
+        /* Title bar — border only, no fill */
+        .doc-title-bar { border-bottom: 2px solid #000; padding: 10px 18px; display: table; width: 100%; }
+        .doc-title-l { display: table-cell; font-size: 14pt; font-weight: bold; letter-spacing: .5px; vertical-align: middle; }
+        .doc-title-r { display: table-cell; text-align: right; font-size: 11pt; font-weight: bold; vertical-align: middle; }
 
         /* Info row */
-        .doc-info-row { display: table; width: 100%; border-bottom: 2px solid #1e3a5f; }
-        .doc-info-left  { display: table-cell; padding: 14px 18px; vertical-align: top; }
-        .doc-info-right { display: table-cell; padding: 14px 18px; vertical-align: middle; text-align: right; width: 185px; }
-        .field-group { margin-bottom: 7px; }
-        .field-label { font-size: 7pt; font-weight: bold; color: #1e3a5f; text-transform: uppercase; letter-spacing: .4px; }
-        .field-value { font-size: 10pt; color: #222; margin-top: 1px; }
+        .doc-info-row { display: table; width: 100%; border-bottom: 1px solid #aaa; }
+        .doc-info-left  { display: table-cell; padding: 12px 18px; vertical-align: top; }
+        .doc-info-right { display: table-cell; padding: 12px 18px; vertical-align: middle; text-align: right; width: 185px; }
+        .field-group { margin-bottom: 6px; }
+        .field-label { font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: .4px; }
+        .field-value { font-size: 10pt; margin-top: 1px; }
 
         /* Signatures */
-        .sig-section { padding: 10px 18px 13px; border-bottom: 1px solid #e2e6ed; }
-        .sig-title { font-size: 7.5pt; font-weight: bold; color: #1e3a5f; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
+        .sig-section { padding: 10px 18px 12px; border-bottom: 1px solid #aaa; }
+        .sig-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
         .sig-entry { display: inline-block; margin-right: 24px; margin-bottom: 6px; font-size: 9.5pt; }
-        .sig-line { display: inline-block; width: 118px; border-bottom: 1px solid #444; margin-left: 5px; vertical-align: bottom; height: 14px; }
+        .sig-line { display: inline-block; width: 118px; border-bottom: 1px solid #000; margin-left: 5px; vertical-align: bottom; height: 14px; }
         .notes-line { font-size: 9.5pt; }
         .notes-line .sig-line { width: 480px; }
 
         /* Items table */
         .items-wrap { padding: 4px 18px 16px; }
         table.doc-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        table.doc-table th { background: #1e3a5f; color: #fff; padding: 7px 8px; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .3px; border: 1px solid #16304f; text-align: center; }
-        table.doc-table td { padding: 5px 8px; border: 1px solid #dde2e9; font-size: 8.5pt; vertical-align: middle; }
-        table.doc-table tr.row-alt td { background: #f2f6ff; }
-        .pg-footer { text-align: center; font-size: 8pt; color: #666; padding: 8px 0 2px; }
+        table.doc-table th { background: #fff; color: #000; padding: 6px 8px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; border: 1px solid #555; text-align: center; }
+        table.doc-table td { padding: 5px 8px; border: 1px solid #aaa; font-size: 8.5pt; vertical-align: middle; }
+        .pg-footer { text-align: center; font-size: 8pt; color: #555; padding: 8px 0 2px; }
 
         @media print {
-            body { background: #fff; }
             #divContent { margin: 0; width: 100%; max-width: none; }
             #Button1 { display: none; }
-            .doc-page { box-shadow: none; border: 1px solid #ccc; border-radius: 0; }
-            .doc-title-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            table.doc-table th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            table.doc-table tr.row-alt td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             H1.SaltoDePagina { PAGE-BREAK-AFTER: always; }
         }
     </style>
