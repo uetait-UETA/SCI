@@ -277,7 +277,10 @@ public partial class ProductLocator : BasePage
             rtbItem.Text = ItemList.SelectedValue;
             ItemList.Visible = false;
             rbtnCancel.Visible = false;
+            rbtnCancel1.Visible = false;
+            rtbItem.Visible = true;
             rbtnSearch.Visible = true;
+            rbtnSearch.Enabled = true;
             GetData();
             BindGrid();
         }
