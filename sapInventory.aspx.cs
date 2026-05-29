@@ -624,20 +624,56 @@ public partial class sapInventory : BasePage
                 dt = (DataTable)Session["SearchItemByBarCodesData"];
             }
 
+            bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
+            string selectItemText = isEn ? "SELECT ITEM" : "SELECCIONE ARTICULO";
+
             if (dt.Rows.Count <= 0)
             {
-                ItemList.Visible = false;
-                rbtnCancel.Visible = false;
+                // Barcode not found — try U_CSKU_ID as fallback
+                DataTable dtCsku = SearchByCsku(barCode);
 
-                ArticuloTextBox.Visible = true;
+                if (dtCsku.Rows.Count == 0)
+                {
+                    ItemList.Visible = false;
+                    rbtnCancel.Visible = false;
+                    ArticuloTextBox.Visible = true;
+                    buscarButton.Enabled = true;
+                    btnExport.Enabled = true;
+                    res = true;
+                }
+                else if (dtCsku.Rows.Count == 1)
+                {
+                    row = dtCsku.Rows[0];
+                    ArticuloTextBox.Text = row["ItemCode"].ToString();
+                    ItemList.Visible = false;
+                    rbtnCancel.Visible = false;
+                    ArticuloTextBox.Visible = true;
+                    buscarButton.Enabled = true;
+                    btnExport.Enabled = true;
+                    res = true;
+                }
+                else
+                {
+                    DataRow dtRow = dtCsku.NewRow();
+                    dtRow["ItemCode"] = "-";
+                    dtRow["ItemName"] = selectItemText;
+                    dtCsku.Rows.InsertAt(dtRow, 0);
 
-                buscarButton.Enabled = true;
-                btnExport.Enabled = true;
-
-                //If the item is not found, just go on for the binding. Then, it won't show the
-                //table if the item code provided is a bar code (probably user will faint here :D)
-                //because no messages are showed here o.o!
-                res = true;
+                    ItemList.DataSource = dtCsku;
+                    ItemList.DataMember = "ItemCode";
+                    ItemList.DataValueField = "ItemCode";
+                    ItemList.DataTextField = "ItemName";
+                    ItemList.DataBind();
+                    ItemList.Visible = true;
+                    rbtnCancel.Visible = true;
+                    ItemList.Width = 184;
+                    ItemList.Focus();
+                    ItemList.ToolTip = selectItemText;
+                    ArticuloTextBox.Visible = false;
+                    buscarButton.Enabled = false;
+                    btnExport.Enabled = false;
+                    res = false;
+                }
             }
             else if (dt.Rows.Count == 1)
             {
@@ -645,13 +681,9 @@ public partial class sapInventory : BasePage
                 ArticuloTextBox.Text = row["ItemCode"].ToString();
                 ItemList.Visible = false;
                 rbtnCancel.Visible = false;
-
                 ArticuloTextBox.Visible = true;
-
                 buscarButton.Enabled = true;
                 btnExport.Enabled = true;
-
-                //Here just go on to the bind function.
                 res = true;
             }
             else
@@ -659,7 +691,7 @@ public partial class sapInventory : BasePage
                 DataTable dTable = dt;
                 DataRow dtRow = dTable.NewRow();
                 dtRow["ItemCode"] = "-";
-                dtRow["ItemName"] = "SELECCIONE ARTICULO";
+                dtRow["ItemName"] = selectItemText;
 
                 dt.Rows.InsertAt(dtRow, 0);
 
@@ -670,17 +702,12 @@ public partial class sapInventory : BasePage
                 ItemList.DataBind();
                 ItemList.Visible = true;
                 rbtnCancel.Visible = true;
-
                 ItemList.Width = 184;
-
                 ItemList.Focus();
-                ItemList.ToolTip = "SELECCIONE ARTICULO";
-
+                ItemList.ToolTip = selectItemText;
                 ArticuloTextBox.Visible = false;
-
                 buscarButton.Enabled = false;
                 btnExport.Enabled = false;
-
                 res = false;
             }
             return res;
@@ -689,5 +716,27 @@ public partial class sapInventory : BasePage
         {
             throw new Exception(ex.Message);
         }
+    }
+
+    // Uses db.Conn (SqlDataAdapter auto-opens/closes) — no Connect/Disconnect needed.
+    private DataTable SearchByCsku(string csku)
+    {
+        var dtResult = new DataTable();
+        try
+        {
+            string sql =
+                "SELECT ItemCode, " +
+                "CASE WHEN U_Type='Duty Free' THEN 'DF | ' " +
+                "     WHEN U_Type='Duty Paid'  THEN 'DP | ' ELSE '' END " +
+                "+ LTRIM(RTRIM(ItemCode)) + ' | ' + LTRIM(RTRIM(ItemName)) AS ItemName " +
+                "FROM " + sap_db + "..OITM WITH(NOLOCK) WHERE U_CSKU_ID = @csku";
+            using (var cmd = new SqlCommand(sql, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@csku", csku);
+                new SqlDataAdapter(cmd).Fill(dtResult);
+            }
+        }
+        catch { }
+        return dtResult;
     }
 }
