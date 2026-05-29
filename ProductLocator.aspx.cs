@@ -184,13 +184,45 @@ public partial class ProductLocator : BasePage
                     dt = db.SearchItemByBarCodes(v_CompanyID, barCode);
                     DataRow row;
                     //ulData.Visible = false;
+                    bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
+                    string selectItemText = isEn ? "SELECT ITEM" : "SELECCIONE ARTICULO";
+
                     if (dt.Rows.Count <= 0)
                     {
-                        ItemList.Visible = false;
-                        rbtnCancel.Visible = false;
-                        //If the item is sitll not found, then show the message to the user:
-                        rgHead.Visible = false;
-                        ShowMasterPageMessage("Standard", "No Data", "No records for the item: " + rtbItem.Text + " in company: " + v_CompanyID);
+                        // Barcode not found — try U_CSKU_ID as last fallback
+                        DataTable dtCsku = SearchByCsku(rtbItem.Text, v_CompanyID);
+
+                        if (dtCsku.Rows.Count == 0)
+                        {
+                            ItemList.Visible = false;
+                            rbtnCancel.Visible = false;
+                            rgHead.Visible = false;
+                            ShowMasterPageMessage("Standard", "No Data", "No records for the item: " + rtbItem.Text + " in company: " + v_CompanyID);
+                        }
+                        else if (dtCsku.Rows.Count == 1)
+                        {
+                            rtbItem.Text = dtCsku.Rows[0]["ItemCode"].ToString();
+                            ItemList.Visible = false;
+                            rbtnCancel.Visible = false;
+                            GetData();
+                            BindGrid();
+                        }
+                        else
+                        {
+                            DataRow dtRow = dtCsku.NewRow();
+                            dtRow["ItemCode"] = "-";
+                            dtRow["ItemName"] = selectItemText;
+                            dtCsku.Rows.InsertAt(dtRow, 0);
+
+                            ItemList.DataSource = dtCsku;
+                            ItemList.DataMember = "ItemCode";
+                            ItemList.DataValueField = "ItemCode";
+                            ItemList.DataTextField = "ItemName";
+                            ItemList.DataBind();
+                            ItemList.Visible = true;
+                            rbtnCancel.Visible = true;
+                            rbtnSearch.Visible = false;
+                        }
                     }
                     else if (dt.Rows.Count == 1)
                     {
@@ -206,7 +238,7 @@ public partial class ProductLocator : BasePage
                         DataTable dTable = dt;
                         DataRow dtRow = dTable.NewRow();
                         dtRow["ItemCode"] = "-";
-                        dtRow["ItemName"] = "SELECCIONE ARTICULO";
+                        dtRow["ItemName"] = selectItemText;
 
                         dt.Rows.InsertAt(dtRow, 0);
 
@@ -458,10 +490,13 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
             }
             else
             {
+                bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
+                string selectItemText = isEn ? "SELECT ITEM" : "SELECCIONE ARTICULO";
+
                 DataTable dTable = dt;
                 DataRow dtRow = dTable.NewRow();
                 dtRow["ItemCode"] = "-";
-                dtRow["ItemName"] = "SELECCIONE ARTICULO";
+                dtRow["ItemName"] = selectItemText;
 
                 dt.Rows.InsertAt(dtRow, 0);
 
@@ -476,7 +511,7 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
                 ItemList.Width = 177;
 
                 ItemList.Focus();
-                ItemList.ToolTip = "SELECCIONE ARTICULO";
+                ItemList.ToolTip = selectItemText;
 
                 rtbItem.Visible = false;
 
@@ -490,6 +525,28 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
         {
             throw new Exception(ex.Message);
         }
+    }
+
+    // Uses the existing db.Conn (already open from BindGrid) — no Connect/Disconnect.
+    private DataTable SearchByCsku(string csku, string companyId)
+    {
+        var dtResult = new DataTable();
+        try
+        {
+            string sql =
+                "SELECT ItemCode, " +
+                "CASE WHEN U_Type='Duty Free' THEN 'DF | ' " +
+                "     WHEN U_Type='Duty Paid'  THEN 'DP | ' ELSE '' END " +
+                "+ LTRIM(RTRIM(ItemCode)) + ' | ' + LTRIM(RTRIM(ItemName)) AS ItemName " +
+                "FROM " + companyId + "..OITM WITH(NOLOCK) WHERE U_CSKU_ID = @csku";
+            using (var cmd = new SqlCommand(sql, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@csku", csku);
+                new SqlDataAdapter(cmd).Fill(dtResult);
+            }
+        }
+        catch { }
+        return dtResult;
     }
 
     protected void rgHead_ItemDataBound(object sender, GridItemEventArgs e)
