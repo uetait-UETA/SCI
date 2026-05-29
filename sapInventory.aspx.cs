@@ -718,10 +718,11 @@ public partial class sapInventory : BasePage
         }
     }
 
-    // Uses db.Conn (SqlDataAdapter auto-opens/closes) — no Connect/Disconnect needed.
     private DataTable SearchByCsku(string csku)
     {
         var dtResult = new DataTable();
+        var localDb = new SqlDb();
+        localDb.Connect();
         try
         {
             string sql =
@@ -730,13 +731,14 @@ public partial class sapInventory : BasePage
                 "     WHEN U_Type='Duty Paid'  THEN 'DP | ' ELSE '' END " +
                 "+ LTRIM(RTRIM(ItemCode)) + ' | ' + LTRIM(RTRIM(ItemName)) AS ItemName " +
                 "FROM " + sap_db + "..OITM WITH(NOLOCK) WHERE U_CSKU_ID = @csku";
-            using (var cmd = new SqlCommand(sql, db.Conn))
+            using (var cmd = new SqlCommand(sql, localDb.Conn))
             {
                 cmd.Parameters.AddWithValue("@csku", csku);
                 new SqlDataAdapter(cmd).Fill(dtResult);
             }
         }
         catch { }
+        finally { localDb.Disconnect(); }
         return dtResult;
     }
 }
