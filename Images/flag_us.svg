@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 100">
+  <!-- Red base -->
+  <rect width="190" height="100" fill="#B22234"/>
+  <!-- White stripes -->
+  <rect y="7.7"  width="190" height="7.7" fill="#fff"/>
+  <rect y="23.1" width="190" height="7.7" fill="#fff"/>
+  <rect y="38.5" width="190" height="7.7" fill="#fff"/>
+  <rect y="53.8" width="190" height="7.7" fill="#fff"/>
+  <rect y="69.2" width="190" height="7.7" fill="#fff"/>
+  <rect y="84.6" width="190" height="7.7" fill="#fff"/>
+  <!-- Blue canton -->
+  <rect width="76" height="53.8" fill="#3C3B6E"/>
+  <!-- Stars (simplified as small circles, 5 rows) -->
+  <circle cx="7"  cy="6"  r="3" fill="#fff"/>
+  <circle cx="19" cy="6"  r="3" fill="#fff"/>
+  <circle cx="31" cy="6"  r="3" fill="#fff"/>
+  <circle cx="43" cy="6"  r="3" fill="#fff"/>
+  <circle cx="55" cy="6"  r="3" fill="#fff"/>
+  <circle cx="67" cy="6"  r="3" fill="#fff"/>
+  <circle cx="13" cy="13" r="3" fill="#fff"/>
+  <circle cx="25" cy="13" r="3" fill="#fff"/>
+  <circle cx="37" cy="13" r="3" fill="#fff"/>
+  <circle cx="49" cy="13" r="3" fill="#fff"/>
+  <circle cx="61" cy="13" r="3" fill="#fff"/>
+  <circle cx="7"  cy="20" r="3" fill="#fff"/>
+  <circle cx="19" cy="20" r="3" fill="#fff"/>
+  <circle cx="31" cy="20" r="3" fill="#fff"/>
+  <circle cx="43" cy="20" r="3" fill="#fff"/>
+  <circle cx="55" cy="20" r="3" fill="#fff"/>
+  <circle cx="67" cy="20" r="3" fill="#fff"/>
+  <circle cx="13" cy="27" r="3" fill="#fff"/>
+  <circle cx="25" cy="27" r="3" fill="#fff"/>
+  <circle cx="37" cy="27" r="3" fill="#fff"/>
+  <circle cx="49" cy="27" r="3" fill="#fff"/>
+  <circle cx="61" cy="27" r="3" fill="#fff"/>
+  <circle cx="7"  cy="34" r="3" fill="#fff"/>
+  <circle cx="19" cy="34" r="3" fill="#fff"/>
+  <circle cx="31" cy="34" r="3" fill="#fff"/>
+  <circle cx="43" cy="34" r="3" fill="#fff"/>
+  <circle cx="55" cy="34" r="3" fill="#fff"/>
+  <circle cx="67" cy="34" r="3" fill="#fff"/>
+  <circle cx="13" cy="41" r="3" fill="#fff"/>
+  <circle cx="25" cy="41" r="3" fill="#fff"/>
+  <circle cx="37" cy="41" r="3" fill="#fff"/>
+  <circle cx="49" cy="41" r="3" fill="#fff"/>
+  <circle cx="61" cy="41" r="3" fill="#fff"/>
+  <circle cx="7"  cy="48" r="3" fill="#fff"/>
+  <circle cx="19" cy="48" r="3" fill="#fff"/>
+  <circle cx="31" cy="48" r="3" fill="#fff"/>
+  <circle cx="43" cy="48" r="3" fill="#fff"/>
+  <circle cx="55" cy="48" r="3" fill="#fff"/>
+  <circle cx="67" cy="48" r="3" fill="#fff"/>
+</svg>

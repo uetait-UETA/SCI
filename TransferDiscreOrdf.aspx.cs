@@ -1,0 +1,2174 @@
+using System;
+using System.Configuration;
+using System.Data;
+using System.Collections;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Data.SqlClient;
+using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using Newtonsoft.Json.Linq;
+
+public partial class TransferDiscreOrdf : System.Web.UI.Page
+{
+    protected SqlDb db = new SqlDb();
+    protected string sap_db;
+
+    private static readonly HashSet<string> AllowedUsers =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        { "MPEGUEROBOD","CBERROABOD","LCONCEPCIONBOD","GCRUZBOD","GCRUZ","CCRUZBOD","YRIJOBOD","MPEGUERO","CBERROA","LCONCEPCION","CCRUZ","YRIJO", "YFELICIANO", "AGALVEZ", "MMARTINEZBOD", "AABREGO", "DGILTIE", "YFELICIANOBOD", "WFERNANDEZBOD", "WFERNANDEZ" ,"ICASTILLO" ,"ICASTILLOBOD"};
+
+    string LvParameters = null;
+    string LvDispatched = null;
+    string LvReceived = null;
+    string LvUserDisp = null;
+    int GloVarDocEntry = 0;
+    char flagPerDeskay = 'N';
+    char flagPerReckay = 'N';
+    char GloVarDesRec = 'X';
+
+
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        LabelCurUser.Text = "User: " + (string)this.Session["UserId"];
+	if (!IsPostBack){
+            //var user = (string)this.Session["UserId"];
+            //ZeroCheckBox.Visible = AllowedUsers.Contains(user);
+            ZeroCheckBox.Visible = false;
+			}
+    }
+
+    protected void Panel1_Load(object sender, EventArgs e)
+    {
+        if ((string)this.Session["UserId"] == "" || (string)this.Session["UserId"] == null)
+        {
+            Response.Redirect("Login1.aspx");
+        }
+
+        sap_db = (string)this.Session["CompanyId"];
+        CompanyLabel.Text = sap_db;
+
+        ArrayList controles = new ArrayList();
+        controles = (ArrayList)this.Session["Controles"];
+
+        ArrayList roles = new ArrayList();
+        roles = (ArrayList)this.Session["Roles"];
+
+        ArrayList permissions = new ArrayList();
+        permissions = (ArrayList)this.Session["Permissions"];
+
+        string thiscontrol = "";
+        char flagokay = 'N';
+
+        for (int i = 0; i < controles.Count; i++)
+        {
+            thiscontrol = (controles[i].ToString());
+            if ((thiscontrol == "TransferDiscreOrdf.aspx") || (thiscontrol == "ATOTAL"))
+            {
+                flagokay = 'Y';
+            }
+        }
+
+        if (flagokay == 'N')
+        {
+            Response.Write("<script type=\"text/javascript\">alert('" + "This User does not have permissions for this option, please log in with another user." + "');</script>");
+            Response.End();
+        }
+
+        string thispermission = "";
+
+        for (int i = 0; i < permissions.Count; i++)
+        {
+            thispermission = "";
+            thispermission = (permissions[i].ToString());
+
+            if ((thispermission == "DESPATCH") || (thispermission == "ATOTAL"))
+            {
+                flagPerDeskay = 'Y';
+            }
+        }
+
+        for (int i = 0; i < permissions.Count; i++)
+        {
+            thispermission = "";
+            thispermission = (permissions[i].ToString());
+
+            if ((thispermission == "RECEIVE") || (thispermission == "ATOTAL"))
+            {
+                flagPerReckay = 'Y';
+            }
+        }
+
+        db.Connect();
+
+        string DocEntry = "";
+
+        if (Request.QueryString["DocEntry"] == null)
+        {
+            db.Disconnect();
+            Response.Write("ERROR: No document entry number specified in querystring.<br>");
+            Response.End();
+        }
+        else
+        {
+            DocEntry = Request.QueryString["DocEntry"].ToString();
+            GloVarDocEntry = Convert.ToInt32(DocEntry);
+            DocEntryLabel.Text = DocEntry;
+
+            //btnPrint.OnClientClick = "window.open('DisTransferDetails.aspx?DocEntry=" + DocEntry + "','PrintWindow','status=0,toolbar=0,resizable=1,scrollbars=1')";
+
+            List<DocumentsPrint> docEntries = new List<DocumentsPrint>
+            {
+                new DocumentsPrint(DocEntry, 1)
+            };
+
+            Session["docEntries"] = docEntries;
+
+            btnPrint.OnClientClick = "window.open('DisTransferDetailsPrint.aspx?DocEntry=" + DocEntry + "','PrintWindow','status=0,toolbar=0,resizable=1,scrollbars=1')";
+			
+            DataTable lDataTable;
+            DataSet lDataSet = new DataSet();
+            SqlCommand sqlCommand = new SqlCommand();
+
+            string sql = Queries.With_SmmDraftHeader() + @"
+select docstatus from SmmDraftHeader where docentry = {1}";
+
+            sql = string.Format(sql, sap_db, DocEntry);
+
+            sqlCommand.CommandText = sql;
+            sqlCommand.CommandType = CommandType.Text;
+            sqlCommand.Connection = db.Conn;
+
+            SqlDataAdapter lSqlDataAdapter = new SqlDataAdapter
+            {
+                SelectCommand = sqlCommand
+            };
+
+            //lSqlDataAdapter.Fill(lDataSet, "smm_draft_header_vw");
+            //lDataTable = lDataSet.Tables["smm_draft_header_vw"];
+
+            lSqlDataAdapter.Fill(lDataSet, "SmmDraftHeader");
+            lDataTable = lDataSet.Tables["SmmDraftHeader"];
+
+            string docstatus = "";
+
+            foreach (DataRow lDataRow in lDataTable.Rows)
+            {
+                docstatus = Convert.ToString(lDataRow["docstatus"]);
+            }
+
+            if (docstatus == "O")
+            {
+                try
+                {
+                    sqlCommand.Parameters.Clear();
+                    sqlCommand.CommandText = "smm_populate_discrep_odrf";
+                    sqlCommand.CommandType = CommandType.StoredProcedure;
+                    sqlCommand.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.Int));
+                    sqlCommand.Parameters["@DocEntry"].Value = Convert.ToInt32(DocEntry);
+                    sqlCommand.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+                    sqlCommand.Parameters["@CompanyId"].Value = sap_db;
+                    sqlCommand.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    Response.Write("Error when smm_populate_discrep_odrf was called.");
+                    Response.Write(ex.Message);
+                }
+                finally
+                {
+                    db.Disconnect();
+                }               
+            }
+            else
+            {
+                try
+                {
+                    
+                    sqlCommand.CommandText = "select count(1) numrows from smm_Transdiscrep_odrf where CompanyId = '" + sap_db + "' and docentry = " + DocEntry;
+                    sqlCommand.CommandType = CommandType.Text;
+                    sqlCommand.Connection = db.Conn;
+
+                    lSqlDataAdapter.SelectCommand = sqlCommand;
+
+                    lSqlDataAdapter.Fill(lDataSet, "smm_Transdiscrep_odrf");
+                    lDataTable = lDataSet.Tables["smm_Transdiscrep_odrf"];
+
+
+                    string Lnumrows = "";
+
+                    foreach (DataRow lDataRow in lDataTable.Rows)
+                    {
+                        Lnumrows = Convert.ToString(lDataRow["numrows"]);
+                    }
+
+                    int Lnmrows = Convert.ToInt32(Lnumrows);
+
+                    if (Lnmrows == 0)
+                    {
+                        db.Disconnect();
+                        Response.Write("Note: This Transfer was not processed through Discrepancy Control.<br>");
+                        Response.End();
+                    }
+                    else
+                    {
+                        ObjectDataSource1.SelectParameters["DocEntry"].DefaultValue = DocEntry;
+                        ObjectDataSource2.SelectParameters["DocEntry"].DefaultValue = DocEntry;
+                    }
+                }
+                catch (Exception)
+                {
+                    throw;
+                }
+                finally
+                {
+                    db.Disconnect();
+                }
+
+            }
+        }
+
+        // Sync U_GTK_CONFIRMATION and changed line quantities from SAP B1 on first load.
+        if (!IsPostBack) SyncFromSapItr();
+
+        db.Disconnect();
+    }
+
+    protected void GridView1_DataBound(object sender, EventArgs e)
+    {
+        iniviews(sender, e);
+    }
+
+    protected void GridView2_DataBound(object sender, EventArgs e)
+    {
+        bool isDutyPaid = string.Equals(GetFromWhsType(), "Duty Paid", StringComparison.OrdinalIgnoreCase);
+
+        string lvDispatched = GridView1.Rows.Count > 0 ? GridView1.Rows[0].Cells[6].Text : "Y";
+        bool isDispatch = lvDispatched == "N";
+        string fromSmType = isDispatch ? GetFromWhsSmType() : "";
+        // Dispatch: editable for any U_Type (Duty Free or Duty Paid), TIENDA or BODEGA origin
+        bool isDispatchEditable = isDispatch && (
+            string.Equals(fromSmType, "TIENDA", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(fromSmType, "BODEGA", StringComparison.OrdinalIgnoreCase)
+        );
+        // Receive: editable only for Duty Paid origin
+        bool isReceiveEditable = !isDispatch && isDutyPaid;
+
+        if (!isDispatchEditable && !isReceiveEditable) return;
+
+        foreach (GridViewRow row in GridView2.Rows)
+        {
+            var tb = row.FindControl("TextBox1") as TextBox;
+            if (tb != null)
+            {
+                tb.ReadOnly  = false;
+                tb.BackColor = System.Drawing.Color.White;
+            }
+        }
+    }
+
+    protected void GridView1_PreRender(object sender, EventArgs e)
+    {
+        LvDispatched = GridView1.Rows[0].Cells[6].Text; // from header
+        LvReceived = GridView1.Rows[0].Cells[8].Text; // from header
+        LvUserDisp = GridView1.Rows[0].Cells[13].Text; // from header
+        LabelMsg.Text = "";
+
+        LabelCurUser.Text = "User: " + (string)this.Session["UserId"];
+
+        string gtkVal = GetLocalGtkConfirmation();
+        if (!string.IsNullOrWhiteSpace(gtkVal))
+        {
+            GtkConfLabel.Text    = "GTK Confirmation #: " + gtkVal;
+            GtkConfLabel.Visible = true;
+        }
+
+        if (LvDispatched == "N")
+        {
+            GridView2.Columns[3].Visible = true;   // DraftQuantity
+            GridView2.Columns[4].Visible = false;  // DispatchQuantity
+            GridView2.Columns[5].Visible = false;  // ReceivedQuantity
+            GridView2.Columns[6].Visible = false;  // tmpQuantity
+            GridView2.Columns[7].Visible = true;   // Actual Quantity (TextBox)
+            GridView2.Columns[8].Visible = false;  // userrecscanner
+
+            if (flagPerDeskay != 'Y')
+            {
+                Button1.Visible = false;
+                GridView2.Columns[7].Visible = false;
+                //Button2.Enabled = false;
+                //btnPrint.Enabled = false;
+                LabelMsg.Text = "Message: " + "This user does not have permissions to dispatch.";
+                Alert.Show(LabelMsg.Text);
+            }
+        }
+        else
+        {
+            if (LvReceived == "N")
+            {
+                GridView2.Columns[3].Visible = false;  // DraftQuantity
+                GridView2.Columns[4].Visible = true;   // DispatchQuantity
+                GridView2.Columns[5].Visible = false;  // ReceivedQuantity
+                GridView2.Columns[6].Visible = false;  // tmpQuantity
+                GridView2.Columns[7].Visible = true;   // Actual Quantity (TextBox)
+                GridView2.Columns[8].Visible = true;   // userrecscanner
+
+                if (flagPerReckay != 'Y')
+                {
+                    Button1.Visible = false;
+                    GridView2.Columns[7].Visible = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LabelMsg.Text = "Message: " + "This user does not have permissions to receive.";
+                    //Alert.Show(LabelMsg.Text);
+                }
+
+                //if ((string)this.Session["UserId"] == LvUserDisp)
+		if (string.Equals((string)this.Session["UserId"], LvUserDisp, StringComparison.OrdinalIgnoreCase))
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LabelMsg.Text = "Message: Dispatch completed successfully. The receiving user must be different from the dispatching user.";
+                    //Alert.Show(LabelMsg.Text);
+                }
+
+                string lToWhs = GridView1.Rows[0].Cells[4].Text;
+
+                if (lToWhs == "R2 - RESEARCH STORES")
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LabelMsg.Text = "Message: Dispatch completed successfully. Receiving in R2 is not allowed.";
+                }
+
+                bool isDutyFree = string.Equals(GetFromWhsType(), "Duty Free", StringComparison.OrdinalIgnoreCase);
+                if (isDutyFree && string.IsNullOrWhiteSpace(gtkVal))
+                {
+                    Button2.Enabled = false;
+                    LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
+                }
+                else if (!string.IsNullOrWhiteSpace(gtkVal))
+                {
+                    LabelMsg.ForeColor = System.Drawing.Color.Green;
+                    LabelMsg.Text = "GTK Confirmation #: " + gtkVal;
+                }
+            }
+            else
+            {
+                GridView2.Columns[3].Visible = true;   // DraftQuantity
+                GridView2.Columns[4].Visible = true;   // DispatchQuantity
+                GridView2.Columns[5].Visible = true;   // ReceivedQuantity
+                GridView2.Columns[6].Visible = false;  // tmpQuantity
+                GridView2.Columns[7].Visible = false;  // Actual Quantity (TextBox)
+                GridView2.Columns[8].Visible = true;   // userrecscanner
+                Button1.Enabled = false;
+                LabelMsg.Text = "Message: This Order has been closed and sent to SAP BO.";
+            }
+        }
+    }
+
+
+    protected void DisRec()
+    {
+        string LvParameters = GridView1.Rows[0].Cells[0].Text;
+        string disOrRec = null;
+        string LvDispatched = GridView1.Rows[0].Cells[6].Text;
+        string LvReceived = GridView1.Rows[0].Cells[8].Text;
+        string LvUserDisp = GridView1.Rows[0].Cells[13].Text; // from header
+        LabelMsg.Text = "";
+
+        LabelCurUser.Text = "User: " + (string)this.Session["UserId"];
+        sap_db = (string)Session["CompanyId"];
+
+        string LvuserApp = (string)this.Session["UserId"];
+
+        char LvFlag1 = 'Y';
+
+        //logTrace("TransferDiscreOrdf-"+ GloVarDocEntry, "Tp1 LvDispatched: "+ LvDispatched);
+        //logTrace("TransferDiscreOrdf-"+ GloVarDocEntry, "Tp2 LvReceived: " + LvReceived);
+
+        string sloginTypeWhs = null;
+        string sTypeWhs = null;
+
+        ////////////////////
+        ////Get type og user and warehose Bodega/Tienda
+        try
+        {
+            db.Connect();
+
+            db.cmd.Parameters.Clear();
+            db.cmd.CommandText = "SMM_GET_LOGIN_WHS_TYPE_PRC";
+            db.cmd.CommandType = CommandType.StoredProcedure;
+            db.cmd.Connection = db.Conn;
+
+            db.cmd.Parameters.Add(new SqlParameter("@LoginId", SqlDbType.NVarChar));
+            db.cmd.Parameters["@LoginId"].Value = LvuserApp;
+
+            db.cmd.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.NVarChar));
+            db.cmd.Parameters["@DocEntry"].Value = GloVarDocEntry;
+
+            db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+            db.cmd.Parameters["@CompanyId"].Value = sap_db;
+
+
+            //db.cmd.ExecuteNonQuery();
+
+            SqlDataAdapter sAdapter = new SqlDataAdapter
+            {
+                SelectCommand = db.cmd
+            };
+
+            DataSet dSet = new DataSet();
+            sAdapter.Fill(dSet, "loginTypeWhs");
+            DataTable dtable = dSet.Tables["loginTypeWhs"];
+
+            foreach (DataRow errorRow in dtable.Rows)
+            {
+                sloginTypeWhs = errorRow["loginTypeWhs"].ToString();
+                sTypeWhs = errorRow["TypeWhs"].ToString();
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Caught exception in call procedure SMM_GET_LOGIN_WHS_TYPE_PRC. ERROR MESSAGE : " + ex.Message);
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        if (string.Equals(sloginTypeWhs, "NOSETUP", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sTypeWhs,     "NOSETUP", StringComparison.OrdinalIgnoreCase))
+        {
+            Button1.Enabled = false;
+            Button2.Enabled = false;
+            btnPrint.Enabled = true;
+            LvFlag1 = 'N';
+            LabelMsg.Text = "Message: User/Destination is not configured.";
+            Alert.Show(LabelMsg.Text);
+        }
+
+        if (!string.Equals(sloginTypeWhs, "BODEGA", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(sloginTypeWhs, "TIENDA", StringComparison.OrdinalIgnoreCase))
+        {
+            Button1.Enabled = false;
+            Button2.Enabled = false;
+            btnPrint.Enabled = true;
+            LvFlag1 = 'N';
+            LabelMsg.Text = "Message: User is not configured in Warehouse or Store.";
+            Alert.Show(LabelMsg.Text);
+        }
+
+        ////////////////////
+
+        if (LvDispatched == "Y")
+        {
+            if (LvReceived == "N")
+            {
+                //if ((string)this.Session["UserId"] == LvUserDisp)
+		if (string.Equals((string)this.Session["UserId"], LvUserDisp, StringComparison.OrdinalIgnoreCase))
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LvFlag1 = 'N';
+                    LabelMsg.Text = "Message: The receiving user must be different from the dispatching user.";
+                    Alert.Show(LabelMsg.Text);
+                }
+
+                string lToWhs = GridView1.Rows[0].Cells[4].Text;
+
+                if (lToWhs == "R2 - RESEARCH STORES")
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LvFlag1 = 'N';
+                    LabelMsg.Text = "Message: Receiving in R2 is not allowed.";
+                    Alert.Show(LabelMsg.Text);
+                }
+
+                if (!string.Equals(sloginTypeWhs, sTypeWhs, StringComparison.OrdinalIgnoreCase))
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LvFlag1 = 'N';
+                    LabelMsg.Text = "Message: " + sloginTypeWhs + " CANNOT RECEIVE IN " + sTypeWhs + ".";
+                    Alert.Show(LabelMsg.Text);
+                }
+
+                if (string.Equals(GetFromWhsType(), "Duty Free", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LvFlag1 = 'N';
+                    LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
+                    Alert.Show(LabelMsg.Text);
+                }
+            }
+        }
+        else
+        {
+            if (!string.Equals(sloginTypeWhs, sTypeWhs, StringComparison.OrdinalIgnoreCase))
+            {
+                Button1.Enabled = false;
+                Button2.Enabled = false;
+                btnPrint.Enabled = true;
+                LvFlag1 = 'N';
+                LabelMsg.Text = "Message: " + sloginTypeWhs + " CANNOT DISPATCH IN " + sTypeWhs + ".";
+                Alert.Show(LabelMsg.Text);
+            }
+        }
+
+        if (LvFlag1 == 'Y')
+        {
+            int TmpQty = 0;
+            int LvDQty = 0;
+            int LvLinNum = 0;
+            TextBox LvTxB1 = new TextBox();
+            int rg2count = GridView2.Rows.Count;
+            string Lmsg = "Please review quantities on lines ";
+            int x = 0;
+
+            for (int i = 0; i < rg2count; i++)
+            {
+                LvLinNum = Convert.ToInt32(GridView2.Rows[i].Cells[0].Text);
+                LvTxB1.Text = ((TextBox)(GridView2.Rows[i].Cells[7].Controls[1])).Text;
+
+                //if(!int.TryParse(LvTxB1.Text, out x))
+                //{
+                //    Lmsg = Lmsg + ' ' + LvLinNum + ',';
+                //    LvFlag1 = 'N';
+                //}
+
+                try
+                {
+                    x = int.Parse(LvTxB1.Text);
+                }
+                catch (Exception)
+                {
+                    Lmsg = Lmsg + ' ' + LvLinNum + ',';
+                    LvFlag1 = 'N';
+                }
+            }
+
+            if (LvFlag1 == 'N')
+            {
+                Lmsg = Lmsg + ", Please enter whole numbers only.";
+                Alert.Show(Lmsg);
+                return;
+            }
+
+            if (LvDispatched == "N")
+            {
+                for (int i = 0; i < rg2count; i++)
+                {
+                    LvLinNum = Convert.ToInt32(GridView2.Rows[i].Cells[0].Text);
+                    LvTxB1.Text = ((TextBox)(GridView2.Rows[i].Cells[7].Controls[1])).Text;
+                    TmpQty = Convert.ToInt32(LvTxB1.Text);
+
+                    if (LvDispatched == "N")
+                    {
+                        LvTxB1.Text = GridView2.Rows[i].Cells[3].Text;
+                        LvDQty = Convert.ToInt32(LvTxB1.Text);
+                    }
+
+                    if (LvDQty < TmpQty || TmpQty < 0)
+                    {
+                        Lmsg = Lmsg + ' ' + LvLinNum + ',';
+                        LvFlag1 = 'N';
+                    }
+                }
+            }
+
+            if (LvFlag1 == 'N')
+            {
+                Lmsg = Lmsg + ". These must be less than or equal to the Draft quantity or zero";
+                Alert.Show(Lmsg);
+                return;
+            }
+
+            if (LvDispatched == "Y")
+            {
+                for (int i = 0; i < rg2count; i++)
+                {
+                    LvLinNum = Convert.ToInt32(GridView2.Rows[i].Cells[0].Text);
+                    LvTxB1.Text = ((TextBox)(GridView2.Rows[i].Cells[7].Controls[1])).Text;
+                    TmpQty = Convert.ToInt32(LvTxB1.Text);
+
+                    if (TmpQty < 0)
+                    {
+                        Lmsg = Lmsg + ' ' + LvLinNum + ',';
+                        LvFlag1 = 'N';
+                    }
+                }
+
+                if (LvFlag1 == 'N')
+                {
+                    Lmsg = Lmsg + ". These must be greater than or equal to zero";
+                    Alert.Show(Lmsg);
+                    return;
+                }
+            }
+
+            if (LvFlag1 == 'N')
+            {
+                return;
+            }
+
+            db.Connect();
+
+            for (int i = 0; i < rg2count; i++)
+            {
+                LvLinNum = Convert.ToInt32(GridView2.Rows[i].Cells[0].Text);
+                LvTxB1.Text = ((TextBox)(GridView2.Rows[i].Cells[7].Controls[1])).Text;
+                TmpQty = Convert.ToInt32(LvTxB1.Text);
+
+                if (LvDispatched == "N")
+                {
+                    LvTxB1.Text = GridView2.Rows[i].Cells[3].Text;
+                    LvDQty = Convert.ToInt32(LvTxB1.Text);
+                }
+                else
+                {
+                    if (LvReceived == "N")
+                    {
+                        LvTxB1.Text = GridView2.Rows[i].Cells[4].Text;
+                        LvDQty = Convert.ToInt32(LvTxB1.Text);
+                    }
+                }
+
+                SqlCommand sqlCommand = new SqlCommand();
+                sqlCommand.Parameters.Clear();
+                sqlCommand.CommandText = "update_discrep_drf1";
+                sqlCommand.CommandType = CommandType.StoredProcedure;
+                sqlCommand.Connection = db.Conn;
+
+                
+                sqlCommand.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+                sqlCommand.Parameters["@CompanyId"].Value = CompanyLabel.Text;
+
+                sqlCommand.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.Int));
+                sqlCommand.Parameters["@DocEntry"].Value = GloVarDocEntry;
+
+                sqlCommand.Parameters.Add(new SqlParameter("@Linenum", SqlDbType.SmallInt));
+                sqlCommand.Parameters["@Linenum"].Value = LvLinNum;
+
+                sqlCommand.Parameters.Add(new SqlParameter("@TmpQty", SqlDbType.SmallInt));
+                sqlCommand.Parameters["@TmpQty"].Value = TmpQty;
+
+                try
+                {
+                    sqlCommand.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    Response.Write("Error when update_discrep_drf1 was called.");
+                    Response.Write(ex.Message);
+                }
+
+                // During dispatch, persist DispatchQuantity so the shortage calculation
+                // (DispatchQuantity > tmpQuantity) works at receive time even when no ITR exists.
+                if (LvDispatched == "N")
+                {
+                    try
+                    {
+                        using (var dqCmd = new SqlCommand(
+                            "UPDATE smm_Transdiscrep_drf1 SET DispatchQuantity = @qty " +
+                            "WHERE CompanyId = @cid AND DocEntry = @de AND LineNum = @ln",
+                            db.Conn))
+                        {
+                            dqCmd.Parameters.AddWithValue("@qty", TmpQty);
+                            dqCmd.Parameters.AddWithValue("@cid", CompanyLabel.Text);
+                            dqCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                            dqCmd.Parameters.AddWithValue("@ln",  LvLinNum);
+                            dqCmd.ExecuteNonQuery();
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            db.Disconnect();
+
+            if (LvDispatched == "N")
+            {
+                LvParameters = LvParameters + ' ' + 'D';
+                disOrRec = "D";
+                LvFlag1 = 'Y';
+                GloVarDesRec = 'D';
+
+                //if (ZeroCheckBox.Checked)
+                //{
+
+
+                //}
+                //else
+                if (!ZeroCheckBox.Checked)
+                {
+
+                    db.Connect();
+
+                    db.cmd.Parameters.Clear();
+                    db.cmd.CommandText = "Smm_ValDispatching_Order_Prc";
+                    db.cmd.CommandType = CommandType.StoredProcedure;
+                    db.cmd.Connection = db.Conn;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+                    db.cmd.Parameters["@CompanyId"].Value = CompanyLabel.Text;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.Int));
+                    db.cmd.Parameters["@DocEntry"].Value = GloVarDocEntry;
+
+                    SqlParameter textOut = new SqlParameter("@textOut", SqlDbType.VarChar);
+                    textOut.Direction = ParameterDirection.Output;
+                    textOut.Size = 250;
+                    db.cmd.Parameters.Add(textOut);
+
+                    string lTextOut = null;
+
+                    try
+                    {
+                        db.cmd.ExecuteNonQuery();
+                        lTextOut = db.cmd.Parameters["@textOut"].Value.ToString();
+
+                        db.Disconnect();
+
+                        if (lTextOut != "Orden correcta.")
+                        {
+
+                            Alert.Show(lTextOut);
+                            LvFlag1 = 'N';
+                            return;
+
+                        }
+
+                    }
+
+                    catch (Exception ex)
+                    {
+                        db.Disconnect();
+                        Response.Write("Error when Smm_ValDispatching_Order_Prc was called.");
+                        Response.Write(ex.Message);
+                    }
+                }
+            }
+            else
+            {
+                if (LvReceived == "N")
+                {
+                    LvParameters = LvParameters + ' ' + 'R';
+                    disOrRec = "R";
+                    LvFlag1 = 'Y';
+                    GloVarDesRec = 'R';
+
+                    //if (ZeroCheckBox.Checked)
+                    //{
+
+                    //}
+                    //else
+                    if (!ZeroCheckBox.Checked)
+                    {
+
+                        db.Connect();
+
+                        db.cmd.Parameters.Clear();
+                        db.cmd.CommandText = "Smm_ValReciving_Order_Prc";
+                        db.cmd.CommandType = CommandType.StoredProcedure;
+                        db.cmd.Connection = db.Conn;
+
+                        db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+                        db.cmd.Parameters["@CompanyId"].Value = CompanyLabel.Text;
+
+                        db.cmd.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.Int));
+                        db.cmd.Parameters["@DocEntry"].Value = GloVarDocEntry;
+
+                        SqlParameter textOut = new SqlParameter("@textOut", SqlDbType.VarChar);
+                        textOut.Direction = ParameterDirection.Output;
+                        textOut.Size = 250;
+                        db.cmd.Parameters.Add(textOut);
+
+                        string lTextOut = null;
+
+                        try
+                        {
+                            db.cmd.ExecuteNonQuery();
+                            lTextOut = db.cmd.Parameters["@textOut"].Value.ToString();
+
+                            db.Disconnect();
+
+                            if (lTextOut != "Orden correcta.")
+                            {
+                                Alert.Show(lTextOut);
+                                LvFlag1 = 'N';
+                                return;
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            db.Disconnect();
+                            Response.Write("Error when Smm_ValReciving_Order_Prc was called.");
+                            Response.Write(ex.Message);
+                        }
+                    }
+
+                }
+                else
+                {
+                    LvFlag1 = 'N';
+                }
+            }
+
+            //logTrace("TransferDiscreOrdf-"+ GloVarDocEntry, "Tp11 LvFlag1 < " + LvFlag1 + ">");
+
+
+
+            /////////////////////////////////
+
+            string url;
+            string script;
+            string message = null;
+
+	//private static readonly HashSet<string> AllowedUsers =
+       // new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+       // { "YFELICIANO", "AGALVEZ", "MMARTINEZBOD", "AABREGO", "WFERNANDEZ" ,"DGILTIE"};
+
+
+            bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
+
+            if (LvFlag1 == 'Y') // Empieza la parte batch
+            {
+                int sapDocNum = 0;
+                int dispShortageDocNum = 0;
+                string hoistedShortageErr = null;
+                bool hoistedIsDutyPaid = false;
+                string hoistedResearchWhs = "";
+
+                if (disOrRec == "D")
+                {
+                    string sapError = CreateSapTransferRequest(LvuserApp, out sapDocNum);
+                    if (sapError != null)
+                    {
+                        Alert.Show(isEn
+                            ? "Error creating Transfer Request in SAP B1: " + sapError
+                            : "Error al crear Transfer Request en SAP B1: " + sapError);
+                        return;
+                    }
+
+                    // Dispatch shortage IT (Duty Paid only) — must run BEFORE Smm_populate_whs_transfers_Batch
+                    // because that SP resets tmpQuantity, making (DraftQuantity > tmpQuantity) return 0 rows.
+                    // Duty Free: shortage is noted in the confirmation message only — no OWTR is created.
+                    string fromWhsUType = GetFromWhsType();
+                    hoistedIsDutyPaid = string.Equals(fromWhsUType, "Duty Paid", StringComparison.OrdinalIgnoreCase);
+                    if (hoistedIsDutyPaid)
+                    {
+                        hoistedResearchWhs = GetResearchWarehouse("D", fromWhsUType);
+                        if (string.IsNullOrEmpty(hoistedResearchWhs))
+                            hoistedShortageErr = "Research warehouse not found in OWHS (BPLId=3, Block='D', U_Type='" + fromWhsUType + "')";
+                        else
+                            hoistedShortageErr = CreateSapDispatchShortageTransfer(LvuserApp, hoistedResearchWhs, out dispShortageDocNum);
+                    }
+                }
+
+                if (disOrRec == "R")
+                {
+                    string sapError = CreateSapInventoryTransfer(LvuserApp, out sapDocNum);
+                    if (sapError != null)
+                    {
+                        LogMainItLinesToTransferErrors(LvuserApp, sapError);
+                        Alert.Show(isEn
+                            ? "Error creating Inventory Transfer in SAP B1: " + sapError
+                            : "Error al crear Inventory Transfer en SAP B1: " + sapError);
+                        return;
+                    }
+
+                    // Shortage transfer must run BEFORE Smm_populate_whs_transfers_Batch
+                    // because that SP resets tmpQuantity, which would make the shortage
+                    // query (DispatchQuantity > tmpQuantity) return 0 rows.
+                    string fromWhsTypeDiag = GetFromWhsType();
+                    hoistedIsDutyPaid = string.Equals(fromWhsTypeDiag, "Duty Paid", StringComparison.OrdinalIgnoreCase);
+                    string diagInfo = string.Format("[{0}] DocEntry={1} FromWhsType='{2}' | ",
+                        DateTime.Now.ToString("HH:mm:ss"), GloVarDocEntry, fromWhsTypeDiag);
+                    if (hoistedIsDutyPaid)
+                    {
+                        try
+                        {
+                            db.Connect();
+                            string diagSql = "SELECT d.LineNum, d.ItemCode, " +
+                                "ISNULL(CAST(d.DispatchQuantity AS NVARCHAR),'NULL') AS DQ, " +
+                                "ISNULL(CAST(d.tmpQuantity AS NVARCHAR),'NULL') AS TQ " +
+                                "FROM smm_Transdiscrep_drf1 d WHERE d.CompanyId=@cid AND d.DocEntry=@de";
+                            using (var diagCmd = new SqlCommand(diagSql, db.Conn))
+                            {
+                                diagCmd.Parameters.AddWithValue("@cid", sap_db);
+                                diagCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                                var diagDt = new DataTable();
+                                new SqlDataAdapter(diagCmd).Fill(diagDt);
+                                diagInfo += "Lines(DispatchQty/ReceivedQty):";
+                                foreach (DataRow r in diagDt.Rows)
+                                    diagInfo += string.Format(" L{0}[{1}]:{2}/{3}", r["LineNum"], r["ItemCode"], r["DQ"], r["TQ"]);
+                            }
+                        }
+                        catch (Exception exDiag) { diagInfo += " DiagQueryErr:" + exDiag.Message; }
+                        finally { db.Disconnect(); }
+
+                        hoistedResearchWhs = GetResearchWarehouse("R", fromWhsTypeDiag);
+                        int shortageDocNum = 0;
+                        if (string.IsNullOrEmpty(hoistedResearchWhs))
+                        {
+                            hoistedShortageErr = "Research warehouse not found in OWHS (BPLId=3, Block='R', U_Type='" + fromWhsTypeDiag + "')";
+                            diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
+                        }
+                        else
+                        {
+                            hoistedShortageErr = CreateSapDutyPaidShortageTransfer(LvuserApp, hoistedResearchWhs, out shortageDocNum);
+                            if (hoistedShortageErr != null)
+                                diagInfo += " | ShortageIT ERROR: " + hoistedShortageErr;
+                            else if (shortageDocNum == 0)
+                                diagInfo += " | ShortageIT: 0 shortage rows (DispatchQty<=ReceivedQty).";
+                            else
+                                diagInfo += " | ShortageIT OK DocNum=" + shortageDocNum;
+                        }
+                    }
+                    else
+                    {
+                        diagInfo += "ShortageIT SKIPPED (U_Type != 'Duty Paid').";
+                    }
+                    try { System.IO.File.AppendAllText(@"C:\Temp\sci_diag.txt", diagInfo + "\r\n"); } catch { }
+                }
+
+                //logTrace("TransferDiscreOrdf-" + GloVarDocEntry, " dentro del flag = Y");
+
+                try
+                {
+                    db.Connect();
+
+                    SqlCommand sqlCommand = new SqlCommand();
+                    db.cmd.Parameters.Clear();
+                    db.cmd.CommandText = "Smm_populate_whs_transfers_Batch";
+                    db.cmd.CommandType = CommandType.StoredProcedure;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+                    db.cmd.Parameters["@CompanyId"].Value = CompanyLabel.Text;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@DocEntryDrf", SqlDbType.VarChar));
+                    db.cmd.Parameters["@DocEntryDrf"].Value = GloVarDocEntry;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@TypeTran", SqlDbType.VarChar));
+                    db.cmd.Parameters["@TypeTran"].Value = disOrRec;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@UserApp", SqlDbType.VarChar));
+                    db.cmd.Parameters["@UserApp"].Value = LvuserApp;
+
+                    db.cmd.Connection = db.Conn;
+                    db.cmd.CommandTimeout = 0;
+                    db.cmd.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Caught exception in procedure la_populate_whs_transfers, ERROR MESSAGE: " + ex.Message);
+                }
+                finally
+                {
+                    db.Disconnect();
+                }
+
+                if (disOrRec == "D")
+                {
+                    try
+                    {
+                        db.Connect();
+                        using (var cmd = new SqlCommand(
+                            "UPDATE smm_Transdiscrep_odrf SET DocEntryTraRec2 = NULL, DocNumTraRec2 = NULL " +
+                            "WHERE CompanyId = @cid AND DocEntry = @de", db.Conn))
+                        {
+                            cmd.Parameters.AddWithValue("@cid", CompanyLabel.Text);
+                            cmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                            cmd.ExecuteNonQuery();
+                        }
+                    }
+                    catch { }
+                    finally { db.Disconnect(); }
+                }
+
+                GridView1.DataBind();
+                GridView2.DataBind();
+
+                LvDispatched = GridView1.Rows[0].Cells[6].Text;
+
+                //logTrace("TransferDiscreOrdf-" + GloVarDocEntry, " Antes de createUserAudit ");
+                createUserAudit();
+
+                if (disOrRec == "D")
+                {
+                    db.Connect();
+
+                    db.cmd.Parameters.Clear();
+                    db.cmd.CommandText = "Smm_Get_DispCompleted_Prc";
+                    db.cmd.CommandType = CommandType.StoredProcedure;
+                    db.cmd.Connection = db.Conn;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+                    db.cmd.Parameters["@CompanyId"].Value = CompanyLabel.Text;
+
+                    db.cmd.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.Int));
+                    db.cmd.Parameters["@DocEntry"].Value = Convert.ToInt32(GloVarDocEntry);
+
+                    SqlParameter pDispCompleted = new SqlParameter("@DispCompleted", SqlDbType.VarChar);
+                    pDispCompleted.Direction = ParameterDirection.Output;
+                    pDispCompleted.Size = 100;
+                    db.cmd.Parameters.Add(pDispCompleted);
+
+                    string lDispCompleted = null;
+
+                    try
+                    {
+                        db.cmd.ExecuteNonQuery();
+                        lDispCompleted = db.cmd.Parameters["@DispCompleted"].Value.ToString();
+
+                        string sapRef = sapDocNum > 0
+                            ? (isEn ? " Transfer Request #" : " Solicitud de Transferencia #") + sapDocNum + " SAP."
+                            : "";
+
+                        string dispShortagePart = "";
+                        if (hoistedIsDutyPaid)
+                        {
+                            string resWhs = !string.IsNullOrEmpty(hoistedResearchWhs) ? hoistedResearchWhs : "research whs";
+                            if (hoistedShortageErr != null)
+                                dispShortagePart = isEn
+                                    ? " WARNING: Dispatch shortage IT to " + resWhs + " failed: " + hoistedShortageErr
+                                    : " ADVERTENCIA: Error al crear IT de faltante hacia " + resWhs + ": " + hoistedShortageErr;
+                            else if (dispShortageDocNum > 0)
+                                dispShortagePart = isEn
+                                    ? " Shortage IT #" + dispShortageDocNum + " sent to " + resWhs + "."
+                                    : " IT de Faltante #" + dispShortageDocNum + " enviado a " + resWhs + ".";
+                        }
+
+                        if (lDispCompleted == "N")
+                        {
+                            createUserAudit();
+                            if (hoistedIsDutyPaid)
+                            {
+                                message = isEn
+                                    ? "Order Dispatched. Due to discrepancies, the differences will be sent to the research warehouse." + sapRef + dispShortagePart
+                                    : "Orden Despachada. Debido a discrepancias, las diferencias serán enviadas a la bodega de investigación." + sapRef + dispShortagePart;
+                            }
+                            else
+                            {
+                                message = isEn
+                                    ? "Order Dispatched. Due to discrepancies, items not dispatched remain at origin." + sapRef
+                                    : "Orden Despachada. Debido a discrepancias, los artículos no despachados permanecen en origen." + sapRef;
+                            }
+                        }
+                        else
+                        {
+                            message = isEn
+                                ? "Order Dispatched." + sapRef + dispShortagePart
+                                : "Orden Despachada." + sapRef + dispShortagePart;
+                        }
+                        LabelMsg.Text = message;
+
+                        db.Disconnect();
+
+                    }
+                    catch (Exception ex)
+                    {
+                        db.Disconnect();
+                        Response.Write("Error when Smm_Get_DispCompleted_Prc was called.");
+                        Response.Write(ex.Message);
+                    }
+                }
+
+                if (disOrRec == "R")
+                {
+                    // sapDocNum may have been overwritten with the shortage doc if a
+                    // Duty Paid shortage transfer was created; load the IT doc from the DB.
+                    int itDocNum = 0;
+                    try
+                    {
+                        db.Connect();
+                        using (var cmd = new SqlCommand(
+                            "SELECT ISNULL(DocNumTraRec2,0) FROM smm_Transdiscrep_odrf " +
+                            "WHERE CompanyId=@c AND DocEntry=@e", db.Conn))
+                        {
+                            cmd.Parameters.AddWithValue("@c", sap_db);
+                            cmd.Parameters.AddWithValue("@e", GloVarDocEntry);
+                            object v = cmd.ExecuteScalar();
+                            if (v != null && v != DBNull.Value) itDocNum = Convert.ToInt32(v);
+                        }
+                    }
+                    catch { }
+                    finally { db.Disconnect(); }
+
+                    string itPart = itDocNum > 0
+                        ? (isEn ? " Inventory Transfer #" + itDocNum + " created in SAP." : " Transferencia de Inventario #" + itDocNum + " creada en SAP.")
+                        : "";
+
+                    int shortageDocNumSaved = 0;
+                    try
+                    {
+                        db.Connect();
+                        using (var cmd = new SqlCommand(
+                            "SELECT ISNULL(DocNumTraRec,0) FROM smm_Transdiscrep_odrf " +
+                            "WHERE CompanyId=@c AND DocEntry=@e", db.Conn))
+                        {
+                            cmd.Parameters.AddWithValue("@c", sap_db);
+                            cmd.Parameters.AddWithValue("@e", GloVarDocEntry);
+                            object v = cmd.ExecuteScalar();
+                            if (v != null && v != DBNull.Value) shortageDocNumSaved = Convert.ToInt32(v);
+                        }
+                    }
+                    catch { }
+                    finally { db.Disconnect(); }
+
+                    string researchWhsName = !string.IsNullOrEmpty(hoistedResearchWhs) ? hoistedResearchWhs : "research whs";
+                    string shortagePart;
+                    if (!hoistedIsDutyPaid)
+                    {
+                        shortagePart = "";
+                    }
+                    else if (hoistedShortageErr != null)
+                    {
+                        shortagePart = isEn
+                            ? " WARNING: Shortage transfer to " + researchWhsName + " failed: " + hoistedShortageErr
+                            : " ADVERTENCIA: Error al crear faltante hacia " + researchWhsName + ": " + hoistedShortageErr;
+                    }
+                    else if (shortageDocNumSaved > 0)
+                    {
+                        shortagePart = isEn
+                            ? " Shortage Transfer #" + shortageDocNumSaved + " sent to " + researchWhsName + "."
+                            : " Transferencia de Faltante #" + shortageDocNumSaved + " enviada a " + researchWhsName + ".";
+                    }
+                    else
+                    {
+                        shortagePart = isEn
+                            ? " (Duty Paid: no shortage detected — received qty = dispatch qty)."
+                            : " (Duty Paid: sin faltante detectado — cantidad recibida = despachada).";
+                    }
+
+                    message = isEn
+                        ? "Order Received." + itPart + shortagePart
+                        : "Orden Recibida." + itPart + shortagePart;
+                    LabelMsg.Text = message;
+                }
+
+                url = string.Format("TransferDiscreOrdf.aspx?Docentry={0}", GloVarDocEntry);
+                script = "{ alert('";
+                script += message;
+                script += "');";
+                script += "window.location = '";
+                script += url;
+                script += "'; }";
+                ScriptManager.RegisterStartupScript(this.Page, Page.GetType(), "alert", script, true);
+            }
+        }
+    }
+
+    protected void Button1_Click(object sender, EventArgs e)
+    {
+        DisRec();
+    }
+
+    protected void Button2_Click(object sender, EventArgs e)
+    {
+
+    }
+    protected void btnPrint_Click(object sender, EventArgs e)
+    {
+
+    }
+    protected void Button2_Click1(object sender, EventArgs e)
+    {
+        DisRec();
+    }
+
+    protected void iniviews(object sender, EventArgs e)
+    {
+        GridView gridView = (GridView)sender;
+        LvParameters = gridView.Rows[0].Cells[0].Text;
+        LvDispatched = gridView.Rows[0].Cells[6].Text;
+        LvReceived = gridView.Rows[0].Cells[8].Text;
+
+        if (LvDispatched == "N")
+        {
+            Button1.Text = "Dispatch";
+	      //  ZeroCheckBox.Visible = true;
+            btnPrint.Visible = false;
+            Button2.Visible = false;
+            Button1.Height = 38;
+            Button1.Width = 65;
+        }
+        else if (LvReceived == "N")
+        {
+            Button1.Text = "Receive";
+            btnPrint.Visible = true;
+            Button2.Height = 28;
+            Button2.Width = 66;
+            btnPrint.Height = 28;
+            btnPrint.Width = 66;
+            Button1.Visible = false;
+            Button2.Visible = true;
+
+           // var user = LvUserDisp;   // e.g. "YFELICIANO" HACE VISIBLE USUARIO PERMITIDOS
+            //ZeroCheckBox.Visible = AllowedUsers.Contains(user);
+
+            //if ((string)this.Session["UserId"] == LvUserDisp)
+	    if (string.Equals((string)this.Session["UserId"], LvUserDisp, StringComparison.OrdinalIgnoreCase))
+            {
+                Button1.Enabled = false;
+                Button2.Enabled = false;
+                btnPrint.Enabled = true;
+                LabelMsg.Text = "Message: Dispatch completed successfully. The receiving user must be different from the dispatching user.";
+                //Alert.Show(LabelMsg.Text);
+            }
+            else
+            {
+                string lToWhs = GridView1.Rows[0].Cells[4].Text;
+
+                if (lToWhs == "R2 - RESEARCH STORES")
+                {
+                    Button1.Enabled = false;
+                    Button2.Enabled = false;
+                    btnPrint.Enabled = true;
+                    LabelMsg.Text = "Message: Dispatch completed successfully. Receiving in R2 is not allowed.";
+                }
+            }
+
+        }
+        else
+        {
+            Button1.Visible = false;
+            Button2.Visible = false;
+            btnPrint.Visible = false;
+            GridView2.Columns[4].HeaderText = "Dispatched";
+            GridView2.Columns[5].HeaderText = "Received";
+            GridView2.Columns[3].Visible = true;
+            LabelMsg.Text = "Message: This Order has been closed and sent to SAP BO.";
+        }
+    }
+
+    protected void createUserAudit()
+    {
+
+        //logTrace("TransferDiscreOrdf-" + GloVarDocEntry, " Antes de createUserAudit sap_db " + sap_db);
+        //logTrace("TransferDiscreOrdf-" + GloVarDocEntry, " Antes de createUserAudit DocEntry " + GloVarDocEntry);
+        //logTrace("TransferDiscreOrdf-" + GloVarDocEntry, " Antes de createUserAudit GloVarDesRec " + GloVarDesRec);
+
+        db.Connect();
+
+        try
+        {
+            db.cmd.Parameters.Clear();
+            db.cmd.CommandText = "smm_insert_Transdiscrep_audit_odrf";
+            db.cmd.CommandType = CommandType.StoredProcedure;
+
+            db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
+            db.cmd.Parameters["@CompanyId"].Value = CompanyLabel.Text;
+
+            db.cmd.Parameters.Add(new SqlParameter("@DocEntry", SqlDbType.Int));
+            db.cmd.Parameters["@DocEntry"].Value = Convert.ToInt32(GloVarDocEntry);
+
+            db.cmd.Parameters.Add(new SqlParameter("@TypeTrans", SqlDbType.NVarChar));
+            db.cmd.Parameters["@TypeTrans"].Value = GloVarDesRec;
+
+            db.cmd.Parameters.Add(new SqlParameter("@SourceTrans", SqlDbType.NVarChar));
+            db.cmd.Parameters["@SourceTrans"].Value = "SISINV";
+
+            db.cmd.Connection = db.Conn;
+            db.cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Caught exception in call procedure createUserAudit. ERROR MESSAGE : " + ex.Message);
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+    }
+
+
+
+    private string GetLocalGtkConfirmation()
+    {
+        string gtk = "";
+        db.Connect();
+        try
+        {
+            using (SqlCommand cmd = new SqlCommand(
+                "SELECT ISNULL(U_GTK_CONFIRMATION,'') FROM smm_Transdiscrep_odrf " +
+                "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value) gtk = val.ToString();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+        return gtk;
+    }
+
+    private string GetFromWhsType()
+    {
+        string whsType = "";
+        db.Connect();
+        try
+        {
+            string sql = string.Format(
+                "SELECT ISNULL(w.U_Type,'') " +
+                "FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.WhsCode = h.FromWhsCode " +
+                "WHERE h.CompanyId = @Company AND h.DocEntry = @Entry", sap_db);
+            using (SqlCommand cmd = new SqlCommand(sql, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value) whsType = val.ToString();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+        return whsType;
+    }
+
+    // Returns SMM_WHSTYPE.TYPEWHS ('BODEGA'/'TIENDA') for the FROM warehouse of this document.
+    private string GetFromWhsSmType()
+    {
+        string whsType = "";
+        db.Connect();
+        try
+        {
+            using (SqlCommand cmd = new SqlCommand(
+                "SELECT ISNULL(wt.TypeWhs,'') " +
+                "FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                "LEFT JOIN SMM_WHSTYPE wt WITH(NOLOCK) ON wt.WhsCode = h.FromWhsCode " +
+                "WHERE h.CompanyId = @Company AND h.DocEntry = @Entry", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value) whsType = val.ToString();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+        return whsType;
+    }
+
+    // Returns the research warehouse code from OWHS (BPLId=3) for the given block type:
+    // 'D' for dispatch operations, 'R' for receive operations.
+    // uType: when provided, filters by matching U_Type so SAP item-type validation passes.
+    private string GetResearchWarehouse(string blockType, string uType = null)
+    {
+        string whs = "";
+        db.Connect();
+        try
+        {
+            string typeClause = string.IsNullOrEmpty(uType)
+                ? ""
+                : " AND ISNULL(U_Type,'') = @utype";
+
+            using (var cmd = new SqlCommand(
+                "SELECT TOP 1 WhsCode FROM " + sap_db + "..OWHS WITH(NOLOCK) " +
+                "WHERE BPLId=3 AND Block=@b" + typeClause,
+                db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@b", blockType);
+                if (!string.IsNullOrEmpty(uType))
+                    cmd.Parameters.AddWithValue("@utype", uType);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value) whs = val.ToString();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+        return whs;
+    }
+
+    // Reads U_GTK_CONFIRMATION and line quantities directly from SAP B1 (OWTQ/WTQ1),
+    // updates the local header and syncs DispatchQuantity for lines that changed.
+    // Locates the OWTQ by DocEntryTraRec2; falls back to U_BOL if not set.
+    private void SyncFromSapItr()
+    {
+        db.Connect();
+        try
+        {
+            // Only run when document is in receive-pending state
+            string dispatched = null, received = null;
+            int sapItrEntry = 0;
+
+            using (SqlCommand cmd = new SqlCommand(
+                "SELECT Dispatched, Received, ISNULL(DocEntryITR, 0) DocEntryITR " +
+                "FROM smm_Transdiscrep_odrf WHERE CompanyId = @Company AND DocEntry = @Entry",
+                db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                using (SqlDataReader rdr = cmd.ExecuteReader())
+                {
+                    if (rdr.Read())
+                    {
+                        dispatched  = rdr["Dispatched"].ToString();
+                        received    = rdr["Received"].ToString();
+                        sapItrEntry = rdr["DocEntryITR"] != DBNull.Value
+                                      ? Convert.ToInt32(rdr["DocEntryITR"]) : 0;
+                    }
+                }
+            }
+
+            if (dispatched != "Y" || received != "N") return;
+
+            // If DocEntryTraRec2 is not set, find the OWTQ via U_BOL (= local DocEntry)
+            if (sapItrEntry <= 0)
+            {
+                string sqlFind = "SELECT TOP 1 DocEntry FROM " + sap_db +
+                                 "..OWTQ WITH(NOLOCK) WHERE CAST(U_BOL AS NVARCHAR) = @Bol" +
+                                 " ORDER BY DocEntry DESC";
+                using (SqlCommand cmd = new SqlCommand(sqlFind, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@Bol", GloVarDocEntry.ToString());
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value)
+                        sapItrEntry = Convert.ToInt32(val);
+                }
+            }
+
+            if (sapItrEntry <= 0) return;
+
+            // Read GTK confirmation and DocNum from OWTQ
+            string gtk    = null;
+            int    docNum = 0;
+            string sqlGtk = "SELECT U_GTK_CONFIRMATION, DocNum FROM " + sap_db +
+                            "..OWTQ WITH(NOLOCK) WHERE DocEntry = @SapEntry";
+            using (SqlCommand cmd = new SqlCommand(sqlGtk, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                using (SqlDataReader rdr = cmd.ExecuteReader())
+                {
+                    if (rdr.Read())
+                    {
+                        if (rdr["U_GTK_CONFIRMATION"] != DBNull.Value) gtk    = rdr["U_GTK_CONFIRMATION"].ToString();
+                        if (rdr["DocNum"]              != DBNull.Value) docNum = Convert.ToInt32(rdr["DocNum"]);
+                    }
+                }
+            }
+
+            // Persist GTK, DocNum and DocEntry to local header
+            using (SqlCommand cmd = new SqlCommand(
+                "UPDATE smm_Transdiscrep_odrf " +
+                "SET U_GTK_CONFIRMATION = @Gtk, " +
+                "    DocNumITR          = @DocNum, " +
+                "    DocEntryITR        = CASE WHEN ISNULL(DocEntryITR,0)=0 THEN @SapEntry ELSE DocEntryITR END " +
+                "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Gtk",      string.IsNullOrEmpty(gtk) ? (object)DBNull.Value : gtk);
+                cmd.Parameters.AddWithValue("@DocNum",   docNum);
+                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                cmd.Parameters.AddWithValue("@Company",  sap_db);
+                cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                cmd.ExecuteNonQuery();
+            }
+
+            // Sync DispatchQuantity and tmpQuantity from the ITR lines (WTQ1).
+            // tmpQuantity must also be updated so the receive textbox pre-fills with
+            // ITR quantities, which CreateSapInventoryTransfer then uses for the IT.
+            string sqlSync = @"
+                UPDATE d
+                SET    d.DispatchQuantity = CAST(q1.Quantity AS INT),
+                       d.tmpQuantity      = CAST(q1.Quantity AS INT)
+                FROM   smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                JOIN   " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
+                       ON  q1.DocEntry  = @SapEntry
+                       AND q1.ItemCode  = d.ItemCode
+                       AND q1.WhsCode   = d.ToWhsCode
+                WHERE  d.CompanyId = @Company
+                AND    d.DocEntry  = @Entry";
+
+            using (SqlCommand cmd = new SqlCommand(sqlSync, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                cmd.Parameters.AddWithValue("@Company",  sap_db);
+                cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                cmd.ExecuteNonQuery();
+            }
+
+            // Lines that no longer exist in the SAP ITR (removed from WTQ1) get zeroed out.
+            string sqlZero = @"
+                UPDATE d
+                SET    d.DispatchQuantity = 0,
+                       d.tmpQuantity      = 0
+                FROM   smm_Transdiscrep_drf1 d
+                LEFT JOIN " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
+                       ON  q1.DocEntry = @SapEntry
+                       AND q1.ItemCode = d.ItemCode
+                       AND q1.WhsCode  = d.ToWhsCode
+                WHERE  d.CompanyId = @Company
+                AND    d.DocEntry  = @Entry
+                AND    q1.ItemCode IS NULL";
+
+            using (SqlCommand cmd = new SqlCommand(sqlZero, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                cmd.Parameters.AddWithValue("@Company",  sap_db);
+                cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+    }
+
+    // Returns null on success, or an error message string on failure.
+    // Reads tmpQuantity (set by update_discrep_drf1 before the batch runs).
+    private string CreateSapTransferRequest(string despatchUser, out int sapDocNum)
+    {
+        sapDocNum = 0;
+        string fromWhs = "";
+        string toWhs   = "";
+        var lines = new JArray();
+
+        string uStore = "";
+        try
+        {
+            db.Connect();
+
+            string sql = @"
+                SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(w.U_Store, '') AS U_Store,
+                       d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
+                       CAST(d.tmpQuantity AS int) AS Qty
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                LEFT JOIN " + sap_db + @"..OWHS w WITH(NOLOCK)
+                    ON w.WhsCode = h.FromWhsCode
+                WHERE h.CompanyId = '" + sap_db + @"' AND h.DocEntry = " + GloVarDocEntry + @"
+                  AND d.tmpQuantity > 0
+                ORDER BY d.LineNum";
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            DataTable dt = new DataTable();
+            db.adapter.Fill(dt);
+
+            if (dt.Rows.Count == 0) return null;
+
+            fromWhs = dt.Rows[0]["FromWhsCode"].ToString();
+            toWhs   = dt.Rows[0]["ToWhsCode"].ToString();
+            uStore  = dt.Rows[0]["U_Store"].ToString();
+
+            foreach (DataRow row in dt.Rows)
+            {
+                lines.Add(new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            return "Error reading data: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        if (lines.Count == 0) return null;
+
+        string companyDb  = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+        string actionCode = string.Equals(uStore, "WHSE", StringComparison.OrdinalIgnoreCase)
+                            ? "CREATE" : "NO_ENVIAR";
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        toWhs),
+            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_DESPATCH",         despatchUser),
+            new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("U_ACTION_CODE",      actionCode),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransferRequest(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum    = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    SqlCommand upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf SET DocEntryITR = @Entry, DocNumITR = @Num " +
+                        "WHERE CompanyId = @Company AND DocEntry = @LocalEntry",
+                        db.Conn);
+                    upd.Parameters.AddWithValue("@Entry",      sapEntry);
+                    upd.Parameters.AddWithValue("@Num",        sapDocNum);
+                    upd.Parameters.AddWithValue("@Company",    sap_db);
+                    upd.Parameters.AddWithValue("@LocalEntry", GloVarDocEntry);
+                    upd.ExecuteNonQuery();
+                }
+            }
+            catch { }
+            finally
+            {
+                db.Disconnect();
+            }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            return SapServiceLayer.GetSlErrorMessage(wex);
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    // Returns null on success, or an error message string on failure.
+    // Reads tmpQuantity (set by update_discrep_drf1 for the receive step).
+    private string CreateSapInventoryTransfer(string receiveUser, out int sapDocNum)
+    {
+        sapDocNum            = 0;
+        string fromWhs       = "";
+        string toWhs         = "";
+        int    sapTrReqEntry = 0;
+        var    lines         = new JArray();
+
+        try
+        {
+            db.Connect();
+
+            string sql = @"
+                SELECT h.FromWhsCode, h.ToWhsCode, h.DocEntryITR,
+                       d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
+                       CAST(d.tmpQuantity AS int) AS Qty,
+                       ISNULL(q1.LineNum, -1) AS SapLineNum
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                LEFT JOIN " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
+                    ON  q1.DocEntry = h.DocEntryITR
+                    AND q1.ItemCode = d.ItemCode
+                    AND q1.WhsCode  = d.ToWhsCode
+                WHERE h.CompanyId = '" + sap_db + @"' AND h.DocEntry = " + GloVarDocEntry + @"
+                  AND d.tmpQuantity > 0
+                ORDER BY d.LineNum";
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            DataTable dt = new DataTable();
+            db.adapter.Fill(dt);
+
+            if (dt.Rows.Count == 0) return null;
+
+            fromWhs       = dt.Rows[0]["FromWhsCode"].ToString();
+            toWhs         = dt.Rows[0]["ToWhsCode"].ToString();
+            sapTrReqEntry = dt.Rows[0]["DocEntryITR"] != DBNull.Value
+                            ? Convert.ToInt32(dt.Rows[0]["DocEntryITR"]) : 0;
+
+            for (int i = 0; i < dt.Rows.Count; i++)
+            {
+                DataRow row  = dt.Rows[i];
+                var     line = new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
+                );
+                if (sapTrReqEntry > 0)
+                {
+                    int sapLineNum = dt.Rows[i]["SapLineNum"] != DBNull.Value
+                                     ? Convert.ToInt32(dt.Rows[i]["SapLineNum"]) : i;
+                    line.Add("BaseType",  1250000001);
+                    line.Add("BaseEntry", sapTrReqEntry);
+                    line.Add("BaseLine",  sapLineNum >= 0 ? sapLineNum : i);
+                }
+                lines.Add(line);
+            }
+        }
+        catch (Exception ex)
+        {
+            return "Error reading data: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        if (lines.Count == 0) return null;
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        toWhs),
+            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_RECEIVE",          receiveUser),
+            new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransfer(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum    = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    SqlCommand upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf SET DocEntryTraRec2 = @Entry, DocNumTraRec2 = @Num " +
+                        "WHERE CompanyId = @Company AND DocEntry = @LocalEntry",
+                        db.Conn);
+                    upd.Parameters.AddWithValue("@Entry",      sapEntry);
+                    upd.Parameters.AddWithValue("@Num",        sapDocNum);
+                    upd.Parameters.AddWithValue("@Company",    sap_db);
+                    upd.Parameters.AddWithValue("@LocalEntry", GloVarDocEntry);
+                    upd.ExecuteNonQuery();
+                }
+            }
+            catch { }
+            finally
+            {
+                db.Disconnect();
+            }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            return SapServiceLayer.GetSlErrorMessage(wex);
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    // Creates a SAP Inventory Transfer (OWTR) from the Duty Paid origin warehouse to the
+    // research warehouse (queried from OWHS BPLId=3 Block='D') for each line where
+    // DraftQuantity > tmpQuantity (shortage on dispatch: items not sent).
+    // Saves DocEntry/DocNum to DocEntryTraDis / DocNumTraDis.
+    // On SAP failure, logs each line to la_transfer_errors.
+    // Returns null on success (including when there is no shortage), or error message.
+    private string CreateSapDispatchShortageTransfer(string dispatchUser, string researchWhs, out int sapDocNum)
+    {
+        sapDocNum = 0;
+        string fromWhs  = "";
+        string toOriWhs = "";
+        var    lines        = new JArray();
+        var    shortageRows = new DataTable();
+
+        try
+        {
+            db.Connect();
+
+            string sql = @"
+                SELECT h.FromWhsCode, h.ToWhsCode,
+                       d.LineNum, d.ItemCode, d.ItemName,
+                       CAST(d.DraftQuantity  AS int) AS DraftQty,
+                       CAST(d.tmpQuantity    AS int) AS DispatchQty,
+                       CAST(d.DraftQuantity - d.tmpQuantity AS int) AS ShortageQty
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                WHERE h.CompanyId = @cid AND h.DocEntry = @de
+                  AND d.DraftQuantity > d.tmpQuantity
+                ORDER BY d.LineNum";
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@cid", sap_db);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@de",  GloVarDocEntry);
+            db.adapter.Fill(shortageRows);
+
+            if (shortageRows.Rows.Count == 0) return null;
+
+            fromWhs  = shortageRows.Rows[0]["FromWhsCode"].ToString();
+            toOriWhs = shortageRows.Rows[0]["ToWhsCode"].ToString();
+
+            foreach (DataRow row in shortageRows.Rows)
+            {
+                lines.Add(new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["ShortageQty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     researchWhs)
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            return "Error reading dispatch shortage data: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        if (lines.Count == 0) return null;
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        researchWhs),
+            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_DESPATCH",         dispatchUser),
+            new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransfer(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum    = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    using (var upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf SET DocEntryTraDis = @Entry, DocNumTraDis = @Num " +
+                        "WHERE CompanyId = @Company AND DocEntry = @LocalEntry", db.Conn))
+                    {
+                        upd.Parameters.AddWithValue("@Entry",      sapEntry);
+                        upd.Parameters.AddWithValue("@Num",        sapDocNum);
+                        upd.Parameters.AddWithValue("@Company",    sap_db);
+                        upd.Parameters.AddWithValue("@LocalEntry", GloVarDocEntry);
+                        upd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch { }
+            finally { db.Disconnect(); }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            string err = SapServiceLayer.GetSlErrorMessage(wex);
+            LogDispatchShortageLinesToTransferErrors(shortageRows, fromWhs, researchWhs, toOriWhs, dispatchUser, err);
+            return err;
+        }
+        catch (Exception ex)
+        {
+            LogDispatchShortageLinesToTransferErrors(shortageRows, fromWhs, researchWhs, toOriWhs, dispatchUser, ex.Message);
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    private void LogDispatchShortageLinesToTransferErrors(DataTable shortageRows,
+        string fromWhs, string toWhs, string toOriWhs, string userApp, string errorMsg)
+    {
+        foreach (DataRow row in shortageRows.Rows)
+        {
+            InsertTransferError(
+                Convert.ToInt32(row["LineNum"]),
+                fromWhs,
+                toWhs,
+                toOriWhs,
+                row["ItemCode"].ToString(),
+                row["ItemName"].ToString(),
+                Convert.ToInt32(row["ShortageQty"]),
+                userApp,
+                errorMsg);
+        }
+    }
+
+    // Creates a SAP Inventory Transfer (OWTR) from the Duty Paid origin warehouse to the
+    // research warehouse (queried from OWHS BPLId=3 Block='R') for each line where
+    // DispatchQuantity > tmpQuantity (shortage on receipt).
+    // Saves DocEntry/DocNum to DocEntryTraRec / DocNumTraRec.
+    // On SAP failure, logs each shortage line to la_transfer_errors.
+    // Returns null on success (including when there is no shortage), or error message.
+    private string CreateSapDutyPaidShortageTransfer(string receiveUser, string researchWhs, out int sapDocNum)
+    {
+        sapDocNum = 0;
+        string fromWhs  = "";
+        string toOriWhs = "";
+        var    lines        = new JArray();
+        var    shortageRows = new DataTable();
+
+        try
+        {
+            db.Connect();
+
+            string sql = @"
+                SELECT h.FromWhsCode, h.ToWhsCode,
+                       d.LineNum, d.ItemCode, d.ItemName,
+                       CAST(d.DispatchQuantity AS int) AS DispatchQty,
+                       CAST(d.tmpQuantity      AS int) AS ReceivedQty,
+                       CAST(d.DispatchQuantity - d.tmpQuantity AS int) AS ShortageQty
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                WHERE h.CompanyId = @cid AND h.DocEntry = @de
+                  AND d.DispatchQuantity > d.tmpQuantity
+                ORDER BY d.LineNum";
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@cid", sap_db);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@de",  GloVarDocEntry);
+            db.adapter.Fill(shortageRows);
+
+            if (shortageRows.Rows.Count == 0) return null;
+
+            fromWhs  = shortageRows.Rows[0]["FromWhsCode"].ToString();
+            toOriWhs = shortageRows.Rows[0]["ToWhsCode"].ToString();
+
+            foreach (DataRow row in shortageRows.Rows)
+            {
+                lines.Add(new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["ShortageQty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     researchWhs)
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            return "Error reading shortage data: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        if (lines.Count == 0) return null;
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        researchWhs),
+            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_RECEIVE",          receiveUser),
+            new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransfer(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum    = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    using (var upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf SET DocEntryTraRec = @Entry, DocNumTraRec = @Num " +
+                        "WHERE CompanyId = @Company AND DocEntry = @LocalEntry", db.Conn))
+                    {
+                        upd.Parameters.AddWithValue("@Entry",      sapEntry);
+                        upd.Parameters.AddWithValue("@Num",        sapDocNum);
+                        upd.Parameters.AddWithValue("@Company",    sap_db);
+                        upd.Parameters.AddWithValue("@LocalEntry", GloVarDocEntry);
+                        upd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch { }
+            finally { db.Disconnect(); }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            string err = SapServiceLayer.GetSlErrorMessage(wex);
+            LogShortageLinesToTransferErrors(shortageRows, fromWhs, researchWhs, toOriWhs, receiveUser, err);
+            return err;
+        }
+        catch (Exception ex)
+        {
+            LogShortageLinesToTransferErrors(shortageRows, fromWhs, researchWhs, toOriWhs, receiveUser, ex.Message);
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    // Logs shortage lines (DispatchQty > ReceivedQty) to la_transfer_errors.
+    private void LogShortageLinesToTransferErrors(DataTable shortageRows,
+        string fromWhs, string toWhs, string toOriWhs, string userApp, string errorMsg)
+    {
+        foreach (DataRow row in shortageRows.Rows)
+        {
+            InsertTransferError(
+                Convert.ToInt32(row["LineNum"]),
+                fromWhs,
+                toWhs,
+                toOriWhs,
+                row["ItemCode"].ToString(),
+                row["ItemName"].ToString(),
+                Convert.ToInt32(row["ShortageQty"]),
+                userApp,
+                errorMsg);
+        }
+    }
+
+    // Logs main IT receive lines (tmpQuantity > 0) to la_transfer_errors when CreateSapInventoryTransfer fails.
+    private void LogMainItLinesToTransferErrors(string userApp, string errorMsg)
+    {
+        try
+        {
+            db.Connect();
+
+            string sql = @"
+                SELECT h.FromWhsCode, d.ToWhsCode,
+                       d.LineNum, d.ItemCode, d.ItemName,
+                       CAST(d.tmpQuantity AS int) AS Qty
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                WHERE h.CompanyId = @cid AND h.DocEntry = @de
+                  AND d.tmpQuantity > 0
+                ORDER BY d.LineNum";
+
+            var dt = new DataTable();
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@cid", sap_db);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@de",  GloVarDocEntry);
+            db.adapter.Fill(dt);
+
+            foreach (DataRow row in dt.Rows)
+            {
+                InsertTransferError(
+                    Convert.ToInt32(row["LineNum"]),
+                    row["FromWhsCode"].ToString(),
+                    row["ToWhsCode"].ToString(),
+                    row["ToWhsCode"].ToString(),
+                    row["ItemCode"].ToString(),
+                    row["ItemName"].ToString(),
+                    Convert.ToInt32(row["Qty"]),
+                    userApp,
+                    errorMsg);
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+    }
+
+    // Inserts a single row into la_transfer_errors.
+    private void InsertTransferError(int lineNum, string fromWhs, string toWhs, string toOriWhs,
+        string itemCode, string pluDesc, int qty, string userApp, string errorMsg)
+    {
+        try
+        {
+            db.Connect();
+            using (var cmd = new SqlCommand(
+                "INSERT INTO la_transfer_errors " +
+                "(DocEntryOri, line, docdate, fromwhscode, towhscode, tooriwhscode, " +
+                " itemcode, pludesc, quantity, userapp, error_message, fixed) " +
+                "VALUES (@ori, @line, GETDATE(), @from, @to, @toori, " +
+                "        @item, @plu, @qty, @user, @err, 'N')", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@ori",   GloVarDocEntry);
+                cmd.Parameters.AddWithValue("@line",  lineNum);
+                cmd.Parameters.AddWithValue("@from",  fromWhs);
+                cmd.Parameters.AddWithValue("@to",    toWhs);
+                cmd.Parameters.AddWithValue("@toori", toOriWhs);
+                cmd.Parameters.AddWithValue("@item",  itemCode);
+                cmd.Parameters.AddWithValue("@plu",   pluDesc);
+                cmd.Parameters.AddWithValue("@qty",   qty);
+                cmd.Parameters.AddWithValue("@user",  userApp);
+                cmd.Parameters.AddWithValue("@err",   errorMsg);
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+    }
+
+    protected void ReopenRecButton_Click(object sender, EventArgs e)
+    {
+
+    }
+
+    protected void logTrace(string sObjectName, string sLogMessage)
+    {
+        db.Connect();
+
+        try
+        {
+
+            db.cmd.Parameters.Clear();
+            db.cmd.CommandText = "SMM_LOGTRACE_PRC";
+            db.cmd.CommandType = CommandType.StoredProcedure;
+
+            db.cmd.Parameters.Add(new SqlParameter("@ObjectName", SqlDbType.NVarChar));
+            db.cmd.Parameters["@ObjectName"].Value = sObjectName;
+
+            db.cmd.Parameters.Add(new SqlParameter("@LogMessage", SqlDbType.NVarChar));
+            db.cmd.Parameters["@LogMessage"].Value = sLogMessage;
+
+
+            db.cmd.Connection = db.Conn;
+
+
+            db.cmd.ExecuteNonQuery();
+
+        }
+        catch (Exception ex)
+        {
+            db.Disconnect();
+            throw new Exception("Caught exception in call procedure logTrace. ERROR MESSAGE : " + ex.Message);
+        }
+
+        db.Disconnect();
+
+    }
+}

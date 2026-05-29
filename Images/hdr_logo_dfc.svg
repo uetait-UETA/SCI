@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 790 550">
+  <!-- White background -->
+  <rect width="790" height="550" fill="white"/>
+
+  <!-- Blue oval arc (from upper-right, sweeping left and around to lower-right) -->
+  <path d="M 688 138 A 335 228 0 1 0 678 412"
+        fill="none" stroke="#1B3875" stroke-width="36"
+        stroke-linecap="round"/>
+
+  <!-- DUTY FREE -->
+  <text x="188" y="155"
+        font-family="'Arial Black', Arial, sans-serif"
+        font-weight="900" font-style="italic"
+        font-size="78" fill="#E31837"
+        letter-spacing="1">DUTY FREE</text>
+
+  <!-- DFC -->
+  <text x="90" y="388"
+        font-family="'Arial Black', Arial, sans-serif"
+        font-weight="900" font-style="italic"
+        font-size="248" fill="#1B3875">DFC</text>
+
+  <!-- CALIFORNIA -->
+  <text x="305" y="472"
+        font-family="'Arial Black', Arial, sans-serif"
+        font-weight="900" font-style="italic"
+        font-size="56" fill="#E31837"
+        textLength="368" lengthAdjust="spacingAndGlyphs">CALIFORNIA</text>
+</svg>

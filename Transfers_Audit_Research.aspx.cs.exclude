@@ -1,0 +1,295 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Web;
+using System.Web.UI;
+using System.Web.UI.WebControls;
+using System.Data;
+using System.Collections;
+using System.Data.SqlClient;
+using System.Configuration;
+
+
+
+public partial class Transfers_Audit_Research : System.Web.UI.Page
+{
+    protected SqlDb db = new SqlDb();
+
+    protected string usr;
+    protected string Loc;
+    protected string Item;
+    protected string sap_db;
+    protected string serverIP;
+    protected string serverUserName;
+    protected string serverPwd;
+    protected string dbUserName;
+    protected string dbPwd;
+    protected string licenseServerIP;
+    protected string xmlPath;
+    protected string appUserName;
+    protected string commentsMsg;
+    protected string docdateDraft;
+
+    protected string fileName;
+
+
+
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        //if ((string)this.Session["UserId"] == "")
+        //{
+        //    Response.Redirect("Login1.aspx");
+        //}
+
+        if ((string)this.Session["UserId"] == "" || (string)this.Session["UserId"] == null)
+        {
+            Response.Redirect("Login1.aspx");
+        }
+
+        //if ((string)this.Session["Controles"] == "" || (string)this.Session["Controles"] == null)
+        //{
+        //    Response.Redirect("Login1.aspx");
+        //}
+
+
+        ArrayList controles = new ArrayList();
+
+        controles = (ArrayList)this.Session["Controles"];
+
+        string thiscontrol = "";
+        char flagokay = 'N';
+
+        for (int i = 0; i < controles.Count; i++)
+        {
+            thiscontrol = (controles[i].ToString());
+            if ((thiscontrol == "Transfers_Audit.aspx") || (thiscontrol == "ATOTAL"))
+            {
+                flagokay = 'Y';
+            }
+
+        }
+
+        if (flagokay == 'Y')
+        {
+            //ObjectDataSource1.SelectParameters["ShowAll"].DefaultValue = radioShowAll.Checked.ToString(); Mod Nov2013
+            sap_db = ConfigurationSettings.AppSettings.Get("sap_db");
+            serverIP = ConfigurationSettings.AppSettings.Get("serverIP");
+            serverUserName = ConfigurationSettings.AppSettings.Get("serverUserName");
+            serverPwd = ConfigurationSettings.AppSettings.Get("serverPwd");
+            dbUserName = ConfigurationSettings.AppSettings.Get("dbUserName");
+            dbPwd = ConfigurationSettings.AppSettings.Get("dbPwd");
+            licenseServerIP = ConfigurationSettings.AppSettings.Get("licenseServerIP");
+
+            if (!IsPostBack)
+            {
+                LoadWarehouses();
+                LoadItemGroups();
+            }
+        }
+        else
+        {
+
+            Session["FlagNoPerPag"] = "N";
+            Response.Redirect("Login1.aspx");
+
+        }
+
+    }
+
+    protected void btnSearch_Click(object sender, EventArgs e)
+    {
+        doQry.Text = "1";
+        GridView1.DataBind();
+    }
+
+
+    protected void txtDocNum_PreRender(object sender, EventArgs e)
+    {
+        //if ((string)this.Session["UserId"] == "x")
+        //{
+        //    string Lmsg = "Favor de registrarse en el sistema.";
+        //    Alert.Show(Lmsg);
+
+        //    Response.Redirect("Login1.aspx");
+        //    //Response.Close();
+
+        //}
+    }
+    protected void GridView1_DataBound(object sender, EventArgs e)
+    {
+        //StatusRadioButtonList.Items.FindByValue("All").Selected = true;
+
+
+    }
+
+    private void LoadWarehouses()
+    {
+
+        db.Connect();
+
+        DataTable dt = new DataTable();
+
+        try
+        {
+            string sql =
+            @"select 
+		            O.WhsCode ,
+		            O.WhsName 
+	             from " + sap_db + @".dbo.owhs O, RSS_OWHS_CONTROL R
+	             where O.WhsCode  = R.WhsCode
+	               and R.Control = 'VIEWTRAREFROM'
+	             order by o.WhsCode
+	            ";
+
+            //where WhsCode in ('BODEGA', 'TIENDA')
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            db.adapter.Fill(dt);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Caught exception in function LoadWarehouses. ERROR MESSAGE : " + ex.Message);
+        }
+
+        drpFromWhsCode.DataSource = dt;
+        drpFromWhsCode.DataBind();
+
+
+
+
+        //--------------
+
+        DataTable dt2 = new DataTable();
+
+        try
+        {
+            string sql2 =
+            @"select 
+		            O.WhsCode ,
+		            O.WhsName 
+	             from " + sap_db + @".dbo.owhs O, RSS_OWHS_CONTROL R
+	             where O.WhsCode  = R.WhsCode
+	               and R.Control = 'VIEWTRARETO'
+	             order by o.WhsCode
+	            ";
+
+            //where WhsCode in ('BODEGA', 'TIENDA')
+
+            db.adapter = new SqlDataAdapter(sql2, db.Conn);
+            db.adapter.Fill(dt2);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Caught exception in function LoadWarehouses for toloc. ERROR MESSAGE : " + ex.Message);
+        }
+
+
+        drpToWhsCode.DataSource = dt2;
+        drpToWhsCode.DataBind();
+
+        ListItem li = new ListItem("Select a location", "0");
+
+        drpFromWhsCode.Items.Insert(0, li);
+        drpToWhsCode.Items.Insert(0, li);
+
+        db.Conn.Close();
+    }
+
+    private void LoadItemGroups()
+    {
+        DataTable dt = new DataTable();
+
+        try
+        {
+            string sql =
+            @"select 
+               ItmsGrpCod GroupCode, 
+               cast(ItmsGrpCod as varchar) + ' - ' + ItmsGrpNam GroupName 
+             from " + sap_db + @".dbo.oitb 
+            order by ItmsGrpCod";
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            db.adapter.Fill(dt);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Caught exception in function LoadItemGroups. ERROR MESSAGE : " + ex.Message);
+        }
+        drpItemGroups.DataSource = dt;
+        drpItemGroups.DataBind();
+
+        ListItem li = new ListItem("Select a Group", "0");
+
+        drpItemGroups.Items.Insert(0, li);
+
+    }
+
+
+    protected void ExportToExcel_Click(object sender, EventArgs e)
+    {
+        DataTable dt = new DataTable();
+
+
+
+        fileName = "Transferencias.csv";
+        string sFileName = fileName;
+        Response.ContentType = "Application/csv";
+        Response.AddHeader("Content-Disposition", "filename=" + sFileName + ";");
+
+        try
+        {
+            Transfer trf = new Transfer();
+
+            string lstatusDoc = StatusRadioButtonList.SelectedValue;
+            string ltxtDocNum = txtDocNum.Text;
+            string lFromDateTxt = FromDateTxt.Text;
+            string ltoDateTxt = toDateTxt.Text;
+            string lfromLocTxt = drpFromWhsCode.SelectedValue;
+            string ltoLocTxt = drpToWhsCode.SelectedValue;
+            string lcategoryTxt = drpItemGroups.SelectedValue;
+            string landOr1 = andOrDropDownList1.SelectedValue;
+            string landOr2 = andOrDropDownList2.SelectedValue;
+            string landOr3 = andOrDropDownList3.SelectedValue;
+            string ldoQry = "1";
+
+
+
+
+            //dt = trf.GetTransferAudit(lstatusDoc, ltxtDocNum, lFromDateTxt, ltoDateTxt, lfromLocTxt, ltoLocTxt, lcategoryTxt, landOr1, landOr2, landOr3, ldoQry); 
+
+
+            // output header row
+            string hdr = "";
+            for (int i = 0; i < dt.Columns.Count; i++)
+            {
+                hdr += dt.Columns[i].ColumnName.ToString() + ",";
+            }
+            hdr += "New Min,New Max,";
+            Response.Write(hdr.Substring(0, hdr.Length - 1) + '\r' + '\n');
+            //output all data rows
+            foreach (DataRow r in dt.Rows)
+            {
+                Response.Write(FormatCsvString(r));
+            }
+        }
+        catch (Exception ex)
+        {
+            Response.Write("Caught exception in function ShowWorksheet.<br>ERROR MESSAGE: " + ex.Message);
+        }
+        Response.End();
+    }
+
+    protected string FormatCsvString(DataRow r)
+    {
+        string s = "";
+        for (int i = 0; i < r.ItemArray.Length; i++)
+        {
+            s += "\"" + r[i].ToString().Replace("\"", "\"\"") + "\",";
+        }
+        return s.Substring(0, s.Length - 1) + '\r' + '\n';
+    }
+
+
+
+}
+
+

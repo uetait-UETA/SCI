@@ -1,0 +1,330 @@
+﻿<%@ Master Language="C#" AutoEventWireup="true" CodeFile="SiteMaster.master.cs" Inherits="SiteMaster" %>
+
+<%@ Register Assembly="Telerik.Web.UI" Namespace="Telerik.Web.UI" TagPrefix="tel" %>
+<%--<%@ Register Assembly="AjaxControlToolkit" Namespace="AjaxControlToolkit" TagPrefix="asp" %>--%>
+
+<!DOCTYPE html>
+
+<html lang="en" translate="no" xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+    <title>Inventory Control System</title>
+    <asp:ContentPlaceHolder ID="head" runat="server">
+    </asp:ContentPlaceHolder>
+    <meta charset="utf-8" />
+    <meta name="google" content="notranslate" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="shortcut icon" href="Images/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="Images/favicon.ico" type="image/x-icon" />
+    <link href="BootStrap/css/bootstrap.css" rel="stylesheet" type="text/css" />
+    <link href="Font-Awesome/css/font-awesome.css" rel="stylesheet" type="text/css" />
+    <link href="Styles/StyleSheet.css" rel="stylesheet" type="text/css" />
+
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+      <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+</head>
+<body>
+    <form id="form1" runat="server">
+
+
+        <tel:RadScriptManager ID="RadScriptManager1" runat="server" AsyncPostBackTimeout="90000"></tel:RadScriptManager>
+
+        <%--<asp:ToolkitScriptManager ID="ToolkitScriptManager1" runat="server" />--%>
+        <tel:RadSkinManager ID="QsfSkinManager" runat="server" ShowChooser="false" Skin="Windows7" />
+
+        <%--<tel:RadAjaxLoadingPanel ID="ralpMain" runat="server" Height="75px" Width="75px" Transparency="10"
+            IsSticky="false" Style="position: absolute; top: 0; left: 0; height: 100%; width: 100%;">
+        </tel:RadAjaxLoadingPanel>
+
+        <tel:RadAjaxPanel ID="rapMain" runat="server" LoadingPanelID="ralpMain" Height="100%">--%>
+        <div id="wrapper">
+            <div class="row">
+                <div class="col-md-1">
+                    <div class="row" style="margin-left: 20px;">
+                        <img src="Images/hdr_logo.png" alt="Logo"
+                            style="max-width:112px; max-height:85px; object-fit:contain;" />
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <ul class="myUL" style="margin-left: 20px;">
+                        <li>
+                            <asp:Label ID="lblHeading" runat="server" Font-Bold="true" Font-Names="Arial" Font-Size="20px" ForeColor="#004990" />
+                            <label class="myLabel small">V 3.2</label>
+                        </li>
+                        <li>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <tel:RadMenu ID="rmMainMenu" runat="server" Style="z-index: 500;" ShowToggleHandle="true">
+                                        <Items>
+                                            <tel:RadMenuItem Text="Home" Value="Default" NavigateUrl="Default.aspx" />
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Product Locator" Value="ProductLocator" NavigateUrl="ProductLocator.aspx" />
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Store Min-Max" Value="StoreMinMax">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Text="Min-Max" Value="MinMax" NavigateUrl="StoreMinMax3.aspx" />
+                                                    <tel:RadMenuItem Text="Min-Max Excel" Value="MinMaxExcel" NavigateUrl="MinMaxByExcel.aspx" />
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="ADR" Value="ADR">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Text="Delivery Errors" Value="DeliveryErrores" NavigateUrl="DeliveryErrors.aspx" />
+                                                    <tel:RadMenuItem Text="Delivery Errors by Items" Value="DeliveryErroresItems" NavigateUrl="DeliveryErrorsItems.aspx" />
+                                                    <tel:RadMenuItem Text="Transfer Errors" Value="ErroresdeTransferencia" NavigateUrl="TransferErrors.aspx" />
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                             <tel:RadMenuItem Text="Receiving" Value="Receiving" Visible="false">
+                                                <Items>
+                                                     <tel:RadMenuItem Text="Goods Receipt"  Value="GoodsReceiptPO"              NavigateUrl="GoodsReceiptPO.aspx" />
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Transfers" Value="Transfers">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Text="Create Min-Max Transfer" Value="CrearTransferenciaMinMax" NavigateUrl="CreateTransfer.aspx" />
+                                                    <tel:RadMenuItem Text="Create Manual Transfer" Value="CrearTransferenciaManual" NavigateUrl="CreateTransferXsap.aspx" />
+                                                    <tel:RadMenuItem Text="Transfer by Excel" Value="TransferenciaporExcel" NavigateUrl="createTransferByExcel.aspx" />
+                                                    <tel:RadMenuItem Text="Delete Transfer" Value="BorrarTransferencia" NavigateUrl="TransferDelete.aspx" />
+                                                    <tel:RadMenuItem Text="View Transfers" Value="VerTransferencias" NavigateUrl="Transfers.aspx" />
+                                                    <tel:RadMenuItem Text="Transfer Audit" Value="AuditoriadeTransferencias" NavigateUrl="Transfers_Audit.aspx" />
+                                                    <tel:RadMenuItem Text="Transfer Audit by Item" Value="AuditoriadeTransferenciasporArticulo" NavigateUrl="Transfers_Audit_Item.aspx" />
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                            <%--<tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="SAP" Value="SAP">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Text="Existencia en SAP" Value="ExistenciaenSAP" NavigateUrl="sapInventory.aspx"></tel:RadMenuItem>
+                                                </Items>
+                                            </tel:RadMenuItem>--%>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Fill Priority" Value="FILL" NavigateUrl="FillPriority.aspx" />
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Warehouses" Value="Bodegas">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Text="Bins" Value="Bins" NavigateUrl="WhsItemBin.aspx" />
+                                                    <tel:RadMenuItem Text="Bins Excel" Value="BinsExcel" NavigateUrl="BinByExcel.aspx" />
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Reports" Value="Reports">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Visible="false" Text="Bins Disp and Rec (Colon)" Value="BinesDesp" NavigateUrl="R_BinesDesp.aspx" />
+                                                    <tel:RadMenuItem Enabled="false" Text="Bins Disp and Rec (Stores)" Value="BinesDespTiendas" NavigateUrl="R_BinesDespTiendas.aspx" />
+                                                    <tel:RadMenuItem Visible="false" Text="Item Detail by Bins" Value="DetalledeItemsporBins" NavigateUrl="R_DetalledeItemsporBins.aspx" />
+                                                    <tel:RadMenuItem Enabled="false" Text="Item Detail by Bins Stores" Value="DetalledeItemsporBinsTiendas" NavigateUrl="R_DetalledeItemsporBinsTiendas.aspx" />
+                                                    <tel:RadMenuItem Text="SAP Inventory" Value="ExistenciaenSAP" NavigateUrl="sapInventory.aspx"></tel:RadMenuItem>
+                                                    <tel:RadMenuItem Text="Store Inventory" Value="InventarioDeTiendasTocumen" NavigateUrl="R_InventarioDeTiendasTocumen.aspx" />
+                                                    <tel:RadMenuItem Enabled="false" Text="Research" Value="Research" NavigateUrl="R_Research.aspx" />
+                                                    <tel:RadMenuItem Text="Kardex" Value="Kardex" NavigateUrl="R_Kardex.aspx" />
+                                                    <tel:RadMenuItem Visible="false" Text="Open Orders in Colon ZL" Value="OrdenesAbiertas" NavigateUrl="R_OrdenesAbiertas.aspx" />
+                                                    <tel:RadMenuItem Enabled="false" Text="Orders with Issues" Value="OrdenesConProblemas" NavigateUrl="R_OrdenesConProblemas.aspx" />
+                                                    <tel:RadMenuItem Enabled="false" Text="Warehouse Receipt SAP APRI vs GRPOs (Accounting)" Value="ReciboBodegaSAPAPRIvsGRPO" NavigateUrl="R_ReciboBodegaSAPAPRIvsGRPO.aspx" />
+                                                    <tel:RadMenuItem Enabled="false" Text="Warehouse Receipt vs SAP" Value="ReciboBodegavsSAP" NavigateUrl="R_ReciboBodegavsSAP.aspx" />
+                                                    <tel:RadMenuItem Visible="false" Text="Web Orders" Value="PreOrderManagement" NavigateUrl="PreOrderManagement.aspx" />
+													<tel:RadMenuItem Visible="false" Text="Web Orders by Status" Value="PreOrderManagement_Det" NavigateUrl="PreOrderManagement_Det.aspx" />
+                                                    <tel:RadMenuItem Text="Min-Max by Category and Brand" Value="MinMaxMult" NavigateUrl="StoreMinMax3Multiple.aspx" />
+                                                    <tel:RadMenuItem Visible="false" Text="Analysis of References with No Stock in Operation" Value="MinMaxMultColSiTocNo" NavigateUrl="R_StoreMinMax3Multiple_ColSiTocNo.aspx" />
+							<tel:RadMenuItem Visible="false" Text="Transfer Status" Value="EstatusTransferencias" NavigateUrl="javascript:window.open('http://administrator:ATEU7770!@172.18.230.21/Reports/Browse/Logistica', '_blank');" />
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Barcodes" Value="ProductBarra" NavigateUrl="UETAUpdateBarcodeSap.aspx" />
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="FAQs and Videos" Value="PreguntasFrecuentes">
+                                                <GroupSettings />
+                                                <Items>
+                                                    <tel:RadMenuItem Text="Frequently Asked Questions" Value="PreguntasFrecuentes" NavigateUrl="PreguntasFrecuentes.aspx"></tel:RadMenuItem>
+                                                    <tel:RadMenuItem Text="Operational Videos" Value="VideosOperativos" NavigateUrl="VideosOperativos.aspx"></tel:RadMenuItem>
+                                                    <tel:RadMenuItem Text="Financial Videos" Value="VideosFinancieros" NavigateUrl="VideosFinancieros.aspx"></tel:RadMenuItem>
+                                                    <tel:RadMenuItem Text="Maintain FAQ" Value="MaintainFAQ" NavigateUrl="MaintainFAQ.aspx"></tel:RadMenuItem>
+                                                    <tel:RadMenuItem Text="Maintain Operativos" Value="MaintainOperativos" NavigateUrl="MaintainVideosOperativos.aspx"></tel:RadMenuItem>
+                                                    <tel:RadMenuItem Text="Maintain Financieros" Value="MaintainFinancieros" NavigateUrl="MaintainVideosFinancieros.aspx"></tel:RadMenuItem>
+                                                </Items>
+                                            </tel:RadMenuItem>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Admin" Value="Usuarios">
+					    						<GroupSettings />
+					    							<Items>
+					    								<tel:RadMenuItem Text="Users" Value="Usuarios" NavigateUrl="/admin/UserEdit.aspx"></tel:RadMenuItem>
+					    								<tel:RadMenuItem Text="Credentials" Value="Credenciales" NavigateUrl="/admin/LoginEdit.aspx"></tel:RadMenuItem>
+					    							</Items>
+					    						</tel:RadMenuItem>
+                                            <tel:RadMenuItem IsSeparator="true" />
+                                            <tel:RadMenuItem Text="Login" Value="LOGIN" NavigateUrl="Login1.aspx" />
+                                        </Items>
+                                    </tel:RadMenu>&nbsp;&nbsp;
+                                    <label runat="server" id="lblCompany" style="color: red; font-size: 14pt;" translate="no" />
+                                </div>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="col-md-3" style="text-align: right; padding-right: 60px; padding-top: 15px;">
+                    <ul class="myUL" style="margin-left: 20px;">
+                        <li style="white-space: nowrap;">
+                            <asp:LinkButton ID="lbEnglish" runat="server" OnClick="lbEnglish_Click"
+                                ToolTip="English" style="text-decoration:none; border:none; background:none; cursor:pointer; vertical-align:middle;">
+                                <img src="Images/flag_us.svg" width="28" height="18" alt="English" style="border:1px solid #ccc; vertical-align:middle;" />
+                            </asp:LinkButton>
+                            <asp:LinkButton ID="lbSpanish" runat="server" OnClick="lbSpanish_Click"
+                                ToolTip="Español" style="text-decoration:none; border:none; background:none; cursor:pointer; vertical-align:middle; margin-left:4px;">
+                                <img src="Images/flag_es.svg" width="28" height="18" alt="Español" style="border:1px solid #ccc; vertical-align:middle;" />
+                            </asp:LinkButton>
+                            &nbsp;
+                            <label runat="server" id="lblUser" class="myLabelLarge" style="text-align:right; font-size: 12pt; vertical-align:middle;" />
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+            <div class="row mySeparator">&nbsp;</div>
+            <div class="row">&nbsp;</div>
+            <div class="row">
+                <div class="col-md-12">
+                    <div id="content">
+                        <asp:ContentPlaceHolder ID="cphMain" runat="server">
+                        </asp:ContentPlaceHolder>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12">
+            <div class="row">&nbsp;</div>
+            <div class="alert alert-danger alert-dismissable col-md-10 col-md-offset-1" id="divMessage" runat="server" visible="false" style="z-index: 1; position: absolute;">
+                <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
+                <div id="divMessageInner" runat="server" />
+            </div>
+        </div>
+
+        <div>
+            <tel:RadNotification ID="rnMessage" runat="server" VisibleOnPageLoad="false" Position="Center"
+                Width="400" Animation="Fade" EnableRoundedCorners="true" EnableShadow="true" ContentIcon=""
+                Style="z-index: 35000" AutoCloseDelay="6000" ShowContentDuringLoad="false">
+            </tel:RadNotification>
+        </div>
+        <%--</tel:RadAjaxPanel>--%>
+
+        <div id="sciLoaderOverlay">
+            <div class="sci-spinner"></div>
+        </div>
+    </form>
+
+    <script src="http://code.jquery.com/jquery-1.11.0.min.js" type="text/javascript"></script>
+    <%--<script src="Scripts/menu.js" type="text/javascript"></script>--%>
+    <script src="BootStrap/js/bootstrap.min.js" type="text/javascript"></script>
+    <script src="Scripts/myJQuery.js" type="text/javascript"></script>
+    <script src="Scripts/i18n.js" type="text/javascript"></script>
+    <script type="text/javascript">
+
+        $(document).ready(function () {
+            $('[data-toggle="tooltip"]').tooltip();
+            // Re-initialize Bootstrap dropdowns in case Telerik conflicts with jQuery
+            $('[data-toggle="dropdown"]').dropdown();
+        });
+
+        var rptWin = null;
+        var screenWidth = window.innerWidth;
+        var screenHeight = window.innerHeight;
+        function popUpReport(url) {
+            rptWin = window.open(url, "rptWin", "width=800,height=600,scrollbars=1,toolbar=0,resizable=1", false);
+            if (rptWin.opener == null) rptWin.opener = window;
+            //rptWin.document.focus();
+        }
+
+        function popUpReport2(url) {
+            rptWin = window.open(url, "rptWin", "width=200,height=200,scrollbars=1,toolbar=0,resizable=1", false);
+            if (rptWin.opener == null) rptWin.opener = window;
+            rptWin.document.focus();
+        }
+
+        function popUpReport3(url) {
+            rptWin = window.open(url, "rptWin", "width=1100,height=600,scrollbars=1,toolbar=0,resizable=1", false);
+            if (rptWin.opener == null) rptWin.opener = window;
+            rptWin.document.focus();
+        }
+        function popUpReport4(url) {
+            rptWin = window.open(url, "rptWin", "width="+ (screenWidth*(95/100)) +",height="+ (screenHeight*(85/100))+",scrollbars=1,toolbar=0,resizable=1", false);
+            if (rptWin.opener == null) rptWin.opener = window;
+            //rptWin.document.focus();
+        }
+        function verifySORequestCreTra() {
+            return confirm("WARNING!!\n\nAre You Sure You Want to Create This Transfer?\n\nClick OK to Create or Cancel to Not Create");
+        }
+
+        // ── Global processing indicator ──────────────────────────────────────
+        (function () {
+            var overlay    = null;
+            var hooked     = false;
+            var safetyTimer = null;
+
+            function showLoader() {
+                if (!overlay) overlay = document.getElementById('sciLoaderOverlay');
+                if (!overlay) return;
+                overlay.classList.add('active');
+                // Safety: hide automatically after 45 s in case no endRequest fires
+                clearTimeout(safetyTimer);
+                safetyTimer = setTimeout(hideLoader, 45000);
+            }
+            function hideLoader() {
+                clearTimeout(safetyTimer);
+                if (!overlay) overlay = document.getElementById('sciLoaderOverlay');
+                if (overlay) overlay.classList.remove('active');
+            }
+
+            function init() {
+                if (hooked) return;
+                hooked = true;
+
+                // All ASP.NET button postbacks go through __doPostBack
+                if (typeof __doPostBack === 'function') {
+                    var _dpb = __doPostBack;
+                    window.__doPostBack = function (et, ea) { showLoader(); _dpb(et, ea); };
+                }
+
+                // Validator-protected buttons use WebForm_DoPostBackWithOptions
+                if (typeof WebForm_DoPostBackWithOptions === 'function') {
+                    var _wf = WebForm_DoPostBackWithOptions;
+                    window.WebForm_DoPostBackWithOptions = function (o) { showLoader(); _wf(o); };
+                }
+
+                // Fallback for plain <input type="submit"> buttons
+                var frm = document.getElementById('form1');
+                if (frm) frm.addEventListener('submit', showLoader);
+
+                // Telerik / UpdatePanel partial postbacks
+                try {
+                    var prm = Sys.WebForms.PageRequestManager.getInstance();
+                    prm.add_beginRequest(showLoader);
+                    prm.add_endRequest(hideLoader);
+                } catch (e) { }
+            }
+
+            // Hide loader if browser restores page from back/forward cache
+            window.addEventListener('pageshow', hideLoader);
+
+            // Call immediately — script is at bottom of page so all scripts are ready.
+            // Also register with Sys.Application so partial postbacks re-apply the hook
+            // in case Telerik re-emits __doPostBack after an async update.
+            init();
+            if (typeof Sys !== 'undefined' && Sys.Application) {
+                Sys.Application.add_load(init);
+            }
+        })();
+        // ────────────────────────────────────────────────────────────────────
+
+    </script>
+</body>
+</html>

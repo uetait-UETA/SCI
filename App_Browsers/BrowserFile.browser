@@ -1,0 +1,9 @@
+﻿<browsers>
+  <browser refID="Default">
+    <controlAdapters>
+      <!--<adapter controlType="System.Web.UI.Page" adapterType="Telerik.Web.UI.RadHiddenFieldPageStateCompression" />-->
+      <!--Uncomment the following line to use SessionStateCompression and remove ViewState from the page-->
+      <adapter controlType="System.Web.UI.Page" adapterType="Telerik.Web.UI.RadSessionPageStateCompression" />
+    </controlAdapters>
+  </browser>
+</browsers>

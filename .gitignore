@@ -1,0 +1,45 @@
+# Build output
+bin/
+obj/
+
+# NuGet packages (restore via nuget restore)
+packages/
+!packages/repositories.config
+
+# Visual Studio local files
+.vs/
+*.suo
+*.user
+*.userprefs
+*.userosscache
+*.sln.docstates
+
+# Publish output
+*.pubxml
+*.pubxml.user
+website.publishproj.user
+
+# Logs and temp files
+temp/
+*.log
+
+# Runtime data folders
+transfer_draft_docs/
+
+# Claude Code project files
+.claude/
+
+# VS Code settings
+.vscode/
+
+# ASP.NET auto-generated client scripts
+aspnet_client/
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Excel temp files
+~$*.xlsx
+~$*.xls

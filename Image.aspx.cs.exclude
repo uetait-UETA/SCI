@@ -1,0 +1,63 @@
+﻿using System;
+using System.Collections;
+using System.Configuration;
+using System.Data;
+using System.Linq;
+using System.Web;
+using System.Web.Security;
+using System.Web.UI;
+using System.Web.UI.HtmlControls;
+using System.Web.UI.WebControls;
+using System.Web.UI.WebControls.WebParts;
+using System.Xml.Linq;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+
+public partial class Image : System.Web.UI.Page
+{
+    public DataManager dm = new DataManager();
+    protected void Page_Load(object sender, EventArgs e)
+    {
+        try
+        {
+            //DataTable dt = dm.GetFAQImageByID(Request.QueryString["FaqId"]);
+            //MemoryStream stream = new MemoryStream();
+            //byte[] image = (byte[])dt.Rows[0]["SolutionImage"];
+            //stream.Write(image, 0, image.Length);
+            //Bitmap bitmap = new Bitmap(stream);
+            ////var bitmap = Image.FromStream(stream);
+            //Response.ContentType = "image/Jpeg";
+            //bitmap.Save(Response.OutputStream, ImageFormat.Jpeg);
+            //stream.Close();
+
+            //byte[] image = (byte[])dt.Rows[0]["SolutionImage"];
+            //MemoryStream ms = new MemoryStream(image, 0, image.Length);
+            //ms.Position = 0;
+            //System.Drawing.Image i = System.Drawing.Image.FromStream(ms, true);
+
+
+            byte[] barrImg = dm.GetFAQImageByIDs(Request.QueryString["FaqId"]);
+            string strfn = Convert.ToString(DateTime.Now.ToFileTime());
+            FileStream fs = new FileStream(strfn, FileMode.CreateNew, FileAccess.Write);
+            fs.Write(barrImg, 0, barrImg.Length);
+            fs.Flush();
+            fs.Close();
+        }
+        catch (Exception ex)
+        {
+            string hjk = ex.Message;
+        }
+    }
+    public Image byteArrayToImage(byte[] byteArrayIn)
+    {
+        MemoryStream ms = new MemoryStream(byteArrayIn);
+        Image returnImage = Image.FromStream(ms);
+        return returnImage;
+    }
+
+    private static Image FromStream(MemoryStream ms)
+    {
+        throw new NotImplementedException();
+    }
+}

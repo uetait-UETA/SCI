@@ -1,0 +1,52 @@
+﻿        .myLabelMedium, .myLabelSmall {
+            padding-left: 5px;
+        }
+
+        .myImageButton {
+            vertical-align: middle;
+            height: 20px;
+            width: 20px;
+            margin-left: 5px;
+        }
+        
+        div.qsf-right-content .qsf-col-wrap 
+        {
+            position: static;
+        }
+ 
+        .rgEditForm {
+            width: auto !important;
+        }
+ 
+        * + html .rgEditForm.popUpEditForm {
+            width: 800px !important;
+        }
+ 
+        .rgEditForm > div + div,
+        .RadGrid .rgEditForm {
+            height: auto !important;
+        }
+ 
+        .rgEditForm > div > table{
+            height: 100%;
+     
+        }
+ 
+        .rgEditForm > div > table > tbody > tr > td {
+            padding: 4px 10px;
+        }
+ 
+        .rfdSelectBoxDropDown {
+            z-index: 100011;
+        }
+        
+        .tdLabelBold
+        {
+        	font-weight:bold;
+        	padding:2px 0px 2px 5px;
+        }
+        
+        .tdValue
+        {
+        	padding:2px 0px 2px 5px;
+        }
