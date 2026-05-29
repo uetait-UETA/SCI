@@ -46,7 +46,10 @@
                                 </li>
                                 <li>
                                     <label class="myLabel" style="vertical-align: top;">Excel File</label>
-                                    <asp:FileUpload ID="FileUpload1" runat="server" CssClass="mybtnXlarge" />
+                                    <asp:FileUpload ID="FileUpload1" runat="server" ClientIDMode="Static" style="display:none;" />
+                                    <button type="button" class="mybtnmeduim" onclick="document.getElementById('FileUpload1').click(); return false;">Choose File</button>
+                                    &nbsp;
+                                    <span id="spnFileName" style="display:inline-block; min-width:340px; max-width:480px; border:1px solid #ccc; padding:3px 8px; background:white; vertical-align:middle; color:#555; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="">No file chosen</span>
                                 </li>
                                 <li>&nbsp;
                                 </li>
@@ -180,6 +183,15 @@
             </div>
         </div>
     </div>
+
+    <script type="text/javascript">
+        document.getElementById('FileUpload1').addEventListener('change', function () {
+            var display = document.getElementById('spnFileName');
+            var name = this.files && this.files.length > 0 ? this.files[0].name : 'No file chosen';
+            display.textContent = name;
+            display.title = name;
+        });
+    </script>
 
 </asp:Content>
 
