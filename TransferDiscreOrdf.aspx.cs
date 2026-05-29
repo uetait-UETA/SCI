@@ -379,6 +379,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         string LvReceived = GridView1.Rows[0].Cells[8].Text;
         string LvUserDisp = GridView1.Rows[0].Cells[13].Text; // from header
         LabelMsg.Text = "";
+        bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
 
         LabelCurUser.Text = "User: " + (string)this.Session["UserId"];
         sap_db = (string)Session["CompanyId"];
@@ -447,7 +448,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             Button2.Enabled = false;
             btnPrint.Enabled = true;
             LvFlag1 = 'N';
-            LabelMsg.Text = "Message: User/Destination is not configured.";
+            LabelMsg.Text = isEn
+                ? "Message: User/Destination is not configured."
+                : "Mensaje: Usuario/Destino no está configurado.";
             Alert.Show(LabelMsg.Text);
         }
 
@@ -458,7 +461,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             Button2.Enabled = false;
             btnPrint.Enabled = true;
             LvFlag1 = 'N';
-            LabelMsg.Text = "Message: User is not configured in Warehouse or Store.";
+            LabelMsg.Text = isEn
+                ? "Message: User is not configured in Warehouse or Store."
+                : "Mensaje: Usuario no está configurado en Bodega o Tienda.";
             Alert.Show(LabelMsg.Text);
         }
 
@@ -475,7 +480,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Button2.Enabled = false;
                     btnPrint.Enabled = true;
                     LvFlag1 = 'N';
-                    LabelMsg.Text = "Message: The receiving user must be different from the dispatching user.";
+                    LabelMsg.Text = isEn
+                        ? "Message: The receiving user must be different from the dispatching user."
+                        : "Mensaje: El usuario receptor debe ser diferente al usuario despachador.";
                     Alert.Show(LabelMsg.Text);
                 }
 
@@ -487,7 +494,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Button2.Enabled = false;
                     btnPrint.Enabled = true;
                     LvFlag1 = 'N';
-                    LabelMsg.Text = "Message: Receiving in R2 is not allowed.";
+                    LabelMsg.Text = isEn
+                        ? "Message: Receiving in R2 is not allowed."
+                        : "Mensaje: No se permite recibir en R2.";
                     Alert.Show(LabelMsg.Text);
                 }
 
@@ -497,7 +506,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Button2.Enabled = false;
                     btnPrint.Enabled = true;
                     LvFlag1 = 'N';
-                    LabelMsg.Text = "Message: " + sloginTypeWhs + " CANNOT RECEIVE IN " + sTypeWhs + ".";
+                    LabelMsg.Text = isEn
+                        ? "Message: " + sloginTypeWhs + " CANNOT RECEIVE IN " + sTypeWhs + "."
+                        : "Mensaje: " + sloginTypeWhs + " no puede recibir en " + sTypeWhs + ".";
                     Alert.Show(LabelMsg.Text);
                 }
 
@@ -508,7 +519,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Button2.Enabled = false;
                     btnPrint.Enabled = true;
                     LvFlag1 = 'N';
-                    LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
+                    LabelMsg.Text = isEn
+                        ? "Message: Awaiting GTK Confirmation to receive this transfer."
+                        : "Mensaje: Esperando confirmación GTK para recibir esta transferencia.";
                     Alert.Show(LabelMsg.Text);
                 }
             }
@@ -521,7 +534,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 Button2.Enabled = false;
                 btnPrint.Enabled = true;
                 LvFlag1 = 'N';
-                LabelMsg.Text = "Message: " + sloginTypeWhs + " CANNOT DISPATCH IN " + sTypeWhs + ".";
+                LabelMsg.Text = isEn
+                    ? "Message: " + sloginTypeWhs + " CANNOT DISPATCH IN " + sTypeWhs + "."
+                    : "Mensaje: " + sloginTypeWhs + " no puede despachar en " + sTypeWhs + ".";
                 Alert.Show(LabelMsg.Text);
             }
         }
@@ -533,7 +548,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             int LvLinNum = 0;
             TextBox LvTxB1 = new TextBox();
             int rg2count = GridView2.Rows.Count;
-            string Lmsg = "Please review quantities on lines ";
+            string Lmsg = isEn ? "Please review quantities on lines " : "Por favor revise las cantidades en las líneas ";
             int x = 0;
 
             for (int i = 0; i < rg2count; i++)
@@ -560,7 +575,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             if (LvFlag1 == 'N')
             {
-                Lmsg = Lmsg + ", Please enter whole numbers only.";
+                Lmsg = Lmsg + (isEn ? ", Please enter whole numbers only." : ", Por favor ingrese solo números enteros.");
                 Alert.Show(Lmsg);
                 return;
             }
@@ -589,7 +604,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             if (LvFlag1 == 'N')
             {
-                Lmsg = Lmsg + ". These must be less than or equal to the Draft quantity or zero";
+                Lmsg = Lmsg + (isEn ? ". These must be less than or equal to the Draft quantity or zero" : ". Deben ser menores o iguales a la cantidad del borrador o cero");
                 Alert.Show(Lmsg);
                 return;
             }
@@ -611,7 +626,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
                 if (LvFlag1 == 'N')
                 {
-                    Lmsg = Lmsg + ". These must be greater than or equal to zero";
+                    Lmsg = Lmsg + (isEn ? ". These must be greater than or equal to zero" : ". Deben ser mayores o iguales a cero");
                     Alert.Show(Lmsg);
                     return;
                 }
@@ -840,8 +855,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
        // new HashSet<string>(StringComparer.OrdinalIgnoreCase)
        // { "YFELICIANO", "AGALVEZ", "MMARTINEZBOD", "AABREGO", "WFERNANDEZ" ,"DGILTIE"};
 
-
-            bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
 
             if (LvFlag1 == 'Y') // Empieza la parte batch
             {
