@@ -220,8 +220,12 @@ public partial class ProductLocator : BasePage
                             ItemList.DataTextField = "ItemName";
                             ItemList.DataBind();
                             ItemList.Visible = true;
-                            rbtnCancel.Visible = true;
-                            rbtnSearch.Visible = false;
+                            ItemList.Width = 177;
+                            ItemList.Focus();
+                            ItemList.ToolTip = selectItemText;
+                            rbtnCancel1.Visible = true;
+                            rtbItem.Visible = false;
+                            rbtnSearch.Enabled = false;
                         }
                     }
                     else if (dt.Rows.Count == 1)
