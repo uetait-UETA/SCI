@@ -10,19 +10,19 @@
         * { box-sizing: border-box; }
         body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; background: #fff; margin: 0; padding: 0; }
         #divContent { margin: 16px auto; width: 98%; max-width: 1060px; }
-        #Button1 { margin: 12px 0 0 14px; padding: 5px 18px; background: #fff; color: #000; border: 1px solid #555; font-size: 9pt; font-weight: bold; cursor: pointer; border-radius: 3px; }
+        #Button1 { margin: 12px 0 0 14px; padding: 5px 18px; background: #fff; color: #000; border: 0.5px solid #555; font-size: 9pt; font-weight: bold; cursor: pointer; border-radius: 3px; }
         #Button1:hover { background: #f0f0f0; }
 
         /* ── Document page ── */
-        .doc-page { border: 1px solid #aaa; margin-bottom: 22px; }
+        .doc-page { border: 0.5px solid #888; margin-bottom: 22px; }
 
         /* Title bar — border only, no fill */
-        .doc-title-bar { border-bottom: 2px solid #000; padding: 10px 18px; display: table; width: 100%; }
+        .doc-title-bar { border-bottom: 1px solid #000; padding: 10px 18px; display: table; width: 100%; }
         .doc-title-l { display: table-cell; font-size: 14pt; font-weight: bold; letter-spacing: .5px; vertical-align: middle; }
         .doc-title-r { display: table-cell; text-align: right; font-size: 11pt; font-weight: bold; vertical-align: middle; }
 
         /* Info row */
-        .doc-info-row { display: table; width: 100%; border-bottom: 1px solid #aaa; }
+        .doc-info-row { display: table; width: 100%; border-bottom: 0.5px solid #888; }
         .doc-info-left  { display: table-cell; padding: 12px 18px; vertical-align: top; }
         .doc-info-right { display: table-cell; padding: 12px 18px; vertical-align: middle; text-align: right; width: 185px; }
         .field-group { margin-bottom: 6px; }
@@ -30,7 +30,7 @@
         .field-value { font-size: 10pt; margin-top: 1px; }
 
         /* Signatures */
-        .sig-section { padding: 10px 18px 12px; border-bottom: 1px solid #aaa; }
+        .sig-section { padding: 10px 18px 12px; border-bottom: 0.5px solid #888; }
         .sig-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
         .sig-entry { display: inline-block; margin-right: 24px; margin-bottom: 6px; font-size: 9.5pt; }
         .sig-line { display: inline-block; width: 118px; border-bottom: 1px solid #000; margin-left: 5px; vertical-align: bottom; height: 14px; }
@@ -40,8 +40,8 @@
         /* Items table */
         .items-wrap { padding: 4px 18px 16px; }
         table.doc-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        table.doc-table th { background: #fff; color: #000; padding: 6px 8px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; border: 1px solid #555; text-align: center; }
-        table.doc-table td { padding: 5px 8px; border: 1px solid #aaa; font-size: 8.5pt; vertical-align: middle; }
+        table.doc-table th { background: #fff; color: #000; padding: 6px 8px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; border: 0.5px solid #555; text-align: center; }
+        table.doc-table td { padding: 5px 8px; border: 0.5px solid #aaa; font-size: 8.5pt; vertical-align: middle; }
         .pg-footer { text-align: center; font-size: 8pt; color: #555; padding: 8px 0 2px; }
 
         @page { size: landscape; margin: 10mm; }

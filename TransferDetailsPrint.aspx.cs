@@ -149,37 +149,34 @@ public partial class TransferDetailsPrint : System.Web.UI.Page
         {
             for (i = 0; i < dt.Rows.Count; i++)
             {
-                if ((i) % linesPerPage == 0)
-                {
+                if (i % linesPerPage == 0)
                     str += hdr + LineItemHeader(ref colspan);
-                }
 
-                // add a line item to the html string
-                str += LineItem(dt.Rows[i]);
+                str += LineItem(dt.Rows[i], i % linesPerPage);
 
                 if ((i + 1) % linesPerPage == 0)
                 {
-                    // add footer, pagebreak, and header for next page
-                    str += "<tr><td colspan=\"" + colspan + "\" align=\"center\" style=\"font-size:8pt;\">Page " + PageNum + " of " + PageCount + "</td></tr></table><br><br>";
+                    str += "</table>"
+                        + "<div class=\"pg-footer\">Page " + PageNum + " of " + PageCount + "</div>"
+                        + "</div></div>";
                     if (i != dt.Rows.Count - 1)
-                    {
-                        //str += "<br class=\"page\" />";
                         str += "<H1 class=\"SaltoDePagina\"></H1>";
-                    }
                     PageNum += 1;
                 }
             }
 
-            print_off(); //1
+            print_off();
         }
         else
         {
-            str += "<tr><td colspan=\"" + colspan + "\" align=\"center\"><font face=\"arial\"><b>No Records Found</b></font></td></tr>";
+            str += "<tr><td colspan=\"" + colspan + "\" style=\"text-align:center; padding:14px; font-size:9pt;\"><b>No Records Found</b></td></tr>";
         }
 
-        if ((i) % linesPerPage != 0)
+        if (i % linesPerPage != 0)
         {
-            str += "<tr><td colspan=\"" + colspan + "\" align=\"center\" style=\"font-size:8pt;\">Page " + PageNum + " of " + PageCount + "</font></td></tr></table><br><br>";
+            str += "</table>"
+                + "<div class=\"pg-footer\">Page " + PageNum + " of " + PageCount + "</div>"
+                + "</div></div>";
         }
         //str += HtmlFooter();
         return str;
@@ -190,113 +187,100 @@ public partial class TransferDetailsPrint : System.Web.UI.Page
     {
         UserApp = LvUser;
         string imgSrc = AnyPourpuse.GetBarCodeImage(DocEntry).ImageUrl;
-        string str = "<table class=\"tblHeader\">"
-                        + "<caption><span class=\"captionText\">Dispatch Document No. " + DocEntry + "<span></caption>"
-                        + "<tr>"
-                            + "<td style=\"padding-left:10px; text-align:left;\">"
-                                + "<table>"
-                                    + "<tr>"
-                                    + "    <td class=\"tblHeaderTitle\" colspan=\"4\">" + OriCopy + " Document No. <span style=\"font-size:11pt;font-weight:normal;\">" + DocEntry + "</span></td>"
-                                    + "    <td class=\"barCodeContainer\" rowspan=\"7\">"
-                                    + "        <img id=\"img_" + DocEntry + "\" alt=\"IMG_" + DocEntry + "\" class=\"barCodeImg\" src=\"" + imgSrc + "\">"
-                                    + "    </td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Origin:</td>"
-                                    + "    <td style=\"padding-left:22px; font-size:8.50pt;\">" + FromLoc + "</td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Destination:</td>"
-                                    + "    <td style=\"padding-left:22px; font-size:8.50pt;\">" + ToLoc + "</td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Draft Date:</td>"
-                                    + "    <td style=\"padding-left:22px;\">" + DocDate + "</td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Status:</td>"
-                                    + "    <td style=\"padding-left:22px;\">" + Status + "</td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Draft User:</td>"
-                                    + "    <td style=\"padding-left:22px;\">" + DraftUser + "</td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Dispatch User:</td>"
-                                    + "    <td style=\"padding-left:22px;\">" + DespUser + "</td>"
-                                    + "</tr>"
-                                    + "<tr>"
-                                    + "    <td style=\"font-weight:bold;\">Print User:</td>"
-                                    + "    <td style=\"padding-left:22px;\">" + UserApp + "</td>"
-                                    + "    <td style=\"font-weight:bold;padding-left:30px\">Total Products:</td>"
-                                    + "    <td style=\"padding-left:20px;\">" + TotProds + "</td>"
-                                    + "</tr>"
-                                + "</table>"
-                            + "</td>"
-                        + "</tr>"
 
-                        + "<tr>"
-                        + "    <td style=\"font-weight:bold; padding-top:2px;\">Signatures:</td>"
-                        + "</tr>"
-                        + "<tr>"
-                        + "    <td style=\"font-weight:bold;\">"
-                        + "        Origin:&nbsp;&nbsp;&nbsp;____________________________&nbsp;&nbsp;Destination:&nbsp;&nbsp;____________________________&nbsp;&nbsp;&nbsp;&nbsp;Inventory Control:&nbsp;&nbsp;&nbsp;&nbsp;________________________________"
-                        + "    </td>"
-                        + "</tr>"
-                        + "<tr>"
-                        + "    <td style=\"font-weight:bold; padding-top:9px;\">"
-                        + "        Notes:________________________________________________________________________________________________________________________"
-                        + "    </td>"
-                        + "</tr>"
-                    + "</table>";
+        string str =
+            "<div class=\"doc-page\">"
+
+            // ── Title bar ──
+            + "<div class=\"doc-title-bar\">"
+            + "<span class=\"doc-title-l\">Dispatch / Receive</span>"
+            + "<span class=\"doc-title-r\">" + OriCopy + "&nbsp;Document&nbsp;#&nbsp;" + DocEntry + "</span>"
+            + "</div>"
+
+            // ── Info row ──
+            + "<div class=\"doc-info-row\">"
+            + "<div class=\"doc-info-left\">"
+            + "<div class=\"info-cols\">"
+            // Left column
+            + "<div class=\"info-col\">"
+            + "<div class=\"field-group\"><div class=\"field-label\">From Location</div><div class=\"field-value\">" + FromLoc + "</div></div>"
+            + "<div class=\"field-group\"><div class=\"field-label\">To Location</div><div class=\"field-value\">" + ToLoc + "</div></div>"
+            + "<div class=\"field-group\"><div class=\"field-label\">Draft Date</div><div class=\"field-value\">" + DocDate + "</div></div>"
+            + "<div class=\"field-group\"><div class=\"field-label\">Status</div><div class=\"field-value\">" + Status + "</div></div>"
+            + "</div>"
+            // Right column
+            + "<div class=\"info-col\">"
+            + "<div class=\"field-group\"><div class=\"field-label\">Draft User</div><div class=\"field-value\">" + DraftUser + "</div></div>"
+            + "<div class=\"field-group\"><div class=\"field-label\">Dispatch User</div><div class=\"field-value\">" + DespUser + "</div></div>"
+            + "<div class=\"field-group\"><div class=\"field-label\">Print User</div><div class=\"field-value\">" + UserApp + "</div></div>"
+            + "<div class=\"field-group\"><div class=\"field-label\">Total Products</div><div class=\"field-value\">" + TotProds + "</div></div>"
+            + "</div>"
+            + "</div>"  // info-cols
+            + "</div>"  // doc-info-left
+            + "<div class=\"doc-info-right\">"
+            + "<img src=\"" + imgSrc + "\" alt=\"Barcode " + DocEntry + "\" style=\"max-width:155px; max-height:75px;\" />"
+            + "</div>"
+            + "</div>"  // doc-info-row
+
+            // ── Signatures ──
+            + "<div class=\"sig-section\">"
+            + "<div class=\"sig-title\">Signatures</div>"
+            + "<div>"
+            + "<span class=\"sig-entry\">Origin: <span class=\"sig-line\"></span></span>"
+            + "<span class=\"sig-entry\">Destination: <span class=\"sig-line\"></span></span>"
+            + "<span class=\"sig-entry\">Inv. Control: <span class=\"sig-line\"></span></span>"
+            + "</div>"
+            + "<div style=\"margin-top:7px;\" class=\"notes-line\">Notes: <span class=\"sig-line\"></span></div>"
+            + "</div>"
+
+            // ── Items section (table appended after) ──
+            + "<div class=\"items-wrap\">";
 
         return str;
     }
 
-    // return a line item header row 
+    // return a line item header row
     protected string LineItemHeader(ref string colspan)
     {
-        string str = ""
-        + "<table style=\"width:100%; font-family: Arial, Helvetica, sans-serif;\">"
-        + "<tr class=\"printHeader\">";
-        str += "<td style=\"text-align:center;\">Line</td>";
-        str += "<td style=\"text-align:center;\">Code</td>";
-        str += "<td style=\"text-align:center;\">Barcode</td>";
-        str += "<td style=\"text-align:left;\">Brand</td>";
-        str += "<td style=\"text-align:left;\">Description</td>";
-        str += "<td style=\"text-align:center;\">Price</td>";
-        str += "<td style=\"text-align:center;\">Qty</td>";
+        string str = "<table class=\"doc-table\">"
+            + "<tr>"
+            + "<th style=\"width:42px;\">Line</th>"
+            + "<th style=\"width:105px;\">Item Code</th>"
+            + "<th style=\"width:105px;\">Barcode</th>"
+            + "<th style=\"width:80px;\">Brand</th>"
+            + "<th>Description</th>"
+            + "<th style=\"width:72px;\">Price</th>"
+            + "<th style=\"width:55px;\">Qty</th>";
         if (order_multiple == "C")
         {
             colspan = (int.Parse(colspan) + 1).ToString();
-            str += "<td style=\"text-align:center;\">Cases</td>";
+            str += "<th style=\"width:55px;\">Cases</th>";
         }
-        str += "<td style=\"text-align:center;\">Qty Control</td>";
-        str += "<td style=\"text-align:center;\">Bins</td>";
-        str += "</tr>";
+        str += "<th style=\"width:72px;\">Qty Control</th>"
+            + "<th style=\"width:55px;\">Bins</th>"
+            + "</tr>";
         return str;
     }
 
-    // return a single line item table row 
-
-    protected string LineItem(DataRow row)
+    // return a single line item table row
+    protected string LineItem(DataRow row, int rowIndex = 0)
     {
-        string str = ""
-        + "<tr class=\"printRow\" >";
-        str += "<td class=\"printData\" style=\"text-align:center; \">" + row["LineNumber"].ToString() + "</td>";
-        str += "<td class=\"printData\" style=\"text-align:center; font-size:8.50pt; \">" + row["ItemCode"].ToString() + "</td>";
-        str += "<td class=\"printData\" style=\"text-align:center; \">" + row["BarCode"].ToString() + "</td>";
-        str += "<td class=\"printData\" style=\"text-align:left; font-size:6pt;\"> " + ((row["U_brand"].ToString().Length <= 14) ? row["U_brand"].ToString() : row["U_brand"].ToString().Substring(0, 13) + "...").ToString() + "</td>";
-        str += "<td class=\"printData\" style=\"text-align:left; \">" + row["Description"].ToString() + "</td>";
-        str += "<td class=\"printData\" style=\"text-align:center; \">" + String.Format("{0:C}", row["Price"]) + "</td>";
-        str += "<td class=\"printData\" style=\"text-align:center; font-size:8.50pt;\">" + String.Format("{0:#,###}", row["Qty"]) + "</td>";
+        string brand = row["U_brand"].ToString();
+        if (brand.Length > 14) brand = brand.Substring(0, 13) + "...";
+
+        string str = "<tr>"
+            + "<td style=\"text-align:center;\">" + row["LineNumber"] + "</td>"
+            + "<td style=\"text-align:center;\">" + row["ItemCode"] + "</td>"
+            + "<td style=\"text-align:center;\">" + row["BarCode"] + "</td>"
+            + "<td style=\"text-align:left;\">" + brand + "</td>"
+            + "<td style=\"text-align:left;\">" + row["Description"] + "</td>"
+            + "<td style=\"text-align:right;\">" + String.Format("{0:C}", row["Price"]) + "</td>"
+            + "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["Qty"]) + "</td>";
         if (order_multiple == "C")
-        {
-            str += "<td class=\"printData\" style=\"text-align:center; \">" + String.Format("{0:#,###}", row["Cases"]) + "</td>";
-        }
-        str += "<td class=\"printData\" style=\"text-align:center; \"></td>";
-        str += "<td class=\"printData\" style=\"text-align:center; \">" + String.Format("{0:#,###}", row["bins"]) + "</td></tr>";
-        str += "<tr><td class=\"printDataBottom\" colspan=\"" + colspan + "\"></td></tr>";
+            str += "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["Cases"]) + "</td>";
+        str += "<td style=\"text-align:center;\">&nbsp;</td>"
+            + "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["bins"]) + "</td>"
+            + "</tr>";
         return str;
     }
 

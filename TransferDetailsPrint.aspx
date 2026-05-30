@@ -8,114 +8,52 @@
     <title>Transfer Draft Document</title>
     <link href="Styles/StyleSheet.css" rel="stylesheet" type="text/css" />
     <style type="text/css">
-        #divContent {
-            padding-left: 40px;
-            padding-top: 52px;
-            width: 65%;
-        }
-        #Button1 {
-            position: relative;
-            top: 25px;
-            right:33%;  
-            float:right;
-        }
-        .printHeader {
-            font-weight:bold;
-            text-decoration:underline;
-            font-size: 8.25pt;
-            color:white;
-            background-color:black;
-        }
-        .tblHeader {
-            width:99%; 
-            font-family: Arial, Helvetica, sans-serif;
-            font-size:8pt;
-        }
-        .tblHeaderTitle {
-            font-weight:bold;
-            color:Red;
-            font-size:9pt;
-        }
-        .printRow, .printData {
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 8.25pt;
-            padding-bottom: 0px;
-            margin-bottom: 0px;
-            padding-top: 0px;
-            margin-top: 0px;
-        }
-        .printDataBottom {
-            border-bottom: 0.2px solid Black;
-            padding:0;
-            margin:0;
-        }
-        .barCodeImg {
-            position: relative;
-            padding:0;
-            margin:0;
-            right:-47px;
-        }
-        .barCodeContainer {
-            text-align: right;
-            vertical-align:top;
-            overflow: hidden;
-        }
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; color: #000; background: #fff; margin: 0; padding: 0; }
+        #divContent { margin: 16px auto; width: 98%; max-width: 1060px; }
+        #Button1 { margin: 12px 0 0 14px; padding: 5px 18px; background: #fff; color: #000; border: 1px solid #555; font-size: 9pt; font-weight: bold; cursor: pointer; border-radius: 3px; }
+
+        /* ── Document page ── */
+        .doc-page { border: 0.5px solid #888; margin-bottom: 22px; }
+
+        /* Title bar */
+        .doc-title-bar { border-bottom: 1px solid #000; padding: 10px 18px; display: table; width: 100%; }
+        .doc-title-l { display: table-cell; font-size: 14pt; font-weight: bold; letter-spacing: .5px; vertical-align: middle; }
+        .doc-title-r { display: table-cell; text-align: right; font-size: 11pt; font-weight: bold; vertical-align: middle; }
+
+        /* Info row */
+        .doc-info-row { display: table; width: 100%; border-bottom: 0.5px solid #888; }
+        .doc-info-left  { display: table-cell; padding: 12px 18px; vertical-align: top; }
+        .doc-info-right { display: table-cell; padding: 12px 18px; vertical-align: middle; text-align: right; width: 185px; }
+        .field-group { margin-bottom: 6px; }
+        .field-label { font-size: 7pt; font-weight: bold; text-transform: uppercase; letter-spacing: .4px; }
+        .field-value { font-size: 10pt; margin-top: 1px; }
+
+        /* Two-column info layout */
+        .info-cols { display: table; width: 100%; }
+        .info-col   { display: table-cell; padding-right: 30px; vertical-align: top; }
+
+        /* Signatures */
+        .sig-section { padding: 10px 18px 12px; border-bottom: 0.5px solid #888; }
+        .sig-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
+        .sig-entry { display: inline-block; margin-right: 24px; margin-bottom: 6px; font-size: 9.5pt; }
+        .sig-line { display: inline-block; width: 118px; border-bottom: 1px solid #000; margin-left: 5px; vertical-align: bottom; height: 14px; }
+        .notes-line { font-size: 9.5pt; }
+        .notes-line .sig-line { width: 480px; }
+
+        /* Items table */
+        .items-wrap { padding: 4px 18px 16px; }
+        table.doc-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        table.doc-table th { background: #fff; color: #000; padding: 6px 8px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; border: 0.5px solid #555; text-align: center; }
+        table.doc-table td { padding: 5px 8px; border: 0.5px solid #aaa; font-size: 8.5pt; vertical-align: middle; }
+        .pg-footer { text-align: center; font-size: 8pt; color: #555; padding: 8px 0 2px; }
+
+        @page { size: landscape; margin: 10mm; }
 
         @media print {
-            .modalClose {
-                display:none;
-            }
-            #divContent {
-                width:100%;
-                padding: 0;
-                margin:0;
-            }
-            #Button1 {
-                display:none;
-            }
-            .printHeader {
-                font-weight:bold;
-                text-decoration:underline;
-                font-size: 8pt;
-                color:black;
-                background-color:white;
-            }
-            .tblHeader {
-                width:100%; 
-                font-family: Arial, Helvetica, sans-serif;
-                font-size:7pt;
-            }
-            .tblHeaderTitle {
-                font-weight:bold;
-                color:Black;
-                font-size:7.7pt;
-            }
-            .printRow, .printData {
-                font-family: Arial, Helvetica, sans-serif;
-                font-size: 7pt;
-                padding-bottom: 0px;
-                margin-bottom: 0px;
-                padding-top: 0px;
-                margin-top: 0px;
-            }
-            .printDataBottom {
-                border-bottom: 0.1px thin black;
-                padding:0;
-                margin:0;
-            }
-            .barCodeImg {
-                position: relative;
-                padding:0;
-                margin:0;
-            }
-            .barCodeContainer {
-                text-align: right;
-                vertical-align:top;
-                overflow: hidden;
-            }
-            H1.SaltoDePagina {
-                PAGE-BREAK-AFTER: always;
-            }
+            #divContent { margin: 0; width: 100%; max-width: none; }
+            #Button1 { display: none; }
+            H1.SaltoDePagina { PAGE-BREAK-AFTER: always; }
         }
     </style>
 </head>
@@ -125,14 +63,9 @@
         <asp:PlaceHolder ID="plBarCode" runat="server"  />
     </div>--%>
     <form id="form2" runat="server">
-        <div style="width:100%; padding:0; margin:0;">
-            <asp:Button ID="Button1" ClientIDMode="Static" runat="server" onclick="Button1_Click"  
-                Text="Print" Font-Size="Medium" 
-                Height="40px" Width="102px" />
-
-            <div id="divContent" runat="server">copia</div>
-            
-        </div>
+        <asp:Button ID="Button1" ClientIDMode="Static" runat="server" OnClick="Button1_Click"
+            Text="Print" Font-Size="Small" />
+        <div id="divContent" runat="server"></div>
     </form>
 
     <script type="text/javascript">
