@@ -14,15 +14,15 @@
         #Button1:hover { background: #f0f0f0; }
 
         /* ── Document page ── */
-        .doc-page { border: 0.5px solid #888; margin-bottom: 22px; }
+        .doc-page { border: 0.3px solid #bbb; margin-bottom: 22px; }
 
-        /* Title bar — border only, no fill */
-        .doc-title-bar { border-bottom: 1px solid #000; padding: 10px 18px; display: table; width: 100%; }
+        /* Title bar */
+        .doc-title-bar { border-bottom: 0.5px solid #000; padding: 10px 18px; display: table; width: 100%; }
         .doc-title-l { display: table-cell; font-size: 14pt; font-weight: bold; letter-spacing: .5px; vertical-align: middle; }
         .doc-title-r { display: table-cell; text-align: right; font-size: 11pt; font-weight: bold; vertical-align: middle; }
 
         /* Info row */
-        .doc-info-row { display: table; width: 100%; border-bottom: 0.5px solid #888; }
+        .doc-info-row { display: table; width: 100%; border-bottom: 0.3px solid #bbb; }
         .doc-info-left  { display: table-cell; padding: 12px 18px; vertical-align: top; }
         .doc-info-right { display: table-cell; padding: 12px 18px; vertical-align: middle; text-align: right; width: 185px; }
         .field-group { margin-bottom: 6px; }
@@ -30,18 +30,18 @@
         .field-value { font-size: 10pt; margin-top: 1px; }
 
         /* Signatures */
-        .sig-section { padding: 10px 18px 12px; border-bottom: 0.5px solid #888; }
+        .sig-section { padding: 10px 18px 12px; border-bottom: 0.3px solid #bbb; }
         .sig-title { font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; margin-bottom: 8px; }
         .sig-entry { display: inline-block; margin-right: 24px; margin-bottom: 6px; font-size: 9.5pt; }
-        .sig-line { display: inline-block; width: 118px; border-bottom: 1px solid #000; margin-left: 5px; vertical-align: bottom; height: 14px; }
+        .sig-line { display: inline-block; width: 118px; border-bottom: 0.5px solid #000; margin-left: 5px; vertical-align: bottom; height: 14px; }
         .notes-line { font-size: 9.5pt; }
         .notes-line .sig-line { width: 480px; }
 
-        /* Items table */
+        /* Items table — horizontal lines only, no vertical grid */
         .items-wrap { padding: 4px 18px 16px; }
-        table.doc-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        table.doc-table th { background: #fff; color: #000; padding: 6px 8px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; border: 0.5px solid #555; text-align: center; }
-        table.doc-table td { padding: 5px 8px; border: 0.5px solid #aaa; font-size: 8.5pt; vertical-align: middle; }
+        table.doc-table { width: 100%; border-collapse: collapse; margin-top: 10px; border-top: 0.5px solid #555; }
+        table.doc-table th { background: #fff; color: #000; padding: 6px 8px; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; letter-spacing: .3px; border: none; border-bottom: 0.5px solid #555; text-align: center; }
+        table.doc-table td { padding: 5px 8px; border: none; border-bottom: 0.3px solid #ccc; font-size: 8.5pt; vertical-align: middle; }
         .pg-footer { text-align: center; font-size: 8pt; color: #555; padding: 8px 0 2px; }
 
         @page { size: landscape; margin: 10mm; }
