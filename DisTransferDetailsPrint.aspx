@@ -44,6 +44,8 @@
         table.doc-table td { padding: 5px 8px; border: 1px solid #aaa; font-size: 8.5pt; vertical-align: middle; }
         .pg-footer { text-align: center; font-size: 8pt; color: #555; padding: 8px 0 2px; }
 
+        @page { size: landscape; margin: 10mm; }
+
         @media print {
             #divContent { margin: 0; width: 100%; max-width: none; }
             #Button1 { display: none; }
