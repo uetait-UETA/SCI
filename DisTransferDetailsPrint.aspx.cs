@@ -191,7 +191,7 @@ public partial class DisTransferDetailsPrint : System.Web.UI.Page
             + "<td style=\"text-align:center;\">" + row["BarCode"] + "</td>"
             + "<td style=\"text-align:left;\">" + row["U_brand"] + "</td>"
             + "<td style=\"text-align:left;\">" + row["Description"] + "</td>"
-            + "<td style=\"text-align:right;\">" + String.Format("{0:C}", row["Price"]) + "</td>"
+            + "<td style=\"text-align:right;\">" + String.Format("{0:N2}", row["Price"]) + "</td>"
             + "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["Qty"]) + "</td>";
         if (order_multiple == "C")
             str += "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["Cases"]) + "</td>";
