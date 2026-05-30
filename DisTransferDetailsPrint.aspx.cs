@@ -232,7 +232,7 @@ public partial class DisTransferDetailsPrint : System.Web.UI.Page
             // ── Title bar ──
             + "<div class=\"doc-title-bar\">"
             + "<span class=\"doc-title-l\">Dispatch / Receive</span>"
-            + "<span class=\"doc-title-r\">Document&nbsp;#&nbsp;" + DocEntry + "</span>"
+            + "<span class=\"doc-title-r\" style=\"color:#cc0000;\">Document&nbsp;#&nbsp;" + DocEntry + "</span>"
             + "</div>"
 
             // ── Info row ──
