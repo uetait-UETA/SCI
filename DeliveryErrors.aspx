@@ -23,6 +23,7 @@
                         <PagerStyle Mode="Slider"></PagerStyle>
                         <SortingSettings EnableSkinSortStyles="false" />
                         <MasterTableView Width="100%" AllowNaturalSort="false" EditMode="InPlace" DataKeyNames="id">
+                            <ItemStyle Wrap="false" Height="22px" />
                             <Columns>
                                 <%--<tel:GridButtonColumn UniqueName="transfer" ButtonType="LinkButton" HeaderText="Transfer / Order" DataTextField="transfer" CommandName="TRANSFER" ItemStyle-Font-Underline="true" />--%>
                                 <tel:GridEditCommandColumn UniqueName="EditColumn" ButtonType="ImageButton" HeaderStyle-Width="40px" />
@@ -31,7 +32,7 @@
                                 <tel:GridBoundColumn SortExpression="skunum" HeaderText="Item" HeaderButtonType="TextButton" DataField="skunum" UniqueName="skunum" HeaderStyle-Width="70px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="OldBarCode" HeaderText="Old Bar Code Item" HeaderButtonType="TextButton" DataField="OldBarCode" UniqueName="OldBarCode" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <%--<tel:GridBoundColumn SortExpression="new_sku" HeaderText="New Item" HeaderButtonType="TextButton" DataField="new_sku" UniqueName="new_sku" HeaderStyle-Width="90px" />--%>
-                                <tel:GridTemplateColumn HeaderText="New Item" SortExpression="new_sku" UniqueName="new_sku" HeaderStyle-Width="70px">
+                                <tel:GridTemplateColumn HeaderText="New Item" SortExpression="new_sku" UniqueName="new_sku" HeaderStyle-Width="70px" ItemStyle-Wrap="false">
                                     <ItemTemplate>
                                         <%# Eval("new_sku") %>
                                     </ItemTemplate>
@@ -52,7 +53,7 @@
                                 <tel:GridBoundColumn SortExpression="sale_qty" HeaderText="Trans Qty" HeaderButtonType="TextButton" DataField="sale_qty" UniqueName="sale_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="whs_qty" HeaderText="Whs Qty" HeaderButtonType="TextButton" DataField="whs_qty" UniqueName="whs_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="whs_code" HeaderText="Whs Code" HeaderButtonType="TextButton" DataField="whs_code" UniqueName="whs_code" HeaderStyle-Width="80px" ReadOnly="true" />
-                                <tel:GridBoundColumn SortExpression="error_message" HeaderText="Error Message" HeaderButtonType="TextButton" DataField="error_message" UniqueName="error_message" ReadOnly="true" HeaderStyle-Width="80px" />
+                                <tel:GridBoundColumn SortExpression="error_message" HeaderText="Error Message" HeaderButtonType="TextButton" DataField="error_message" UniqueName="error_message" ReadOnly="true" HeaderStyle-Width="200px" />
                             </Columns>
                         </MasterTableView>
                         <ClientSettings>

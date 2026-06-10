@@ -203,12 +203,12 @@
                         </asp:TemplateField>
 
 
-                        <asp:TemplateField HeaderText="CodArticulo" SortExpression="ItemCode">
+                        <asp:TemplateField HeaderText="Item Code" SortExpression="ItemCode">
                             <ItemTemplate><%#Eval("ItemCode")%></ItemTemplate>
                             <ItemStyle HorizontalAlign="Center" />
                         </asp:TemplateField>
 
-                        <asp:TemplateField HeaderText="Descripcion Articulo" SortExpression="ItemName">
+                        <asp:TemplateField HeaderText="Item Description" SortExpression="ItemName">
                             <ItemTemplate><%#Eval("ItemName")%></ItemTemplate>
                         </asp:TemplateField>
 

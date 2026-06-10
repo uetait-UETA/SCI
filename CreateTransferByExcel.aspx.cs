@@ -254,7 +254,7 @@ public partial class createTransferByExcel : BasePage
 
         if (dispErr != null)
         {
-            LabDocEntry.Text          = "Error en SAP B1: " + dispErr + " — La transferencia fue revertida.";
+            LabDocEntry.Text          = "SAP B1 Error: " + dispErr + " — The transfer was reverted.";
             btnCreateDraft.Visible    = true;
             btnCreateTransfer.Visible = false;
             btnUdateDraft.Visible     = false;
@@ -264,9 +264,9 @@ public partial class createTransferByExcel : BasePage
         }
 
         string sapRef = sapDocNum > 0
-            ? " Solicitud de Transferencia #" + sapDocNum + " creada en SAP B1."
+            ? " Transfer Request #" + sapDocNum + " created in SAP B1."
             : "";
-        LabDocEntry.Text = " Draft " + DocEntry.Text + " completado." + sapRef;
+        LabDocEntry.Text = " Draft " + DocEntry.Text + " completed." + sapRef;
 
         btnCreateDraft.Visible    = false;
         btnCreateTransfer.Visible = false;
@@ -364,11 +364,14 @@ public partial class createTransferByExcel : BasePage
         DocEntry.Text = lDocEntry.ToString();
         LabDocEntry.Text = "Draft Number: " + lDocEntry.ToString();
 
+        // Now that DocEntry is set, upload Excel items to staging with the correct DocEntry
+        UploadDataToDataBase();
+
         if(db.DbConnectionState == ConnectionState.Closed)
         {
             db.Connect();
         }
-        
+
         try
         {
             sqlCommand = new SqlCommand
@@ -1028,8 +1031,7 @@ public partial class createTransferByExcel : BasePage
                 return;
             }
         }
-
-        UploadDataToDataBase();
+        // UploadDataToDataBase() is called from btnCreateDraft_Click after the DocEntry sequence is obtained
     }
 
     private string GetFromWhsUType()

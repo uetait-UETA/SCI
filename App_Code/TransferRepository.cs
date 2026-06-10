@@ -336,8 +336,8 @@ public class TransferRepository
             cmd.Parameters.AddWithValue("@de",  docEntry);
             int count = (int)cmd.ExecuteScalar();
             return count > 0
-                ? "Esta Orden tiene cantidades en cero. Revise por favor y/o de Check en \"Aceptar Cantidades en cero.\""
-                : "Orden correcta.";
+                ? "This order has zero quantities. Please review and/or check \"Accept Zero Quantities\"."
+                : "Order is valid.";
         }
     }
 

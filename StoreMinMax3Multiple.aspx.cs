@@ -399,7 +399,7 @@ public partial class StoreMinMax3Multiple : BasePage
                 DataTable dTable = dt;
                 DataRow dtRow = dTable.NewRow();
                 dtRow["ItemCode"] = "-";
-                dtRow["ItemName"] = "SELECCIONE ARTICULO";
+                dtRow["ItemName"] = "SELECT ITEM";
 
                 dt.Rows.InsertAt(dtRow, 0);
 

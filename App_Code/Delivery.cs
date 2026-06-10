@@ -14,6 +14,7 @@ public class Delivery
     protected string sap_db;
     protected string tienda_db;
     protected string whs_code;
+    protected string branchId;
 
 	public Delivery()
 	{
@@ -23,6 +24,7 @@ public class Delivery
         System.Web.HttpContext ctx = System.Web.HttpContext.Current;
         sap_db = (ctx != null && ctx.Session != null) ? ctx.Session["CompanyId"] as string : null;
         tienda_db = (ctx != null && ctx.Session != null) ? ctx.Session["tienda_db"] as string : null;
+        branchId = (ctx != null && ctx.Session != null) ? ctx.Session["BranchId"] as string : null;
         if (string.IsNullOrEmpty(sap_db)) sap_db = ConfigurationManager.AppSettings.Get("smm_db");
         if (string.IsNullOrEmpty(tienda_db)) tienda_db = ConfigurationManager.AppSettings.Get("tienda_db");
         whs_code = ConfigurationManager.AppSettings.Get("whs_code");
@@ -42,17 +44,17 @@ public class Delivery
 	                a.id, 
 	                a.transnum, 
 	                a.itemnum, 
-	                (select bb.whsname 
+	                (select TOP 1 bb.whsname
                         from dbo.ADR_TIENDAS_VW aa,
                              " + sap_db + @".dbo.owhs bb
                         where aa.whscode = bb.whscode
-                        and aa.storenum =  a.storenum) storenum, 
+                        and aa.storenum =  a.storenum) storenum,
 	                CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)) itemdatetime, 
                     --[dbo].[FIVEBCODEPRODS] (a.skunum) OldBarCode, 
                     OldBarCode=STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=a.skunum FOR XML PATH ('')), 1, 3, ''),
 	                a.skunum, 
                     --[dbo].[FIVEBCODEPRODS] (case when b.skunum=a.skunum then '' else b.skunum end) NewBarCode, 
-                    NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=a.skunum FOR XML PATH ('')), 1, 3, '')),
+                    NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=b.skunum FOR XML PATH ('')), 1, 3, '')),
                     case when b.skunum = a.skunum then '' else b.skunum end new_sku,
                     [dbo].[InitCap] (case when d.itemcode is not null then d.itemname else a.pludesc end) description,
 	                a.qty sale_qty, 
@@ -60,15 +62,15 @@ public class Delivery
                       isnull(c.onhand,0)  whs_qty,
                     tt.WhsCode whs_code,
 	                a.error_message
-                from 
-	                dbo.la_delivery_errors a " + Queries.WITH_NOLOCK + @" 
-				inner join ADR_TIENDAS_VW tt " + Queries.WITH_NOLOCK + @"  ON a.storenum=tt.storenum and a.CompanyId = '" + sap_db + @"' 
-				inner join dbo.la_store_sales b " + Queries.WITH_NOLOCK + @"  on a.id = b.id 
+                from
+	                dbo.la_delivery_errors a " + Queries.WITH_NOLOCK + @"
+				cross apply (SELECT TOP 1 WhsCode FROM ADR_TIENDAS_VW " + Queries.WITH_NOLOCK + @" WHERE storenum = a.storenum) tt
+				inner join dbo.la_store_sales b " + Queries.WITH_NOLOCK + @"  on a.id = b.id
 				left outer join " + sap_db + @".dbo.oitw c " + Queries.WITH_NOLOCK + @"  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d " + Queries.WITH_NOLOCK + @"  on c.itemcode = d.itemcode
-                where 
+                where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and a.CompanyId = '" + sap_db + @"' 
+                    and a.CompanyId = '" + branchId + @"' 
                order by CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)), a.storenum,a.itemnum
                 ";
 
@@ -196,7 +198,7 @@ public class Delivery
 select 
                     OldBarCode=STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 with(nolock) WHERE a1.ItemCode=a.skunum FOR XML PATH ('')), 1, 3, ''),
 	                a.skunum,  
-                    NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1  with(nolock) WHERE a1.ItemCode=a.skunum FOR XML PATH ('')), 1, 3, '')),
+                    NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1  with(nolock) WHERE a1.ItemCode=b.skunum FOR XML PATH ('')), 1, 3, '')),
                     case when b.skunum = a.skunum then '' else b.skunum end new_sku,
                     [dbo].[InitCap] (case when d.itemcode is not null then d.itemname else a.pludesc end) description,
 	                a.qty sale_qty, 
@@ -206,13 +208,13 @@ select
 
                 from 
 	                dbo.la_delivery_errors a  with(nolock)
-				inner join ADR_TIENDAS_VW tt  with(nolock)  ON a.storenum=tt.storenum and a.CompanyId =  '" + sap_db + @"'  
-				inner join dbo.la_store_sales b  with(nolock)  on a.id = b.id 
+				inner join ADR_TIENDAS_VW tt  with(nolock)  ON a.storenum=tt.storenum and a.CompanyId =  '" + branchId + @"'
+				inner join dbo.la_store_sales b  with(nolock)  on a.id = b.id
 				left outer join " + sap_db + @".dbo.oitw c  with(nolock)  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d  with(nolock)  on c.itemcode = d.itemcode
-                where 
+                where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and a.CompanyId =  '" + sap_db + @"'  
+                    and a.CompanyId =  '" + branchId + @"'  
 			   )
 
 			   select OldBarCode,	skunum,	NewBarCode,	new_sku,	description,	sum(sale_qty) sale_qty,	sum(whs_qty) whs_qty,	whs_code,STORENUM

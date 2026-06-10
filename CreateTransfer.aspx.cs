@@ -436,14 +436,14 @@ INSERT INTO rss_results
 
                 if (dispErr != null)
                 {
-                    divMessage.InnerHtml = "Error en SAP B1: " + dispErr + " — La transferencia fue revertida.";
+                    divMessage.InnerHtml = "SAP B1 Error: " + dispErr + " — The transfer was reverted.";
                     divMessage.Attributes["class"] = "alert-danger";
                     if (db.DbConnectionState == ConnectionState.Open) db.Disconnect();
                     return;
                 }
 
                 string sapRef = sapDocNum > 0
-                    ? " Solicitud de Transferencia #" + sapDocNum + " creada en SAP B1."
+                    ? " Transfer Request #" + sapDocNum + " created in SAP B1."
                     : "";
                 divMessage.InnerHtml += "<br>Transfer creado!" + sapRef;
             }

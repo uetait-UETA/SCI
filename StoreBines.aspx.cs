@@ -154,7 +154,7 @@ public partial class StoreBines : System.Web.UI.Page
             drpToWhsCode.DataSource = dt;
             drpToWhsCode.DataBind();
 
-            ListItem li = new ListItem("Seleccione una ubicaci�n", "0");
+            ListItem li = new ListItem("Select a location", "0");
             drpToWhsCode.Items.Insert(0, li);
         }
         catch (Exception ex)
@@ -187,7 +187,7 @@ public partial class StoreBines : System.Web.UI.Page
         DropDownItmGrp.DataSource = dt;
         DropDownItmGrp.DataBind();
 
-        ListItem li = new ListItem("Seleccione una categor�a", "0");
+        ListItem li = new ListItem("Select a category", "0");
 
         DropDownItmGrp.Items.Insert(0, li);
     }

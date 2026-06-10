@@ -193,17 +193,17 @@
                     <ItemStyle HorizontalAlign="Center" />
                 </asp:TemplateField>
 
-                <asp:TemplateField HeaderText="Originador" SortExpression="Usuario_Originador">
+                <asp:TemplateField HeaderText="Originator" SortExpression="Usuario_Originador">
                     <ItemTemplate><%#Eval("Usuario_Originador")%></ItemTemplate>
                     <ItemStyle HorizontalAlign="Center" />
                 </asp:TemplateField>
 
-                <asp:TemplateField HeaderText="Despachador" SortExpression="Usuario_Despacho">
+                <asp:TemplateField HeaderText="Dispatcher" SortExpression="Usuario_Despacho">
                     <ItemTemplate><%#Eval("Usuario_Despacho")%></ItemTemplate>
                     <ItemStyle HorizontalAlign="Center" />
                 </asp:TemplateField>
 
-                <asp:TemplateField HeaderText="Receptor" SortExpression="Usuario_Recibo">
+                <asp:TemplateField HeaderText="Receiver" SortExpression="Usuario_Recibo">
                     <ItemTemplate><%#Eval("Usuario_Recibo")%></ItemTemplate>
                     <ItemStyle HorizontalAlign="Center" />
                 </asp:TemplateField>

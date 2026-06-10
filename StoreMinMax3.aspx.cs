@@ -504,7 +504,7 @@ public partial class StoreMinMax3 : BasePage
                     DataTable dTable = dt;
                     DataRow dtRow = dTable.NewRow();
                     dtRow["ItemCode"] = "-";
-                    dtRow["ItemName"] = "SELECCIONE ARTICULO";
+                    dtRow["ItemName"] = "SELECT ITEM";
 
                     dt.Rows.InsertAt(dtRow, 0);
 
@@ -880,9 +880,9 @@ public partial class StoreMinMax3 : BasePage
             e.ExceptionHandled = true;
             string msg = e.Exception.Message;
             if (msg.Contains("offline") || msg.Contains("cannot be opened"))
-                divMessage.InnerHtml = "<span style='color:red;font-weight:bold;'>La base de datos SAP '" + (string)Session["CompanyId"] + "' está temporalmente fuera de línea. Contacte al administrador de base de datos.</span>";
+                divMessage.InnerHtml = "<span style='color:red;font-weight:bold;'>The SAP database '" + (string)Session["CompanyId"] + "' is temporarily offline. Contact the database administrator.</span>";
             else
-                divMessage.InnerHtml = "<span style='color:red;font-weight:bold;'>Error al cargar datos: " + msg + "</span>";
+                divMessage.InnerHtml = "<span style='color:red;font-weight:bold;'>Error loading data: " + msg + "</span>";
             return;
         }
 

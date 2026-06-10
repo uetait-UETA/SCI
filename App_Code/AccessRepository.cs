@@ -150,8 +150,8 @@ public class AccessRepository
 
             if (cnt == 0)
             {
-                textOut = "Usuario Inactivo.";
-                dt.Rows.Add("0", "Usuario Inactivo.");
+                textOut = "Inactive User.";
+                dt.Rows.Add("0", "Inactive User.");
                 return dt;
             }
 
@@ -168,8 +168,8 @@ public class AccessRepository
 
             if (cnt == 0)
             {
-                textOut = "Verifique Usuario Passwd.";
-                dt.Rows.Add("0", "Verifique Usuario Passwd.");
+                textOut = "Check Username / Password.";
+                dt.Rows.Add("0", "Check Username / Password.");
                 return dt;
             }
 
@@ -186,8 +186,8 @@ public class AccessRepository
 
             if (cnt == 0)
             {
-                textOut = "Usuario No tiene permisos para esta compania.";
-                dt.Rows.Add("0", "Usuario No tiene permisos para esta compania.");
+                textOut = "User does not have permissions for this company.";
+                dt.Rows.Add("0", "User does not have permissions for this company.");
                 return dt;
             }
 

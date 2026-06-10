@@ -17,7 +17,7 @@
                             <tel:RadComboBox ID="rcbCompany" runat="server" Height="120px" DropDownAutoWidth="Disabled"
                                 HighlightTemplatedItems="true"
                                 AppendDataBoundItems="true"
-                                EmptyMessage="Seleccione una Company"
+                                EmptyMessage="Select a Company"
                                 AutoPostBack="true" CheckBoxes="false" EnableCheckAllItemsCheckBox="false"
                                 OnSelectedIndexChanged="rcbCompany_SelectedIndexChanged"
                                 Font-Italic="false">
