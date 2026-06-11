@@ -143,13 +143,10 @@ public partial class DeliveryErrors : BasePage
             Hashtable values = new Hashtable();
             item.ExtractValues(values);
 
-            string v_ID = item.GetDataKeyValue("id").ToString();
-            //string v_NewItem = values["new_sku"].ToString();
-
+            string v_SalesId = item.GetDataKeyValue("sales_id").ToString();
 
             Delivery dy = new Delivery();
-            //dy.UpdateDeliveryItemNumber(v_ID, v_NewItem);
-            dy.UpdateDeliveryItemNumber(v_ID, hfNewSku.Value, CompanyIdLabel.Text);
+            dy.UpdateDeliveryItemNumber(v_SalesId, hfNewSku.Value, (string)Session["BranchId"]);
             }
 
 

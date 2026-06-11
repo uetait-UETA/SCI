@@ -40,37 +40,38 @@ public class Delivery
         {
 
 		sql = @"
-                select 
-	                a.id, 
-	                a.transnum, 
-	                a.itemnum, 
+                select
+	                a.id,
+                    b.id AS sales_id,
+	                a.transnum,
+	                a.itemnum,
 	                (select TOP 1 bb.whsname
                         from dbo.ADR_TIENDAS_VW aa,
                              " + sap_db + @".dbo.owhs bb
                         where aa.whscode = bb.whscode
                         and aa.storenum =  a.storenum) storenum,
-	                CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)) itemdatetime, 
-                    --[dbo].[FIVEBCODEPRODS] (a.skunum) OldBarCode, 
+	                CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)) itemdatetime,
                     OldBarCode=STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=a.skunum FOR XML PATH ('')), 1, 3, ''),
-	                a.skunum, 
-                    --[dbo].[FIVEBCODEPRODS] (case when b.skunum=a.skunum then '' else b.skunum end) NewBarCode, 
+	                a.skunum,
                     NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=b.skunum FOR XML PATH ('')), 1, 3, '')),
                     case when b.skunum = a.skunum then '' else b.skunum end new_sku,
                     [dbo].[InitCap] (case when d.itemcode is not null then d.itemname else a.pludesc end) description,
-	                a.qty sale_qty, 
-                    --isnull(c.onhand,0) - isnull(c.iscommited,0) whs_qty,
+	                a.qty sale_qty,
                       isnull(c.onhand,0)  whs_qty,
                     tt.WhsCode whs_code,
 	                a.error_message
                 from
 	                dbo.la_delivery_errors a " + Queries.WITH_NOLOCK + @"
 				cross apply (SELECT TOP 1 WhsCode FROM ADR_TIENDAS_VW " + Queries.WITH_NOLOCK + @" WHERE storenum = a.storenum) tt
-				inner join dbo.la_store_sales b " + Queries.WITH_NOLOCK + @"  on a.id = b.id
+				inner join dbo.la_store_sales b " + Queries.WITH_NOLOCK + @"  on  a.transnum = b.transnum
+                                                                                and a.itemnum  = b.itemnum
+                                                                                and a.storenum = b.storenum
 				left outer join " + sap_db + @".dbo.oitw c " + Queries.WITH_NOLOCK + @"  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d " + Queries.WITH_NOLOCK + @"  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and a.CompanyId = '" + branchId + @"' 
+                    and a.CompanyId = '" + branchId + @"'
+                    and b.CompanyId = '" + branchId + @"'
                order by CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)), a.storenum,a.itemnum
                 ";
 

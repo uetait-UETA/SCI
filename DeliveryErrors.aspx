@@ -22,7 +22,7 @@
                         AllowSorting="true" AllowMultiRowSelection="False" AllowPaging="True" PageSize="15" DataSourceID="ObjectDataSource1" OnUpdateCommand="rgHead_UpdateCommand" Style="margin-left: 0px;">
                         <PagerStyle Mode="Slider"></PagerStyle>
                         <SortingSettings EnableSkinSortStyles="false" />
-                        <MasterTableView Width="100%" AllowNaturalSort="false" EditMode="InPlace" DataKeyNames="id">
+                        <MasterTableView Width="100%" AllowNaturalSort="false" EditMode="InPlace" DataKeyNames="id,sales_id">
                             <ItemStyle Wrap="false" Height="22px" />
                             <Columns>
                                 <%--<tel:GridButtonColumn UniqueName="transfer" ButtonType="LinkButton" HeaderText="Transfer / Order" DataTextField="transfer" CommandName="TRANSFER" ItemStyle-Font-Underline="true" />--%>
