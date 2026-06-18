@@ -307,6 +307,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         {
             if (LvReceived == "N")
             {
+                SyncDispatchQtyFromOpch(LvDispatched, LvReceived);
+                GridView2.DataBind();
+
                 GridView2.Columns[3].Visible = false;  // DraftQuantity
                 GridView2.Columns[4].Visible = true;   // DispatchQuantity
                 GridView2.Columns[5].Visible = false;  // ReceivedQuantity
@@ -2417,6 +2420,53 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             }
         }
         catch { return 0; }
+        finally { db.Disconnect(); }
+    }
+
+    // Reads OPCH line quantities from SAP and updates DispatchQuantity in
+    // smm_Transdiscrep_drf1 so the receive view always reflects what was invoiced.
+    // Only runs when: Dispatched='Y', Received='N', TransferType='SO', DocEntryOPCH > 0.
+    private void SyncDispatchQtyFromOpch(string lvDispatched, string lvReceived)
+    {
+        if (lvDispatched != "Y" || lvReceived != "N") return;
+        if (!string.Equals(GetTransferType(), "SO", StringComparison.OrdinalIgnoreCase)) return;
+
+        int opchDocEntry = GetOpchDocEntry();
+        if (opchDocEntry <= 0) return;
+
+        var gr = new GoodsReceipt();
+        DataTable dtLines = gr.GetApReserveInvoiceLines(sap_db, opchDocEntry);
+        if (dtLines == null || dtLines.Rows.Count == 0) return;
+
+        // Sum OPCH quantities by ItemCode (handles multiple lines per item)
+        var opchQty = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (DataRow row in dtLines.Rows)
+        {
+            string itemCode = row["ItemCode"].ToString();
+            decimal qty     = Convert.ToDecimal(row["Quantity"]);
+            decimal existing;
+            opchQty[itemCode] = opchQty.TryGetValue(itemCode, out existing) ? existing + qty : qty;
+        }
+
+        db.Connect();
+        try
+        {
+            foreach (var kv in opchQty)
+            {
+                using (var cmd = new SqlCommand(
+                    "UPDATE smm_Transdiscrep_drf1 SET DispatchQuantity = @qty " +
+                    "WHERE CompanyId = @cid AND DocEntry = @de AND ItemCode = @item",
+                    db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@qty",  kv.Value);
+                    cmd.Parameters.AddWithValue("@cid",  sap_db);
+                    cmd.Parameters.AddWithValue("@de",   GloVarDocEntry);
+                    cmd.Parameters.AddWithValue("@item", kv.Key);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+        catch { }
         finally { db.Disconnect(); }
     }
 
