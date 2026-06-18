@@ -221,19 +221,22 @@ public static class TransferAutoDispatch
         string userApp, out int sapDocNum)
     {
         sapDocNum = 0;
-        string fromWhs = "", toWhs = "";
+        string fromWhs = "", toWhs = "", fromWhsUType = "";
         var lines = new JArray();
 
         string sql = string.Format(@"
             SELECT h.FromWhsCode, h.ToWhsCode,
                    d.LineNum, d.ItemCode,
                    CAST(d.TmpQuantity AS int) AS Qty,
-                   ISNULL(iw.AvgPrice, 0) AS UnitPrice
+                   ISNULL(iw.AvgPrice, 0) AS UnitPrice,
+                   ISNULL(ow.U_Type, '') AS WhsUType
             FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
             INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
                 ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
             LEFT JOIN [{0}]..OITW iw WITH(NOLOCK)
                 ON iw.ItemCode = d.ItemCode AND iw.WhsCode = h.FromWhsCode
+            LEFT JOIN [{0}]..OWHS ow WITH(NOLOCK)
+                ON ow.WhsCode = h.FromWhsCode
             WHERE h.CompanyId = @cid AND h.DocEntry = @de
               AND d.TmpQuantity > 0
             ORDER BY d.LineNum", sapDb);
@@ -248,8 +251,9 @@ public static class TransferAutoDispatch
 
             if (dt.Rows.Count == 0) return null;
 
-            fromWhs = dt.Rows[0]["FromWhsCode"].ToString();
-            toWhs   = dt.Rows[0]["ToWhsCode"].ToString();
+            fromWhs      = dt.Rows[0]["FromWhsCode"].ToString();
+            toWhs        = dt.Rows[0]["ToWhsCode"].ToString();
+            fromWhsUType = dt.Rows[0]["WhsUType"].ToString();
 
             foreach (DataRow row in dt.Rows)
             {
@@ -284,6 +288,9 @@ public static class TransferAutoDispatch
             new JProperty("U_ORITOWHS",                toWhs),
             new JProperty("DocumentLines",             lines)
         );
+
+        if (!string.IsNullOrEmpty(fromWhsUType))
+            payload["U_Type"] = fromWhsUType;
 
         var sl = new SapServiceLayer();
         try
