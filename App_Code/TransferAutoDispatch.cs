@@ -142,8 +142,80 @@ public static class TransferAutoDispatch
         }
     }
 
+    /// <summary>
+    /// Validates auto-dispatch prerequisites using fromWhs/toWhs directly,
+    /// before any draft is created. Returns null if the transfer can proceed,
+    /// or an error message if a required configuration is missing.
+    /// </summary>
+    public static string ValidateAutoDispatch(string fromWhs, string toWhs, string companyId, string sapDb)
+    {
+        var db = new SqlDb();
+        db.Connect();
+        try
+        {
+            string sql = string.Format(
+                @"SELECT ISNULL(tf.TYPEWHS,'') AS FromType,
+                         ISNULL(wf.BPLId,0)   AS FromBPLId,
+                         ISNULL(tt.TYPEWHS,'') AS ToType
+                  FROM [{0}]..OWHS wf WITH(NOLOCK)
+                  LEFT JOIN dbo.SMM_WHSTYPE tf WITH(NOLOCK)
+                      ON tf.WHSCODE = wf.WhsCode AND tf.COMPANYID = @cid
+                  LEFT JOIN dbo.SMM_WHSTYPE tt WITH(NOLOCK)
+                      ON tt.WHSCODE = @toWhs    AND tt.COMPANYID = @cid
+                  WHERE wf.WhsCode = @fromWhs", sapDb);
+
+            bool isBodegaToTienda = false;
+            using (var cmd = new SqlCommand(sql, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@fromWhs", fromWhs);
+                cmd.Parameters.AddWithValue("@toWhs",   toWhs);
+                cmd.Parameters.AddWithValue("@cid",     companyId);
+                using (var dr = cmd.ExecuteReader())
+                {
+                    if (dr.Read())
+                        isBodegaToTienda =
+                            string.Equals(dr["FromType"].ToString(), "BODEGA", StringComparison.OrdinalIgnoreCase)
+                            && Convert.ToInt32(dr["FromBPLId"]) == 1
+                            && string.Equals(dr["ToType"].ToString(), "TIENDA", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            if (!isBodegaToTienda) return null; // not a BODEGA→TIENDA; no SO needed
+
+            // BODEGA→TIENDA confirmed — check CardCode mapping for the destination warehouse
+            string cardCodeSql = string.Format(
+                "SELECT TOP 1 m.OinvCardCode FROM dbo.ApriCardCodeMapping m " +
+                "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.BPLId = m.DestBPLId " +
+                "WHERE w.WhsCode = @toWhs AND m.IsActive = 1", sapDb);
+
+            string cardCode = null;
+            using (var cmd = new SqlCommand(cardCodeSql, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@toWhs", toWhs);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value) cardCode = val.ToString();
+            }
+
+            if (string.IsNullOrEmpty(cardCode))
+                return "No CardCode mapping found in ApriCardCodeMapping for destination warehouse '" + toWhs
+                       + "'. Contact your administrator.";
+
+            return null; // all checks passed
+        }
+        catch (Exception ex)
+        {
+            return "Error validating transfer prerequisites: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+    }
+
     // ── Private helpers ─────────────────────────────────────────────────────
 
+    // Creates a Sales Order (ORDR) in SAP B1 for BODEGA→TIENDA (inter-branch) transfers.
+    // Price per line is taken from OITW.AvgPrice of the origin warehouse.
     private static string CreateSapTransferRequest(
         SqlConnection conn, int docEntry, string companyId, string sapDb,
         string userApp, out int sapDocNum)
@@ -152,16 +224,19 @@ public static class TransferAutoDispatch
         string fromWhs = "", toWhs = "";
         var lines = new JArray();
 
-        string sql = @"
+        string sql = string.Format(@"
             SELECT h.FromWhsCode, h.ToWhsCode,
-                   d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
-                   CAST(d.TmpQuantity AS int) AS Qty
+                   d.LineNum, d.ItemCode,
+                   CAST(d.TmpQuantity AS int) AS Qty,
+                   ISNULL(iw.AvgPrice, 0) AS UnitPrice
             FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
             INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
                 ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+            LEFT JOIN [{0}]..OITW iw WITH(NOLOCK)
+                ON iw.ItemCode = d.ItemCode AND iw.WhsCode = h.FromWhsCode
             WHERE h.CompanyId = @cid AND h.DocEntry = @de
               AND d.TmpQuantity > 0
-            ORDER BY d.LineNum";
+            ORDER BY d.LineNum", sapDb);
 
         using (var cmd = new SqlCommand(sql, conn))
         {
@@ -179,35 +254,42 @@ public static class TransferAutoDispatch
             foreach (DataRow row in dt.Rows)
             {
                 lines.Add(new JObject(
-                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
-                    new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
-                    new JProperty("FromWarehouseCode", fromWhs),
-                    new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
+                    new JProperty("ItemCode",      row["ItemCode"].ToString()),
+                    new JProperty("Quantity",      Convert.ToInt32(row["Qty"])),
+                    new JProperty("UnitPrice",     Convert.ToDecimal(row["UnitPrice"])),
+                    new JProperty("WarehouseCode", fromWhs)
                 ));
             }
         }
 
         if (lines.Count == 0) return null;
 
-        string companyDb  = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sapDb;
-        string actionCode = "CREATE";
+        string cardCode = GetOrderCardCode(conn, toWhs, sapDb);
+        if (string.IsNullOrEmpty(cardCode))
+            return "No CardCode mapping found in ApriCardCodeMapping for destination warehouse " + toWhs;
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sapDb;
+
+        string today = DateTime.Today.ToString("yyyy-MM-dd",
+            System.Globalization.CultureInfo.InvariantCulture);
 
         var payload = new JObject(
-            new JProperty("FromWarehouse",      fromWhs),
-            new JProperty("ToWarehouse",        toWhs),
-            new JProperty("U_BOL",              docEntry.ToString()),
-            new JProperty("U_DESPATCH",         userApp),
-            new JProperty("U_ORITOWHS",         fromWhs),
-            new JProperty("U_ACTION_CODE",      actionCode),
-            new JProperty("StockTransferLines", lines)
+            new JProperty("CardCode",                  cardCode),
+            new JProperty("BPL_IDAssignedToInvoice",   1),
+            new JProperty("DocDate",                   today),
+            new JProperty("DocDueDate",                today),
+            new JProperty("TaxDate",                   today),
+            new JProperty("U_BOL",                     docEntry.ToString()),
+            new JProperty("U_DESPATCH",                userApp),
+            new JProperty("U_ORITOWHS",                toWhs),
+            new JProperty("DocumentLines",             lines)
         );
 
         var sl = new SapServiceLayer();
         try
         {
             sl.Login(companyDb);
-            string response = sl.CreateInventoryTransferRequest(
-                payload.ToString(Newtonsoft.Json.Formatting.None));
+            string response = sl.CreateSalesOrder(payload.ToString(Newtonsoft.Json.Formatting.None));
 
             try
             {
@@ -219,7 +301,7 @@ public static class TransferAutoDispatch
                 {
                     using (var upd = new SqlCommand(
                         "UPDATE smm_Transdiscrep_odrf " +
-                        "SET DocEntryITR = @entry, DocNumITR = @num " +
+                        "SET DocEntryITR = @entry, DocNumITR = @num, TransferType = 'SO' " +
                         "WHERE CompanyId = @cid AND DocEntry = @de", conn))
                     {
                         upd.Parameters.AddWithValue("@entry", sapEntry);
@@ -245,6 +327,22 @@ public static class TransferAutoDispatch
         finally
         {
             sl.Logout();
+        }
+    }
+
+    // Returns the inter-company customer CardCode for a destination warehouse,
+    // looked up via ApriCardCodeMapping.DestBPLId = OWHS.BPLId.
+    private static string GetOrderCardCode(SqlConnection conn, string toWhs, string sapDb)
+    {
+        string sql = string.Format(
+            "SELECT TOP 1 m.OinvCardCode FROM dbo.ApriCardCodeMapping m " +
+            "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.BPLId = m.DestBPLId " +
+            "WHERE w.WhsCode = @toWhs AND m.IsActive = 1", sapDb);
+        using (var cmd = new SqlCommand(sql, conn))
+        {
+            cmd.Parameters.AddWithValue("@toWhs", toWhs);
+            object val = cmd.ExecuteScalar();
+            return val != null && val != DBNull.Value ? val.ToString() : null;
         }
     }
 

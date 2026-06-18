@@ -345,7 +345,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 }
 
                 bool isDutyFree = string.Equals(GetFromWhsType(), "Duty Free", StringComparison.OrdinalIgnoreCase);
-                if (isDutyFree && string.IsNullOrWhiteSpace(gtkVal))
+                if (isDutyFree && CheckIsBodegaToTienda() && string.IsNullOrWhiteSpace(gtkVal))
                 {
                     Button2.Enabled = false;
                     LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
@@ -354,6 +354,13 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 {
                     LabelMsg.ForeColor = System.Drawing.Color.Green;
                     LabelMsg.Text = "GTK Confirmation #: " + gtkVal;
+                }
+
+                if (string.Equals(GetTransferType(), "SO", StringComparison.OrdinalIgnoreCase)
+                    && GetOpchDocEntry() == 0)
+                {
+                    Button2.Enabled = false;
+                    LabelMsg.Text = "Message: A Purchase Order (OPCH) must be linked to this transfer before receiving.";
                 }
             }
             else
@@ -455,7 +462,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         }
 
         if (!string.Equals(sloginTypeWhs, "BODEGA", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(sloginTypeWhs, "TIENDA", StringComparison.OrdinalIgnoreCase))
+            !string.Equals(sloginTypeWhs, "TIENDA", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(sloginTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase))
         {
             Button1.Enabled = false;
             Button2.Enabled = false;
@@ -500,7 +508,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Alert.Show(LabelMsg.Text);
                 }
 
-                if (!string.Equals(sloginTypeWhs, sTypeWhs, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(sloginTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(sloginTypeWhs, sTypeWhs, StringComparison.OrdinalIgnoreCase))
                 {
                     Button1.Enabled = false;
                     Button2.Enabled = false;
@@ -513,6 +522,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 }
 
                 if (string.Equals(GetFromWhsType(), "Duty Free", StringComparison.OrdinalIgnoreCase)
+                    && CheckIsBodegaToTienda()
                     && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
                 {
                     Button1.Enabled = false;
@@ -528,7 +538,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         }
         else
         {
-            if (!string.Equals(sloginTypeWhs, sTypeWhs, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(sloginTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(sloginTypeWhs, sTypeWhs, StringComparison.OrdinalIgnoreCase))
             {
                 Button1.Enabled = false;
                 Button2.Enabled = false;
@@ -863,6 +874,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 string hoistedShortageErr = null;
                 bool hoistedIsDutyPaid = false;
                 string hoistedResearchWhs = "";
+                bool receiveIsApri = false;
 
                 if (disOrRec == "D")
                 {
@@ -892,69 +904,95 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
                 if (disOrRec == "R")
                 {
-                    string sapError = CreateSapInventoryTransfer(LvuserApp, out sapDocNum);
-                    if (sapError != null)
+                    string sapError;
+                    if (GetOpchDocEntry() > 0)
                     {
-                        LogMainItLinesToTransferErrors(LvuserApp, sapError);
-                        Alert.Show(isEn
-                            ? "Error creating Inventory Transfer in SAP B1: " + sapError
-                            : "Error al crear Inventory Transfer en SAP B1: " + sapError);
-                        return;
-                    }
-
-                    // Shortage transfer must run BEFORE Smm_populate_whs_transfers_Batch
-                    // because that SP resets tmpQuantity, which would make the shortage
-                    // query (DispatchQuantity > tmpQuantity) return 0 rows.
-                    string fromWhsTypeDiag = GetFromWhsType();
-                    hoistedIsDutyPaid = string.Equals(fromWhsTypeDiag, "Duty Paid", StringComparison.OrdinalIgnoreCase);
-                    string diagInfo = string.Format("[{0}] DocEntry={1} FromWhsType='{2}' | ",
-                        DateTime.Now.ToString("HH:mm:ss"), GloVarDocEntry, fromWhsTypeDiag);
-                    if (hoistedIsDutyPaid)
-                    {
-                        try
+                        receiveIsApri = true;
+                        Dictionary<string, decimal> surplusQtyByItem;
+                        sapError = CreateApriOpdn(LvuserApp, out sapDocNum, out surplusQtyByItem);
+                        if (sapError != null)
                         {
-                            db.Connect();
-                            string diagSql = "SELECT d.LineNum, d.ItemCode, " +
-                                "ISNULL(CAST(d.DispatchQuantity AS NVARCHAR),'NULL') AS DQ, " +
-                                "ISNULL(CAST(d.tmpQuantity AS NVARCHAR),'NULL') AS TQ " +
-                                "FROM smm_Transdiscrep_drf1 d WHERE d.CompanyId=@cid AND d.DocEntry=@de";
-                            using (var diagCmd = new SqlCommand(diagSql, db.Conn))
-                            {
-                                diagCmd.Parameters.AddWithValue("@cid", sap_db);
-                                diagCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
-                                var diagDt = new DataTable();
-                                new SqlDataAdapter(diagCmd).Fill(diagDt);
-                                diagInfo += "Lines(DispatchQty/ReceivedQty):";
-                                foreach (DataRow r in diagDt.Rows)
-                                    diagInfo += string.Format(" L{0}[{1}]:{2}/{3}", r["LineNum"], r["ItemCode"], r["DQ"], r["TQ"]);
-                            }
+                            Alert.Show(isEn
+                                ? "Error creating Goods Receipt PO in SAP B1: " + sapError
+                                : "Error al crear Goods Receipt PO en SAP B1: " + sapError);
+                            return;
                         }
-                        catch (Exception exDiag) { diagInfo += " DiagQueryErr:" + exDiag.Message; }
-                        finally { db.Disconnect(); }
-
-                        hoistedResearchWhs = GetResearchWarehouse("R", fromWhsTypeDiag);
-                        int shortageDocNum = 0;
-                        if (string.IsNullOrEmpty(hoistedResearchWhs))
+                        // Duty Paid: create a second standalone OPDN for surplus quantities (received > OPCH qty)
+                        if (string.Equals(GetFromWhsType(), "Duty Paid", StringComparison.OrdinalIgnoreCase)
+                            && surplusQtyByItem != null && surplusQtyByItem.Count > 0)
                         {
-                            hoistedShortageErr = "Research warehouse not found in OWHS (BPLId=3, Block='R', U_Type='" + fromWhsTypeDiag + "')";
-                            diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
-                        }
-                        else
-                        {
-                            hoistedShortageErr = CreateSapDutyPaidShortageTransfer(LvuserApp, hoistedResearchWhs, out shortageDocNum);
-                            if (hoistedShortageErr != null)
-                                diagInfo += " | ShortageIT ERROR: " + hoistedShortageErr;
-                            else if (shortageDocNum == 0)
-                                diagInfo += " | ShortageIT: 0 shortage rows (DispatchQty<=ReceivedQty).";
-                            else
-                                diagInfo += " | ShortageIT OK DocNum=" + shortageDocNum;
+                            int    surplusDocNum = 0;
+                            string surplusError  = CreateSurplusOpdn(LvuserApp, surplusQtyByItem, out surplusDocNum);
+                            if (surplusError != null)
+                                Alert.Show("OPDN #1 created (DocNum " + sapDocNum + "). Error creating surplus OPDN: " + surplusError);
                         }
                     }
                     else
                     {
-                        diagInfo += "ShortageIT SKIPPED (U_Type != 'Duty Paid').";
+                        sapError = CreateSapInventoryTransfer(LvuserApp, out sapDocNum);
+                        if (sapError != null)
+                        {
+                            LogMainItLinesToTransferErrors(LvuserApp, sapError);
+                            Alert.Show(isEn
+                                ? "Error creating Inventory Transfer in SAP B1: " + sapError
+                                : "Error al crear Inventory Transfer en SAP B1: " + sapError);
+                            return;
+                        }
+
+                        // Shortage transfer must run BEFORE Smm_populate_whs_transfers_Batch
+                        // because that SP resets tmpQuantity, which would make the shortage
+                        // query (DispatchQuantity > tmpQuantity) return 0 rows.
+                        string fromWhsTypeDiag = GetFromWhsType();
+                        hoistedIsDutyPaid = string.Equals(fromWhsTypeDiag, "Duty Paid", StringComparison.OrdinalIgnoreCase);
+                        string diagInfo = string.Format("[{0}] DocEntry={1} FromWhsType='{2}' | ",
+                            DateTime.Now.ToString("HH:mm:ss"), GloVarDocEntry, fromWhsTypeDiag);
+                        if (hoistedIsDutyPaid)
+                        {
+                            try
+                            {
+                                db.Connect();
+                                string diagSql = "SELECT d.LineNum, d.ItemCode, " +
+                                    "ISNULL(CAST(d.DispatchQuantity AS NVARCHAR),'NULL') AS DQ, " +
+                                    "ISNULL(CAST(d.tmpQuantity AS NVARCHAR),'NULL') AS TQ " +
+                                    "FROM smm_Transdiscrep_drf1 d WHERE d.CompanyId=@cid AND d.DocEntry=@de";
+                                using (var diagCmd = new SqlCommand(diagSql, db.Conn))
+                                {
+                                    diagCmd.Parameters.AddWithValue("@cid", sap_db);
+                                    diagCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                                    var diagDt = new DataTable();
+                                    new SqlDataAdapter(diagCmd).Fill(diagDt);
+                                    diagInfo += "Lines(DispatchQty/ReceivedQty):";
+                                    foreach (DataRow r in diagDt.Rows)
+                                        diagInfo += string.Format(" L{0}[{1}]:{2}/{3}", r["LineNum"], r["ItemCode"], r["DQ"], r["TQ"]);
+                                }
+                            }
+                            catch (Exception exDiag) { diagInfo += " DiagQueryErr:" + exDiag.Message; }
+                            finally { db.Disconnect(); }
+
+                            hoistedResearchWhs = GetResearchWarehouse("R", fromWhsTypeDiag);
+                            int shortageDocNum = 0;
+                            if (string.IsNullOrEmpty(hoistedResearchWhs))
+                            {
+                                hoistedShortageErr = "Research warehouse not found in OWHS (BPLId=3, Block='R', U_Type='" + fromWhsTypeDiag + "')";
+                                diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
+                            }
+                            else
+                            {
+                                hoistedShortageErr = CreateSapDutyPaidShortageTransfer(LvuserApp, hoistedResearchWhs, out shortageDocNum);
+                                if (hoistedShortageErr != null)
+                                    diagInfo += " | ShortageIT ERROR: " + hoistedShortageErr;
+                                else if (shortageDocNum == 0)
+                                    diagInfo += " | ShortageIT: 0 shortage rows (DispatchQty<=ReceivedQty).";
+                                else
+                                    diagInfo += " | ShortageIT OK DocNum=" + shortageDocNum;
+                            }
+                        }
+                        else
+                        {
+                            diagInfo += "ShortageIT SKIPPED (U_Type != 'Duty Paid').";
+                        }
+                        try { System.IO.File.AppendAllText(@"C:\Temp\sci_diag.txt", diagInfo + "\r\n"); } catch { }
                     }
-                    try { System.IO.File.AppendAllText(@"C:\Temp\sci_diag.txt", diagInfo + "\r\n"); } catch { }
                 }
 
                 //logTrace("TransferDiscreOrdf-" + GloVarDocEntry, " dentro del flag = Y");
@@ -1047,7 +1085,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                         lDispCompleted = db.cmd.Parameters["@DispCompleted"].Value.ToString();
 
                         string sapRef = sapDocNum > 0
-                            ? (isEn ? " Transfer Request #" : " Solicitud de Transferencia #") + sapDocNum + " SAP."
+                            ? (isEn ? " Sales Order #" : " Orden de Venta #") + sapDocNum + " SAP."
                             : "";
 
                         string dispShortagePart = "";
@@ -1121,7 +1159,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     finally { db.Disconnect(); }
 
                     string itPart = itDocNum > 0
-                        ? (isEn ? " Inventory Transfer #" + itDocNum + " created in SAP." : " Transferencia de Inventario #" + itDocNum + " creada en SAP.")
+                        ? (receiveIsApri
+                            ? (isEn ? " Goods Receipt PO #" + itDocNum + " created in SAP." : " Goods Receipt PO #" + itDocNum + " creada en SAP.")
+                            : (isEn ? " Inventory Transfer #" + itDocNum + " created in SAP." : " Transferencia de Inventario #" + itDocNum + " creada en SAP."))
                         : "";
 
                     int shortageDocNumSaved = 0;
@@ -1140,6 +1180,29 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     }
                     catch { }
                     finally { db.Disconnect(); }
+
+                    int surplusOpdn2DocNum = 0;
+                    try
+                    {
+                        db.Connect();
+                        using (var cmd = new SqlCommand(
+                            "SELECT ISNULL(DocNumOpdn2,0) FROM smm_Transdiscrep_odrf " +
+                            "WHERE CompanyId=@c AND DocEntry=@e", db.Conn))
+                        {
+                            cmd.Parameters.AddWithValue("@c", sap_db);
+                            cmd.Parameters.AddWithValue("@e", GloVarDocEntry);
+                            object v = cmd.ExecuteScalar();
+                            if (v != null && v != DBNull.Value) surplusOpdn2DocNum = Convert.ToInt32(v);
+                        }
+                    }
+                    catch { }
+                    finally { db.Disconnect(); }
+
+                    string surplusOpdn2Part = surplusOpdn2DocNum > 0
+                        ? (isEn
+                            ? " Surplus Goods Receipt PO #" + surplusOpdn2DocNum + " created in SAP."
+                            : " Goods Receipt PO de sobrante #" + surplusOpdn2DocNum + " creada en SAP.")
+                        : "";
 
                     string researchWhsName = !string.IsNullOrEmpty(hoistedResearchWhs) ? hoistedResearchWhs : "research whs";
                     string shortagePart;
@@ -1167,8 +1230,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     }
 
                     message = isEn
-                        ? "Order Received." + itPart + shortagePart
-                        : "Orden Recibida." + itPart + shortagePart;
+                        ? "Order Received." + itPart + surplusOpdn2Part + shortagePart
+                        : "Orden Recibida." + itPart + surplusOpdn2Part + shortagePart;
                     LabelMsg.Text = message;
                 }
 
@@ -1416,7 +1479,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         db.Connect();
         try
         {
-            // Only run when document is in receive-pending state
             string dispatched = null, received = null;
             int sapItrEntry = 0;
 
@@ -1433,108 +1495,199 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     {
                         dispatched  = rdr["Dispatched"].ToString();
                         received    = rdr["Received"].ToString();
-                        sapItrEntry = rdr["DocEntryITR"] != DBNull.Value
-                                      ? Convert.ToInt32(rdr["DocEntryITR"]) : 0;
+                        sapItrEntry = rdr["DocEntryITR"] != DBNull.Value ? Convert.ToInt32(rdr["DocEntryITR"]) : 0;
                     }
                 }
             }
 
             if (dispatched != "Y" || received != "N") return;
 
-            // If DocEntryTraRec2 is not set, find the OWTQ via U_BOL (= local DocEntry)
-            if (sapItrEntry <= 0)
-            {
-                string sqlFind = "SELECT TOP 1 DocEntry FROM " + sap_db +
-                                 "..OWTQ WITH(NOLOCK) WHERE CAST(U_BOL AS NVARCHAR) = @Bol" +
-                                 " ORDER BY DocEntry DESC";
-                using (SqlCommand cmd = new SqlCommand(sqlFind, db.Conn))
-                {
-                    cmd.Parameters.AddWithValue("@Bol", GloVarDocEntry.ToString());
-                    object val = cmd.ExecuteScalar();
-                    if (val != null && val != DBNull.Value)
-                        sapItrEntry = Convert.ToInt32(val);
-                }
-            }
+            bool isBodegaToTienda = CheckIsBodegaToTienda(db.Conn);
 
-            if (sapItrEntry <= 0) return;
-
-            // Read GTK confirmation and DocNum from OWTQ
-            string gtk    = null;
-            int    docNum = 0;
-            string sqlGtk = "SELECT U_GTK_CONFIRMATION, DocNum FROM " + sap_db +
-                            "..OWTQ WITH(NOLOCK) WHERE DocEntry = @SapEntry";
-            using (SqlCommand cmd = new SqlCommand(sqlGtk, db.Conn))
+            if (isBodegaToTienda)
             {
-                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
-                using (SqlDataReader rdr = cmd.ExecuteReader())
+                // Inter-branch: dispatch document is ORDR (Sales Order). Sync from RDR1.
+                if (sapItrEntry <= 0)
                 {
-                    if (rdr.Read())
+                    string sqlFind = "SELECT TOP 1 DocEntry FROM " + sap_db +
+                                     "..ORDR WITH(NOLOCK) WHERE CAST(U_BOL AS NVARCHAR) = @Bol" +
+                                     " ORDER BY DocEntry DESC";
+                    using (var cmd = new SqlCommand(sqlFind, db.Conn))
                     {
-                        if (rdr["U_GTK_CONFIRMATION"] != DBNull.Value) gtk    = rdr["U_GTK_CONFIRMATION"].ToString();
-                        if (rdr["DocNum"]              != DBNull.Value) docNum = Convert.ToInt32(rdr["DocNum"]);
+                        cmd.Parameters.AddWithValue("@Bol", GloVarDocEntry.ToString());
+                        object val = cmd.ExecuteScalar();
+                        if (val != null && val != DBNull.Value)
+                            sapItrEntry = Convert.ToInt32(val);
                     }
                 }
+
+                if (sapItrEntry <= 0) return;
+
+                string gtk = null; int docNum = 0;
+
+                // DocNum comes from the ORDR (Sales Order)
+                using (var cmd = new SqlCommand(
+                    "SELECT DocNum FROM " + sap_db +
+                    "..ORDR WITH(NOLOCK) WHERE DocEntry = @SapEntry", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value) docNum = Convert.ToInt32(val);
+                }
+
+                // GTK confirmation is set on the ODLN (Delivery), not on the ORDR.
+                // Find the ODLN created from this ORDR via DLN1.BaseEntry (BaseType=17).
+                using (var cmd = new SqlCommand(
+                    "SELECT TOP 1 d.U_GTK_CONFIRMATION " +
+                    "FROM " + sap_db + "..ODLN d WITH(NOLOCK) " +
+                    "INNER JOIN " + sap_db + "..DLN1 l WITH(NOLOCK) ON l.DocEntry = d.DocEntry " +
+                    "WHERE l.BaseType = 17 AND l.BaseEntry = @SapEntry " +
+                    "ORDER BY d.DocEntry DESC", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value) gtk = val.ToString();
+                }
+
+                using (var cmd = new SqlCommand(
+                    "UPDATE smm_Transdiscrep_odrf " +
+                    "SET U_GTK_CONFIRMATION = @Gtk, DocNumITR = @DocNum, " +
+                    "    DocEntryITR = CASE WHEN ISNULL(DocEntryITR,0)=0 THEN @SapEntry ELSE DocEntryITR END " +
+                    "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@Gtk",      string.IsNullOrEmpty(gtk) ? (object)DBNull.Value : gtk);
+                    cmd.Parameters.AddWithValue("@DocNum",   docNum);
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    cmd.Parameters.AddWithValue("@Company",  sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
+
+                string sqlSync = @"
+                    UPDATE d
+                    SET    d.DispatchQuantity = CAST(r1.Quantity AS INT),
+                           d.tmpQuantity      = CAST(r1.Quantity AS INT)
+                    FROM   smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    JOIN   " + sap_db + @"..RDR1 r1 WITH(NOLOCK)
+                           ON  r1.DocEntry = @SapEntry
+                           AND r1.ItemCode = d.ItemCode
+                    WHERE  d.CompanyId = @Company AND d.DocEntry = @Entry";
+
+                using (var cmd = new SqlCommand(sqlSync, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    cmd.Parameters.AddWithValue("@Company",  sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
+
+                string sqlZero = @"
+                    UPDATE d SET d.DispatchQuantity = 0, d.tmpQuantity = 0
+                    FROM   smm_Transdiscrep_drf1 d
+                    LEFT JOIN " + sap_db + @"..RDR1 r1 WITH(NOLOCK)
+                           ON  r1.DocEntry = @SapEntry AND r1.ItemCode = d.ItemCode
+                    WHERE  d.CompanyId = @Company AND d.DocEntry = @Entry
+                      AND  r1.ItemCode IS NULL";
+
+                using (var cmd = new SqlCommand(sqlZero, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    cmd.Parameters.AddWithValue("@Company",  sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
             }
-
-            // Persist GTK, DocNum and DocEntry to local header
-            using (SqlCommand cmd = new SqlCommand(
-                "UPDATE smm_Transdiscrep_odrf " +
-                "SET U_GTK_CONFIRMATION = @Gtk, " +
-                "    DocNumITR          = @DocNum, " +
-                "    DocEntryITR        = CASE WHEN ISNULL(DocEntryITR,0)=0 THEN @SapEntry ELSE DocEntryITR END " +
-                "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+            else
             {
-                cmd.Parameters.AddWithValue("@Gtk",      string.IsNullOrEmpty(gtk) ? (object)DBNull.Value : gtk);
-                cmd.Parameters.AddWithValue("@DocNum",   docNum);
-                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
-                cmd.Parameters.AddWithValue("@Company",  sap_db);
-                cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
-                cmd.ExecuteNonQuery();
-            }
+                // Intra-branch: dispatch document is OWTQ (ITR). Sync from WTQ1.
+                if (sapItrEntry <= 0)
+                {
+                    string sqlFind = "SELECT TOP 1 DocEntry FROM " + sap_db +
+                                     "..OWTQ WITH(NOLOCK) WHERE CAST(U_BOL AS NVARCHAR) = @Bol" +
+                                     " ORDER BY DocEntry DESC";
+                    using (SqlCommand cmd = new SqlCommand(sqlFind, db.Conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Bol", GloVarDocEntry.ToString());
+                        object val = cmd.ExecuteScalar();
+                        if (val != null && val != DBNull.Value)
+                            sapItrEntry = Convert.ToInt32(val);
+                    }
+                }
 
-            // Sync DispatchQuantity and tmpQuantity from the ITR lines (WTQ1).
-            // tmpQuantity must also be updated so the receive textbox pre-fills with
-            // ITR quantities, which CreateSapInventoryTransfer then uses for the IT.
-            string sqlSync = @"
-                UPDATE d
-                SET    d.DispatchQuantity = CAST(q1.Quantity AS INT),
-                       d.tmpQuantity      = CAST(q1.Quantity AS INT)
-                FROM   smm_Transdiscrep_drf1 d WITH(NOLOCK)
-                JOIN   " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
-                       ON  q1.DocEntry  = @SapEntry
-                       AND q1.ItemCode  = d.ItemCode
-                       AND q1.WhsCode   = d.ToWhsCode
-                WHERE  d.CompanyId = @Company
-                AND    d.DocEntry  = @Entry";
+                if (sapItrEntry <= 0) return;
 
-            using (SqlCommand cmd = new SqlCommand(sqlSync, db.Conn))
-            {
-                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
-                cmd.Parameters.AddWithValue("@Company",  sap_db);
-                cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
-                cmd.ExecuteNonQuery();
-            }
+                string gtk    = null;
+                int    docNum = 0;
+                using (SqlCommand cmd = new SqlCommand(
+                    "SELECT U_GTK_CONFIRMATION, DocNum FROM " + sap_db +
+                    "..OWTQ WITH(NOLOCK) WHERE DocEntry = @SapEntry", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    using (SqlDataReader rdr = cmd.ExecuteReader())
+                    {
+                        if (rdr.Read())
+                        {
+                            if (rdr["U_GTK_CONFIRMATION"] != DBNull.Value) gtk    = rdr["U_GTK_CONFIRMATION"].ToString();
+                            if (rdr["DocNum"]              != DBNull.Value) docNum = Convert.ToInt32(rdr["DocNum"]);
+                        }
+                    }
+                }
 
-            // Lines that no longer exist in the SAP ITR (removed from WTQ1) get zeroed out.
-            string sqlZero = @"
-                UPDATE d
-                SET    d.DispatchQuantity = 0,
-                       d.tmpQuantity      = 0
-                FROM   smm_Transdiscrep_drf1 d
-                LEFT JOIN " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
-                       ON  q1.DocEntry = @SapEntry
-                       AND q1.ItemCode = d.ItemCode
-                       AND q1.WhsCode  = d.ToWhsCode
-                WHERE  d.CompanyId = @Company
-                AND    d.DocEntry  = @Entry
-                AND    q1.ItemCode IS NULL";
+                using (SqlCommand cmd = new SqlCommand(
+                    "UPDATE smm_Transdiscrep_odrf " +
+                    "SET U_GTK_CONFIRMATION = @Gtk, " +
+                    "    DocNumITR          = @DocNum, " +
+                    "    DocEntryITR        = CASE WHEN ISNULL(DocEntryITR,0)=0 THEN @SapEntry ELSE DocEntryITR END " +
+                    "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@Gtk",      string.IsNullOrEmpty(gtk) ? (object)DBNull.Value : gtk);
+                    cmd.Parameters.AddWithValue("@DocNum",   docNum);
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    cmd.Parameters.AddWithValue("@Company",  sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
 
-            using (SqlCommand cmd = new SqlCommand(sqlZero, db.Conn))
-            {
-                cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
-                cmd.Parameters.AddWithValue("@Company",  sap_db);
-                cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
-                cmd.ExecuteNonQuery();
+                string sqlSync = @"
+                    UPDATE d
+                    SET    d.DispatchQuantity = CAST(q1.Quantity AS INT),
+                           d.tmpQuantity      = CAST(q1.Quantity AS INT)
+                    FROM   smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    JOIN   " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
+                           ON  q1.DocEntry  = @SapEntry
+                           AND q1.ItemCode  = d.ItemCode
+                           AND q1.WhsCode   = d.ToWhsCode
+                    WHERE  d.CompanyId = @Company
+                    AND    d.DocEntry  = @Entry";
+
+                using (SqlCommand cmd = new SqlCommand(sqlSync, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    cmd.Parameters.AddWithValue("@Company",  sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
+
+                string sqlZero = @"
+                    UPDATE d
+                    SET    d.DispatchQuantity = 0,
+                           d.tmpQuantity      = 0
+                    FROM   smm_Transdiscrep_drf1 d
+                    LEFT JOIN " + sap_db + @"..WTQ1 q1 WITH(NOLOCK)
+                           ON  q1.DocEntry = @SapEntry
+                           AND q1.ItemCode = d.ItemCode
+                           AND q1.WhsCode  = d.ToWhsCode
+                    WHERE  d.CompanyId = @Company
+                    AND    d.DocEntry  = @Entry
+                    AND    q1.ItemCode IS NULL";
+
+                using (SqlCommand cmd = new SqlCommand(sqlZero, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    cmd.Parameters.AddWithValue("@Company",  sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",    GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
             }
         }
         catch { }
@@ -1542,31 +1695,35 @@ select docstatus from SmmDraftHeader where docentry = {1}";
     }
 
     // Returns null on success, or an error message string on failure.
-    // Reads tmpQuantity (set by update_discrep_drf1 before the batch runs).
+    // BODEGA→TIENDA (inter-branch): creates ORDR (Sales Order) with cost from OITW.AvgPrice.
+    // Other paths: creates OWTQ (Inventory Transfer Request) as before.
     private string CreateSapTransferRequest(string despatchUser, out int sapDocNum)
     {
         sapDocNum = 0;
-        string fromWhs = "";
-        string toWhs   = "";
-        var lines = new JArray();
+        string fromWhs = "", toWhs = "", uStore = "", cardCode = "";
+        bool   isBodegaToTienda = false;
+        var    ordrLines = new JArray();
+        var    owtqLines = new JArray();
 
-        string uStore = "";
         try
         {
             db.Connect();
 
-            string sql = @"
+            string sql = string.Format(@"
                 SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(w.U_Store, '') AS U_Store,
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
-                       CAST(d.tmpQuantity AS int) AS Qty
+                       CAST(d.tmpQuantity AS int) AS Qty,
+                       ISNULL(iw.AvgPrice, 0) AS UnitPrice
                 FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
                 INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
                     ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
-                LEFT JOIN " + sap_db + @"..OWHS w WITH(NOLOCK)
+                LEFT JOIN [{0}]..OWHS w WITH(NOLOCK)
                     ON w.WhsCode = h.FromWhsCode
-                WHERE h.CompanyId = '" + sap_db + @"' AND h.DocEntry = " + GloVarDocEntry + @"
+                LEFT JOIN [{0}]..OITW iw WITH(NOLOCK)
+                    ON iw.ItemCode = d.ItemCode AND iw.WhsCode = h.FromWhsCode
+                WHERE h.CompanyId = '{1}' AND h.DocEntry = {2}
                   AND d.tmpQuantity > 0
-                ORDER BY d.LineNum";
+                ORDER BY d.LineNum", sap_db, sap_db, GloVarDocEntry);
 
             db.adapter = new SqlDataAdapter(sql, db.Conn);
             DataTable dt = new DataTable();
@@ -1578,15 +1735,26 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             toWhs   = dt.Rows[0]["ToWhsCode"].ToString();
             uStore  = dt.Rows[0]["U_Store"].ToString();
 
+            isBodegaToTienda = CheckIsBodegaToTienda(db.Conn);
+
             foreach (DataRow row in dt.Rows)
             {
-                lines.Add(new JObject(
+                ordrLines.Add(new JObject(
+                    new JProperty("ItemCode",      row["ItemCode"].ToString()),
+                    new JProperty("Quantity",      Convert.ToInt32(row["Qty"])),
+                    new JProperty("UnitPrice",     Convert.ToDecimal(row["UnitPrice"])),
+                    new JProperty("WarehouseCode", fromWhs)
+                ));
+                owtqLines.Add(new JObject(
                     new JProperty("ItemCode",          row["ItemCode"].ToString()),
                     new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
                     new JProperty("FromWarehouseCode", fromWhs),
                     new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
                 ));
             }
+
+            if (isBodegaToTienda)
+                cardCode = GetOrderCardCode(db.Conn, toWhs);
         }
         catch (Exception ex)
         {
@@ -1597,27 +1765,53 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             db.Disconnect();
         }
 
-        if (lines.Count == 0) return null;
+        if (isBodegaToTienda ? ordrLines.Count == 0 : owtqLines.Count == 0) return null;
 
-        string companyDb  = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
-        string actionCode = string.Equals(uStore, "WHSE", StringComparison.OrdinalIgnoreCase)
-                            ? "CREATE" : "NO_ENVIAR";
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
 
-        var payload = new JObject(
-            new JProperty("FromWarehouse",      fromWhs),
-            new JProperty("ToWarehouse",        toWhs),
-            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
-            new JProperty("U_DESPATCH",         despatchUser),
-            new JProperty("U_ORITOWHS",         fromWhs),
-            new JProperty("U_ACTION_CODE",      actionCode),
-            new JProperty("StockTransferLines", lines)
-        );
+        JObject payload;
+        if (isBodegaToTienda)
+        {
+            if (string.IsNullOrEmpty(cardCode))
+                return "No CardCode mapping found in ApriCardCodeMapping for destination warehouse " + toWhs;
+
+            string today = DateTime.Today.ToString("yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            payload = new JObject(
+                new JProperty("CardCode",                  cardCode),
+                new JProperty("BPL_IDAssignedToInvoice",   1),
+                new JProperty("DocDate",                   today),
+                new JProperty("DocDueDate",                today),
+                new JProperty("TaxDate",                   today),
+                new JProperty("U_BOL",                     GloVarDocEntry.ToString()),
+                new JProperty("U_DESPATCH",                despatchUser),
+                new JProperty("U_ORITOWHS",                toWhs),
+                new JProperty("DocumentLines",             ordrLines)
+            );
+        }
+        else
+        {
+            string actionCode = string.Equals(uStore, "WHSE", StringComparison.OrdinalIgnoreCase)
+                                ? "CREATE" : "NO_ENVIAR";
+            payload = new JObject(
+                new JProperty("FromWarehouse",      fromWhs),
+                new JProperty("ToWarehouse",        toWhs),
+                new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+                new JProperty("U_DESPATCH",         despatchUser),
+                new JProperty("U_ORITOWHS",         fromWhs),
+                new JProperty("U_ACTION_CODE",      actionCode),
+                new JProperty("StockTransferLines", owtqLines)
+            );
+        }
 
         var sl = new SapServiceLayer();
         try
         {
             sl.Login(companyDb);
-            string response = sl.CreateInventoryTransferRequest(payload.ToString(Newtonsoft.Json.Formatting.None));
+            string response = isBodegaToTienda
+                ? sl.CreateSalesOrder(payload.ToString(Newtonsoft.Json.Formatting.None))
+                : sl.CreateInventoryTransferRequest(payload.ToString(Newtonsoft.Json.Formatting.None));
 
             try
             {
@@ -1628,8 +1822,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 if (sapEntry > 0)
                 {
                     db.Connect();
+                    string setType = isBodegaToTienda ? ", TransferType = 'SO'" : "";
                     SqlCommand upd = new SqlCommand(
-                        "UPDATE smm_Transdiscrep_odrf SET DocEntryITR = @Entry, DocNumITR = @Num " +
+                        "UPDATE smm_Transdiscrep_odrf SET DocEntryITR = @Entry, DocNumITR = @Num" + setType + " " +
                         "WHERE CompanyId = @Company AND DocEntry = @LocalEntry",
                         db.Conn);
                     upd.Parameters.AddWithValue("@Entry",      sapEntry);
@@ -2183,5 +2378,556 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
         db.Disconnect();
 
+    }
+
+    private string GetTransferType()
+    {
+        string transferType = "";
+        db.Connect();
+        try
+        {
+            using (var cmd = new SqlCommand(
+                "SELECT ISNULL(TransferType,'') FROM smm_Transdiscrep_odrf " +
+                "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value) transferType = val.ToString();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+        return transferType;
+    }
+
+    private int GetOpchDocEntry()
+    {
+        db.Connect();
+        try
+        {
+            using (var cmd = new SqlCommand(
+                "SELECT ISNULL(DocEntryOPCH,0) FROM smm_Transdiscrep_odrf " +
+                "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                object val = cmd.ExecuteScalar();
+                return val != null && val != DBNull.Value ? Convert.ToInt32(val) : 0;
+            }
+        }
+        catch { return 0; }
+        finally { db.Disconnect(); }
+    }
+
+    // Creates an OPDN (Goods Receipt PO) in SAP B1 referencing the OPCH stored in DocEntryOPCH.
+    // Reads received quantities from smm_Transdiscrep_drf1.TmpQuantity.
+    // Saves OPDN DocEntry/DocNum to DocEntryTraRec2/DocNumTraRec2.
+    // Returns null on success, or an error message string on failure.
+    private string CreateApriOpdn(string receiveUser, out int sapDocNum, out Dictionary<string, decimal> surplusQtyByItem)
+    {
+        sapDocNum = 0;
+        surplusQtyByItem = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
+        int    opchDocEntry = 0;
+        string toWhsCode    = "";
+        db.Connect();
+        try
+        {
+            using (var cmd = new SqlCommand(
+                "SELECT ISNULL(DocEntryOPCH,0), ISNULL(ToWhsCode,'') " +
+                "FROM smm_Transdiscrep_odrf WHERE CompanyId=@c AND DocEntry=@e", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@c", sap_db);
+                cmd.Parameters.AddWithValue("@e", GloVarDocEntry);
+                using (var dr = cmd.ExecuteReader())
+                {
+                    if (dr.Read())
+                    {
+                        opchDocEntry = Convert.ToInt32(dr[0]);
+                        toWhsCode    = dr[1].ToString();
+                    }
+                }
+            }
+        }
+        catch (Exception ex) { db.Disconnect(); return "Error reading APRI record: " + ex.Message; }
+        finally { db.Disconnect(); }
+
+        if (opchDocEntry == 0)
+            return "No OPCH DocEntry found for this APRI transfer (DocEntryOPCH is empty).";
+
+        var gr = new GoodsReceipt();
+        System.Data.DataRow opchHeader = gr.GetApReserveInvoiceHeader(sap_db, opchDocEntry);
+        if (opchHeader == null)
+            return "Could not load OPCH #" + opchDocEntry + ": " + (gr.LastError ?? "not found");
+
+        System.Data.DataTable dtLines = gr.GetApReserveInvoiceLines(sap_db, opchDocEntry);
+        if (dtLines == null || dtLines.Rows.Count == 0)
+            return "No lines found in OPCH #" + opchDocEntry;
+
+        // Build received quantities from TmpQuantity, keyed by ItemCode
+        var sciQtyByItem = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        db.Connect();
+        try
+        {
+            using (var cmd = new SqlCommand(
+                "SELECT ItemCode, CAST(TmpQuantity AS DECIMAL(18,6)) " +
+                "FROM smm_Transdiscrep_drf1 " +
+                "WHERE CompanyId=@c AND DocEntry=@e AND TmpQuantity > 0", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@c", sap_db);
+                cmd.Parameters.AddWithValue("@e", GloVarDocEntry);
+                using (var dr = cmd.ExecuteReader())
+                    while (dr.Read())
+                        sciQtyByItem[dr.GetString(0)] = dr.GetDecimal(1);
+            }
+        }
+        catch (Exception ex) { db.Disconnect(); return "Error reading received quantities: " + ex.Message; }
+        finally { db.Disconnect(); }
+
+        if (sciQtyByItem.Count == 0) return null;
+
+        var receivedQtys = new Dictionary<int, decimal>();
+        foreach (System.Data.DataRow lr in dtLines.Rows)
+        {
+            string  itemCode    = lr["ItemCode"].ToString();
+            int     lineNum     = Convert.ToInt32(lr["LineNum"]);
+            decimal opchLineQty = Convert.ToDecimal(lr["Quantity"]);
+            decimal sciQty;
+            if (sciQtyByItem.TryGetValue(itemCode, out sciQty))
+            {
+                decimal toReceive = Math.Min(sciQty, opchLineQty);
+                if (toReceive > 0)
+                    receivedQtys[lineNum] = toReceive;
+                decimal surplus = sciQty - opchLineQty;
+                if (surplus > 0)
+                    surplusQtyByItem[itemCode] = surplus;
+            }
+        }
+
+        if (receivedQtys.Count == 0) return null;
+
+        string cardCode   = opchHeader["CardCode"].ToString();
+        int    bplId      = Convert.ToInt32(opchHeader["BplId"]);
+        int    opchDocNum = Convert.ToInt32(opchHeader["DocNum"]);
+
+        string payload = gr.BuildGrpoFromOpchWithQty(
+            cardCode, bplId, opchDocEntry, opchDocNum, dtLines, receivedQtys);
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateGoodsReceiptPO(payload);
+
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum    = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    using (var upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf " +
+                        "SET DocEntryTraRec2 = @entry, DocNumTraRec2 = @num " +
+                        "WHERE CompanyId = @c AND DocEntry = @e", db.Conn))
+                    {
+                        upd.Parameters.AddWithValue("@entry", sapEntry);
+                        upd.Parameters.AddWithValue("@num",   sapDocNum);
+                        upd.Parameters.AddWithValue("@c",     sap_db);
+                        upd.Parameters.AddWithValue("@e",     GloVarDocEntry);
+                        upd.ExecuteNonQuery();
+                    }
+                    db.Disconnect();
+
+                    gr.LogReceipt(sap_db, opchDocEntry, opchDocNum,
+                        sapEntry, sapDocNum, cardCode, toWhsCode,
+                        receiveUser, "SUCCESS", "");
+                }
+            }
+            catch { }
+            finally { db.Disconnect(); }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            return SapServiceLayer.GetSlErrorMessage(wex);
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    // Processes surplus quantities (received > OPCH line qty) for a Duty Paid SO-type transfer.
+    // Per item: if FROM warehouse has sufficient stock → creates OPDN #2 (dest branch) + OINV (origin branch).
+    //           if insufficient stock → logs to la_transfer_errors, no document created for that item.
+    // Returns null on success, or an error string if SAP document creation fails.
+    private string CreateSurplusOpdn(string receiveUser,
+        Dictionary<string, decimal> surplusQtyByItem, out int sapDocNum2)
+    {
+        sapDocNum2 = 0;
+        if (surplusQtyByItem == null || surplusQtyByItem.Count == 0) return null;
+
+        // ── 1. Read transfer header: FROM/TO warehouse and ORDR DocEntry ────────
+        int    opchDocEntry = GetOpchDocEntry();
+        int    docEntryITR  = 0;
+        string fromWhsCode  = "";
+        string toWhsCode    = "";
+        db.Connect();
+        try
+        {
+            using (var cmd = new SqlCommand(
+                "SELECT ISNULL(DocEntryITR,0), ISNULL(FromWhsCode,''), ISNULL(ToWhsCode,'') " +
+                "FROM smm_Transdiscrep_odrf WHERE CompanyId=@c AND DocEntry=@e", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@c", sap_db);
+                cmd.Parameters.AddWithValue("@e", GloVarDocEntry);
+                using (var dr = cmd.ExecuteReader())
+                    if (dr.Read())
+                    {
+                        docEntryITR = Convert.ToInt32(dr[0]);
+                        fromWhsCode = dr[1].ToString();
+                        toWhsCode   = dr[2].ToString();
+                    }
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+
+        if (opchDocEntry == 0) return "No OPCH DocEntry for surplus OPDN.";
+
+        // ── 2. Load OPCH header + lines (prices/warehouse for OPDN #2) ──────────
+        var gr = new GoodsReceipt();
+        System.Data.DataRow opchHeader = gr.GetApReserveInvoiceHeader(sap_db, opchDocEntry);
+        if (opchHeader == null)
+            return "Could not load OPCH #" + opchDocEntry + ": " + (gr.LastError ?? "not found");
+
+        System.Data.DataTable dtOpchLines = gr.GetApReserveInvoiceLines(sap_db, opchDocEntry);
+        if (dtOpchLines == null || dtOpchLines.Rows.Count == 0)
+            return "No lines in OPCH #" + opchDocEntry;
+
+        string opchCardCode = opchHeader["CardCode"].ToString();
+        int    opchBplId    = Convert.ToInt32(opchHeader["BplId"]);
+
+        var opchPriceByItem = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var opchWhsByItem   = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var opchUomByItem   = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string opchWhsType  = "";
+        foreach (System.Data.DataRow lr in dtOpchLines.Rows)
+        {
+            string ic = lr["ItemCode"].ToString();
+            opchPriceByItem[ic] = lr["Price"]   != System.DBNull.Value ? Convert.ToDecimal(lr["Price"]) : 0m;
+            opchWhsByItem[ic]   = lr["WhsCode"].ToString();
+            opchUomByItem[ic]   = lr["UoMCode"].ToString();
+            if (string.IsNullOrEmpty(opchWhsType))
+                opchWhsType = lr["WhsType"].ToString();
+        }
+
+        // ── 3. Load ORDR header + lines (prices/CardCode for OINV) ──────────────
+        string ordrCardCode = "";
+        int    ordrBplId    = 0;
+        int    ordrDocNum   = 0;
+        var    ordrPriceByItem = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        if (docEntryITR > 0)
+        {
+            db.Connect();
+            try
+            {
+                using (var cmd = new SqlCommand(string.Format(
+                    "SELECT CardCode, ISNULL(BPLId,1), ISNULL(DocNum,0) " +
+                    "FROM {0}..ORDR WITH(NOLOCK) WHERE DocEntry=@e", sap_db), db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@e", docEntryITR);
+                    using (var dr = cmd.ExecuteReader())
+                        if (dr.Read())
+                        {
+                            ordrCardCode = dr[0].ToString();
+                            ordrBplId    = Convert.ToInt32(dr[1]);
+                            ordrDocNum   = Convert.ToInt32(dr[2]);
+                        }
+                }
+                using (var cmd = new SqlCommand(string.Format(
+                    "SELECT ItemCode, ISNULL(Price,0) " +
+                    "FROM {0}..RDR1 WITH(NOLOCK) WHERE DocEntry=@e", sap_db), db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@e", docEntryITR);
+                    using (var dr = cmd.ExecuteReader())
+                        while (dr.Read())
+                            ordrPriceByItem[dr.GetString(0)] = Convert.ToDecimal(dr[1]);
+                }
+            }
+            catch { }
+            finally { db.Disconnect(); }
+        }
+
+        // ── 4. Check inventory in FROM warehouse (OITW.OnHand) ──────────────────
+        var stockByItem = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(fromWhsCode))
+        {
+            var itemListSb = new System.Text.StringBuilder();
+            foreach (string ic in surplusQtyByItem.Keys)
+            {
+                if (itemListSb.Length > 0) itemListSb.Append(",");
+                itemListSb.AppendFormat("'{0}'", ic.Replace("'", "''"));
+            }
+            db.Connect();
+            try
+            {
+                using (var cmd = new SqlCommand(string.Format(
+                    "SELECT ItemCode, ISNULL(OnHand,0) FROM {0}..OITW WITH(NOLOCK) " +
+                    "WHERE WhsCode=@whs AND ItemCode IN ({1})", sap_db, itemListSb), db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@whs", fromWhsCode);
+                    using (var dr = cmd.ExecuteReader())
+                        while (dr.Read())
+                            stockByItem[dr.GetString(0)] = Convert.ToDecimal(dr[1]);
+                }
+            }
+            catch { }
+            finally { db.Disconnect(); }
+        }
+
+        // ── 5. Load item descriptions for la_transfer_errors ────────────────────
+        var descByItem = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        {
+            var itemListSb2 = new System.Text.StringBuilder();
+            foreach (string ic in surplusQtyByItem.Keys)
+            {
+                if (itemListSb2.Length > 0) itemListSb2.Append(",");
+                itemListSb2.AppendFormat("'{0}'", ic.Replace("'", "''"));
+            }
+            db.Connect();
+            try
+            {
+                using (var cmd = new SqlCommand(string.Format(
+                    "SELECT ItemCode, ISNULL(ItemName,'') FROM {0}..OITM WITH(NOLOCK) " +
+                    "WHERE ItemCode IN ({1})", sap_db, itemListSb2), db.Conn))
+                using (var dr = cmd.ExecuteReader())
+                    while (dr.Read())
+                        descByItem[dr.GetString(0)] = dr.GetString(1);
+            }
+            catch { }
+            finally { db.Disconnect(); }
+        }
+
+        // ── 6. Split surplus by stock availability (per-item) ───────────────────
+        var hasStockItems = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        int lineIdx = 0;
+        foreach (KeyValuePair<string, decimal> kv in surplusQtyByItem)
+        {
+            if (kv.Value <= 0) { lineIdx++; continue; }
+            decimal onHand = 0m;
+            stockByItem.TryGetValue(kv.Key, out onHand);
+
+            if (onHand >= kv.Value)
+            {
+                hasStockItems[kv.Key] = kv.Value;
+            }
+            else
+            {
+                string desc = "";
+                descByItem.TryGetValue(kv.Key, out desc);
+                string destWhs = "";
+                opchWhsByItem.TryGetValue(kv.Key, out destWhs);
+                if (string.IsNullOrEmpty(destWhs)) destWhs = toWhsCode;
+                InsertTransferError(lineIdx, fromWhsCode, destWhs, destWhs,
+                    kv.Key, desc, (int)kv.Value, receiveUser, "Insufficient Inventory");
+            }
+            lineIdx++;
+        }
+
+        if (hasStockItems.Count == 0) return null; // all logged, nothing to create in SAP
+
+        // ── 7. Build OPDN #2 payload (Goods Receipt PO at destination branch) ───
+        string today   = DateTime.Today.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        string comment = string.Format("Sobrante APRI - ORDR #{0} - Transfer DocEntry: {1}",
+            ordrDocNum > 0 ? ordrDocNum.ToString() : docEntryITR.ToString(), GloVarDocEntry);
+
+        var opdnLines = new JArray();
+        foreach (KeyValuePair<string, decimal> kv in hasStockItems)
+        {
+            decimal price = 0m; opchPriceByItem.TryGetValue(kv.Key, out price);
+            string  whs   = "";  opchWhsByItem.TryGetValue(kv.Key,   out whs);
+            string  uom   = "";  opchUomByItem.TryGetValue(kv.Key,   out uom);
+
+            var lineObj = new JObject(
+                new JProperty("ItemCode",      kv.Key),
+                new JProperty("Quantity",      kv.Value),
+                new JProperty("UnitPrice",     price),
+                new JProperty("WarehouseCode", whs)
+            );
+            if (!string.IsNullOrEmpty(uom)) lineObj["UoMCode"] = uom;
+            opdnLines.Add(lineObj);
+        }
+
+        var opdnPayload = new JObject(
+            new JProperty("CardCode",                opchCardCode),
+            new JProperty("BPL_IDAssignedToInvoice", opchBplId),
+            new JProperty("DocDate",                 today),
+            new JProperty("TaxDate",                 today),
+            new JProperty("DocDueDate",              today),
+            new JProperty("Comments",                comment),
+            new JProperty("U_bol",                   GloVarDocEntry.ToString()),
+            new JProperty("DocumentLines",           opdnLines)
+        );
+        if (!string.IsNullOrEmpty(opchWhsType))
+            opdnPayload["U_Type"] = opchWhsType;
+
+        // ── 8. Build OINV payload (AR Invoice at origin/FROM branch via ORDR) ───
+        JObject oinvPayload = null;
+        if (docEntryITR > 0 && !string.IsNullOrEmpty(ordrCardCode))
+        {
+            var oinvLines = new JArray();
+            foreach (KeyValuePair<string, decimal> kv in hasStockItems)
+            {
+                decimal price = 0m;
+                ordrPriceByItem.TryGetValue(kv.Key, out price);
+
+                oinvLines.Add(new JObject(
+                    new JProperty("ItemCode",      kv.Key),
+                    new JProperty("Quantity",      kv.Value),
+                    new JProperty("UnitPrice",     price),
+                    new JProperty("WarehouseCode", fromWhsCode)
+                ));
+            }
+            if (oinvLines.Count > 0)
+            {
+                oinvPayload = new JObject(
+                    new JProperty("CardCode",                ordrCardCode),
+                    new JProperty("BPL_IDAssignedToInvoice", ordrBplId > 0 ? ordrBplId : 1),
+                    new JProperty("DocDate",                 today),
+                    new JProperty("TaxDate",                 today),
+                    new JProperty("DocDueDate",              today),
+                    new JProperty("Comments",                comment),
+                    new JProperty("U_bol",                   GloVarDocEntry.ToString()),
+                    new JProperty("DocumentLines",           oinvLines)
+                );
+            }
+        }
+
+        // ── 9. POST to SAP Service Layer ─────────────────────────────────────────
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+
+            // OPDN #2
+            string response = sl.CreateGoodsReceiptPO(opdnPayload.ToString(Newtonsoft.Json.Formatting.None));
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum2   = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    try
+                    {
+                        using (var upd = new SqlCommand(
+                            "UPDATE smm_Transdiscrep_odrf " +
+                            "SET DocEntryOpdn2=@entry, DocNumOpdn2=@num " +
+                            "WHERE CompanyId=@c AND DocEntry=@e", db.Conn))
+                        {
+                            upd.Parameters.AddWithValue("@entry", sapEntry);
+                            upd.Parameters.AddWithValue("@num",   sapDocNum2);
+                            upd.Parameters.AddWithValue("@c",     sap_db);
+                            upd.Parameters.AddWithValue("@e",     GloVarDocEntry);
+                            upd.ExecuteNonQuery();
+                        }
+                    }
+                    finally { db.Disconnect(); }
+                }
+            }
+            catch { }
+
+            // OINV — only if OPDN succeeded and ORDR data is available
+            if (oinvPayload != null)
+            {
+                try
+                {
+                    sl.CreateARInvoice(oinvPayload.ToString(Newtonsoft.Json.Formatting.None));
+                }
+                catch (System.Net.WebException wex)
+                {
+                    return "OPDN #2 OK (DocNum " + sapDocNum2 + "). Error creating AR Invoice: "
+                           + SapServiceLayer.GetSlErrorMessage(wex);
+                }
+                catch (Exception ex)
+                {
+                    return "OPDN #2 OK (DocNum " + sapDocNum2 + "). Error creating AR Invoice: " + ex.Message;
+                }
+            }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            return SapServiceLayer.GetSlErrorMessage(wex);
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    // Returns true when FROM warehouse is BODEGA type belonging to BPLId=1 (inter-branch dispatch).
+    private bool CheckIsBodegaToTienda(SqlConnection conn)
+    {
+        string sql = string.Format(
+            @"SELECT TOP 1 ISNULL(tf.TYPEWHS,'') AS FromType, ISNULL(wf.BPLId,0) AS FromBPLId
+              FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+              LEFT JOIN [{0}]..OWHS wf WITH(NOLOCK) ON wf.WhsCode = h.FromWhsCode
+              LEFT JOIN dbo.SMM_WHSTYPE tf WITH(NOLOCK) ON tf.WHSCODE = h.FromWhsCode AND tf.COMPANYID = @cid
+              WHERE h.CompanyId = @cid AND h.DocEntry = @de", sap_db);
+        using (var cmd = new SqlCommand(sql, conn))
+        {
+            cmd.Parameters.AddWithValue("@cid", sap_db);
+            cmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+            using (var dr = cmd.ExecuteReader())
+            {
+                if (dr.Read())
+                    return string.Equals(dr["FromType"].ToString(), "BODEGA", StringComparison.OrdinalIgnoreCase)
+                           && Convert.ToInt32(dr["FromBPLId"]) == 1;
+            }
+        }
+        return false;
+    }
+
+    // Standalone overload — opens its own connection (for use outside of existing DB transactions).
+    private bool CheckIsBodegaToTienda()
+    {
+        db.Connect();
+        try   { return CheckIsBodegaToTienda(db.Conn); }
+        catch { return false; }
+        finally { db.Disconnect(); }
+    }
+
+    // Returns the inter-company customer CardCode for a destination warehouse via ApriCardCodeMapping.
+    private string GetOrderCardCode(SqlConnection conn, string toWhs)
+    {
+        string sql = string.Format(
+            "SELECT TOP 1 m.OinvCardCode FROM dbo.ApriCardCodeMapping m " +
+            "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.BPLId = m.DestBPLId " +
+            "WHERE w.WhsCode = @toWhs AND m.IsActive = 1", sap_db);
+        using (var cmd = new SqlCommand(sql, conn))
+        {
+            cmd.Parameters.AddWithValue("@toWhs", toWhs);
+            object val = cmd.ExecuteScalar();
+            return val != null && val != DBNull.Value ? val.ToString() : null;
+        }
     }
 }

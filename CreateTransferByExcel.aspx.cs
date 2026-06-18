@@ -161,11 +161,12 @@ public partial class createTransferByExcel : BasePage
             @"select O.WhsCode,
                      CONVERT(nvarchar(30), ISNULL(O.U_POSCode, '')) + ' - ' + O.WhsCode + ' - ' + O.WhsName AS WHS,
                      R.Control,
-                     ISNULL(O.U_Type, '') AS WhsType
-                 from " + sap_db + @".dbo.owhs O " + Queries.WITH_NOLOCK + @" , RSS_OWHS_CONTROL R " + Queries.WITH_NOLOCK + @"
-                 where O.WhsCode = R.WhsCode
-                   and R.Control IN ('CRETRAFROMXSAP', 'CRETRATOEXCEL')
-                   AND R.CompanyId = '" + sap_db + @"'" + branchFilter + @"
+                     ISNULL(O.U_Type, '') AS WhsType,
+                     ISNULL(sw.TYPEWHS, '') AS TypeWhs
+                 from " + sap_db + @".dbo.owhs O " + Queries.WITH_NOLOCK + @"
+                 JOIN RSS_OWHS_CONTROL R " + Queries.WITH_NOLOCK + @" ON O.WhsCode = R.WhsCode AND R.CompanyId = '" + sap_db + @"'
+                 LEFT JOIN SMM_WHSTYPE sw " + Queries.WITH_NOLOCK + @" ON sw.WHSCODE = O.WhsCode AND sw.COMPANYID = R.CompanyId
+                 where R.Control IN ('CRETRAFROMXSAP', 'CRETRATOEXCEL')" + branchFilter + @"
               ORDER BY CASE WHEN O.BPLId = 1 THEN 0 ELSE 1 END, O.U_POSCode";
 
             db.adapter = new SqlDataAdapter(sql, db.Conn);
@@ -176,18 +177,43 @@ public partial class createTransferByExcel : BasePage
             throw new Exception("Caught exception in function LoadWarehouses. ERROR MESSAGE : " + ex.Message);
         }
 
-        DataTable dt1 = dt.AsEnumerable()
-            .Where(x => x.Field<string>("Control") == "CRETRAFROMXSAP")
-            .CopyToDataTable();
+        string userTypeWhs = "";
+        try
+        {
+            string userId = Session["UserId"] != null ? Session["UserId"].ToString() : "";
+            if (!string.IsNullOrEmpty(userId))
+            {
+                using (var cmd = new SqlCommand(
+                    "SELECT ISNULL(MAX(TypeWhs),'') FROM smm_login WHERE LoginID = @lid", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@lid", userId);
+                    object val = cmd.ExecuteScalar();
+                    userTypeWhs = val != null && val != DBNull.Value ? val.ToString() : "";
+                }
+            }
+        }
+        catch { }
+        Session["UserTypeWhs"] = userTypeWhs;
+        bool isBodtie = string.Equals(userTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase);
+
+        var dt1Rows = dt.AsEnumerable().Where(x =>
+            x.Field<string>("Control") == "CRETRAFROMXSAP" &&
+            (isBodtie || string.IsNullOrEmpty(userTypeWhs) ||
+             string.IsNullOrEmpty(x.Field<string>("TypeWhs")) ||
+             string.Equals(x.Field<string>("TypeWhs"), userTypeWhs, StringComparison.OrdinalIgnoreCase)));
+        DataTable dt1 = dt1Rows.Any() ? dt1Rows.CopyToDataTable() : dt.Clone();
 
         drpFromWhsCode.DataSource = dt1;
         drpFromWhsCode.DataBind();
 
         Session["fromWhs"] = dt1;
 
-        DataTable dt2 = dt.AsEnumerable()
-            .Where(x => x.Field<string>("Control") == "CRETRATOEXCEL")
-            .CopyToDataTable();
+        var dt2Rows = dt.AsEnumerable().Where(x =>
+            x.Field<string>("Control") == "CRETRATOEXCEL" &&
+            (isBodtie || string.IsNullOrEmpty(userTypeWhs) ||
+             string.IsNullOrEmpty(x.Field<string>("TypeWhs")) ||
+             string.Equals(x.Field<string>("TypeWhs"), userTypeWhs, StringComparison.OrdinalIgnoreCase)));
+        DataTable dt2 = dt2Rows.Any() ? dt2Rows.CopyToDataTable() : dt.Clone();
 
         drpToWhsCode.DataSource = dt2;
         drpToWhsCode.DataBind();
@@ -264,7 +290,7 @@ public partial class createTransferByExcel : BasePage
         }
 
         string sapRef = sapDocNum > 0
-            ? " Transfer Request #" + sapDocNum + " created in SAP B1."
+            ? " Sales Order #" + sapDocNum + " created in SAP B1."
             : "";
         LabDocEntry.Text = " Draft " + DocEntry.Text + " completed." + sapRef;
 
@@ -1081,6 +1107,15 @@ public partial class createTransferByExcel : BasePage
             {
                 GridView2.Rows[i].BackColor = Color.LightCoral;
                 wrongTypeQty = 1;
+            }
+        }
+
+        if (wrongTypeQty == 1)
+        {
+            for (int i = 0; i < rowCount; i++)
+            {
+                if (GridView2.Rows[i].BackColor != Color.LightCoral)
+                    GridView2.Rows[i].Visible = false;
             }
         }
     }
