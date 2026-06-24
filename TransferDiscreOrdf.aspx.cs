@@ -878,10 +878,11 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 bool hoistedIsDutyPaid = false;
                 string hoistedResearchWhs = "";
                 bool receiveIsApri = false;
+                string dispSapDocType = "";
 
                 if (disOrRec == "D")
                 {
-                    string sapError = CreateSapTransferRequest(LvuserApp, out sapDocNum);
+                    string sapError = CreateSapTransferRequest(LvuserApp, out sapDocNum, out dispSapDocType);
                     if (sapError != null)
                     {
                         Alert.Show(isEn
@@ -1087,9 +1088,14 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                         db.cmd.ExecuteNonQuery();
                         lDispCompleted = db.cmd.Parameters["@DispCompleted"].Value.ToString();
 
-                        string sapRef = sapDocNum > 0
-                            ? (isEn ? " Sales Order #" : " Orden de Venta #") + sapDocNum + " SAP."
-                            : "";
+                        string sapRef = "";
+                        if (sapDocNum > 0)
+                        {
+                            string docLabel = dispSapDocType == "OWTQ"
+                                ? "ITR #"
+                                : (isEn ? "Sales Order #" : "Orden de Venta #");
+                            sapRef = " " + docLabel + sapDocNum + " SAP.";
+                        }
 
                         string dispShortagePart = "";
                         if (hoistedIsDutyPaid)
@@ -1700,10 +1706,11 @@ select docstatus from SmmDraftHeader where docentry = {1}";
     // Returns null on success, or an error message string on failure.
     // BODEGA→TIENDA (inter-branch): creates ORDR (Sales Order) with cost from OITW.AvgPrice.
     // Other paths: creates OWTQ (Inventory Transfer Request) as before.
-    private string CreateSapTransferRequest(string despatchUser, out int sapDocNum)
+    private string CreateSapTransferRequest(string despatchUser, out int sapDocNum, out string sapDocType)
     {
-        sapDocNum = 0;
-        string fromWhs = "", toWhs = "", uStore = "", cardCode = "";
+        sapDocNum  = 0;
+        sapDocType = "";
+        string fromWhs = "", toWhs = "", uStore = "", cardCode = "", fromWhsUType = "";
         bool   isBodegaToTienda = false;
         var    ordrLines = new JArray();
         var    owtqLines = new JArray();
@@ -1714,6 +1721,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             string sql = string.Format(@"
                 SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(w.U_Store, '') AS U_Store,
+                       ISNULL(w.U_Type, '') AS WhsUType,
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
                        CAST(d.tmpQuantity AS int) AS Qty,
                        ISNULL(iw.AvgPrice, 0) AS UnitPrice
@@ -1734,11 +1742,13 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             if (dt.Rows.Count == 0) return null;
 
-            fromWhs = dt.Rows[0]["FromWhsCode"].ToString();
-            toWhs   = dt.Rows[0]["ToWhsCode"].ToString();
-            uStore  = dt.Rows[0]["U_Store"].ToString();
+            fromWhs      = dt.Rows[0]["FromWhsCode"].ToString();
+            toWhs        = dt.Rows[0]["ToWhsCode"].ToString();
+            uStore       = dt.Rows[0]["U_Store"].ToString();
+            fromWhsUType = dt.Rows[0]["WhsUType"].ToString();
 
             isBodegaToTienda = CheckIsBodegaToTienda(db.Conn);
+            sapDocType = isBodegaToTienda ? "ORDR" : "OWTQ";
 
             foreach (DataRow row in dt.Rows)
             {
@@ -1792,6 +1802,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 new JProperty("U_ORITOWHS",                toWhs),
                 new JProperty("DocumentLines",             ordrLines)
             );
+            if (!string.IsNullOrEmpty(fromWhsUType))
+                payload["U_Type"] = fromWhsUType;
         }
         else
         {
@@ -1806,6 +1818,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 new JProperty("U_ACTION_CODE",      actionCode),
                 new JProperty("StockTransferLines", owtqLines)
             );
+            if (!string.IsNullOrEmpty(fromWhsUType))
+                payload["U_Type"] = fromWhsUType;
         }
 
         var sl = new SapServiceLayer();
@@ -2454,7 +2468,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             foreach (var kv in opchQty)
             {
                 using (var cmd = new SqlCommand(
-                    "UPDATE smm_Transdiscrep_drf1 SET DispatchQuantity = @qty " +
+                    "UPDATE smm_Transdiscrep_drf1 SET DispatchQuantity = @qty, TmpQuantity = @qty " +
                     "WHERE CompanyId = @cid AND DocEntry = @de AND ItemCode = @item",
                     db.Conn))
                 {
@@ -2934,14 +2948,19 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         }
     }
 
-    // Returns true when FROM warehouse is BODEGA type belonging to BPLId=1 (inter-branch dispatch).
+    // Returns true when FROM=BODEGA (BPLId=1) and TO warehouse BPLId != 3 (ORDR/Sales Order path).
+    // Returns false for Branch 3 destinations (OWTQ path) and for non-inter-branch transfers.
     private bool CheckIsBodegaToTienda(SqlConnection conn)
     {
         string sql = string.Format(
-            @"SELECT TOP 1 ISNULL(tf.TYPEWHS,'') AS FromType, ISNULL(wf.BPLId,0) AS FromBPLId
+            @"SELECT TOP 1 ISNULL(tf.TYPEWHS,'') AS FromType,
+                           ISNULL(wf.BPLId,0)   AS FromBPLId,
+                           ISNULL(wt.BPLId,0)   AS ToBPLId
               FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
               LEFT JOIN [{0}]..OWHS wf WITH(NOLOCK) ON wf.WhsCode = h.FromWhsCode
               LEFT JOIN dbo.SMM_WHSTYPE tf WITH(NOLOCK) ON tf.WHSCODE = h.FromWhsCode AND tf.COMPANYID = @cid
+              LEFT JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK) ON d.DocEntry = h.DocEntry AND d.CompanyId = h.CompanyId
+              LEFT JOIN [{0}]..OWHS wt WITH(NOLOCK) ON wt.WhsCode = d.ToWhsCode
               WHERE h.CompanyId = @cid AND h.DocEntry = @de", sap_db);
         using (var cmd = new SqlCommand(sql, conn))
         {
@@ -2951,7 +2970,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             {
                 if (dr.Read())
                     return string.Equals(dr["FromType"].ToString(), "BODEGA", StringComparison.OrdinalIgnoreCase)
-                           && Convert.ToInt32(dr["FromBPLId"]) == 1;
+                           && Convert.ToInt32(dr["FromBPLId"]) == 1
+                           && Convert.ToInt32(dr["ToBPLId"]) != 3;
             }
         }
         return false;

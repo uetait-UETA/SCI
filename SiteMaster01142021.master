@@ -84,7 +84,7 @@
                                             <tel:RadMenuItem Text="Receiving" Value="Receiving">
                                                 <GroupSettings />
                                                 <Items>
-                                                    <tel:RadMenuItem Text="Goods Receipt" Value="GoodsReceiptPO" NavigateUrl="GoodsReceiptPO.aspx" />
+                                                    <tel:RadMenuItem Text="Direct Purchase" Value="ComprasDirectas" NavigateUrl="ComprasDirectas.aspx" />
                                                 </Items>
                                             </tel:RadMenuItem>
                                             <tel:RadMenuItem IsSeparator="true" />

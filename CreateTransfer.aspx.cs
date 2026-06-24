@@ -458,8 +458,9 @@ INSERT INTO rss_results
             if (draftDocEntry > 0)
             {
                 int sapDocNum;
+                string sapDocType;
                 string dispErr = TransferAutoDispatch.RunAutoDispatch(
-                    draftDocEntry, sap_db, sap_db, appUserName, out sapDocNum);
+                    draftDocEntry, sap_db, sap_db, appUserName, out sapDocNum, out sapDocType);
 
                 if (dispErr != null)
                 {
@@ -469,9 +470,12 @@ INSERT INTO rss_results
                     return;
                 }
 
-                string sapRef = sapDocNum > 0
-                    ? " Sales Order #" + sapDocNum + " created in SAP B1."
-                    : "";
+                string sapRef = "";
+                if (sapDocNum > 0)
+                {
+                    string docLabel = sapDocType == "OWTQ" ? "ITR #" : "Sales Order #";
+                    sapRef = " " + docLabel + sapDocNum + " created in SAP B1.";
+                }
                 divMessage.InnerHtml += "<br>Transfer created!" + sapRef;
             }
             divMessage.Attributes["class"] = "alert-success";

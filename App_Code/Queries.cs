@@ -32,8 +32,8 @@ public class Queries
     public static string With_SmmDraftHeader()
     {
         return @"WITH TransdiscrepODRF AS (
-	SELECT a.CompanyId, a.DocEntry, a.DocDate, a.DocStatus, a.FromWhsCode, a.dispatched, a.received, a.DispCompleted, a.ReceCompleted, a.InputType, a.ScanStatus, a.DocNumITR
-	FROM smm_Transdiscrep_odrf a " + WITH_NOLOCK + @"
+	SELECT a.CompanyId, a.DocEntry, a.DocDate, a.DocStatus, a.FromWhsCode, a.dispatched, a.received, a.DispCompleted, a.ReceCompleted, a.InputType, a.ScanStatus, a.DocNumITR, ISNULL(a.TransferType,'') TransferType
+	FROM smm_Transdiscrep_odrf a" + WITH_NOLOCK + @"
 	WHERE a.CompanyId = '{0}'
 ), TransdiscrepODRF2 AS (
 	SELECT a.CompanyId AS CompanyId, a.DocEntry, DocDate, a.DocStatus, a.FromWhsCode AS FromLoc, b.ToWhsCode AS ToLoc, b.DraftQuantity, d.WhsName AS ToLocName, e.WhsName AS FromLocName, f.ItmsGrpNam AS Category, f.ItmsGrpCod
@@ -134,13 +134,13 @@ public class Queries
 		        from TransdiscrepODRF
 		        union
 		        select CompanyId, DocEntry, FromWhsCode, ToWhsCode, isnull((select DocStatus from TransdiscrepODRF b where b.docentry = a.docentry and b.CompanyId = a.CompanyId), 'O') as DocStatus, DocDate
-		        from AuditODRF a 
+		        from AuditODRF a
 		        union
 		        select CompanyId, DocEntry, Filler AS FromWhsCode, WhsCode AS ToWhsCode, DocStatus, DocDate
-		        from SmmDraft 
+		        from SmmDraft
 	        ) aa
 	        group by aa.CompanyId, aa.DocEntry, aa.FromWhsCode, aa.ToWhsCode, aa.DocStatus
-        ) a 
+        ) a
         left join smm_Transdiscrep_audit_odrf b " + WITH_NOLOCK + @" on a.DocEntry = b.DocEntry and  b.CompanyId = a.CompanyId
         left join TransdiscrepODRF c on a.DocEntry = c.DocEntry and c.CompanyId = a.CompanyId
         where not exists (
@@ -238,21 +238,28 @@ public class Queries
     SELECT CompanyId, Draft_Numero, Usuario_Originador, Usuario_Despacho, Usuario_Recibo, Codigo_Origen, Nombre_Origen, Codigo_Destino, Nombre_Destino, Estatus, Despachado, Recibido, Doc_Entry_Sap, Doc_Num_Sap, Fecha_Originacion, Fecha_Despacho, Fecha_Recibo, Tiempo_Despachar, Tiempo_Recibir, SistemaDes, SistemaRec, DocNumITR
     FROM (
         select
-	        a.CompanyId, a.DocEntry as Draft_Numero, a.FromWhsCode as Codigo_Origen, isnull(c.FromWhsName, (select whsname from {0}.dbo.owhs where whscode = a.FromWhsCode)) as Nombre_Origen, a.ToWhsCode as Codigo_Destino, isnull(c.ToWhsName, (select whsname from {0}.dbo.owhs where whscode = a.toWhsCode)) as Nombre_Destino, isnull(a.DocStatus,'O') as Estatus, isnull(c.Dispatched, 'N') as Despachado, isnull(c.Received,'N') as Recibido, isnull((select max(UserOrigin) from AuditODRF where docentry = a.docentry),(select max(created_By) from TransdiscrepODRF where docentry = a.docentry)) as Usuario_Originador, c.UserDispatch Usuario_Despacho, c.UserReceive as Usuario_Recibo, c.DocEntryTraRec2 as Doc_Entry_Sap, c.DocNumTraRec2 Doc_Num_Sap, a.DocDate as Fecha_Originacion, b.DispatchDate as Fecha_Despacho, b.ReceiveDate as Fecha_Recibo, round(cast(dateDiff(minute,c.DocDate,b.DispatchDate) as float)/60,2) as Tiempo_Despachar, round(cast(dateDiff(minute,b.DispatchDate,b.ReceiveDate)as float)/60, 2) as Tiempo_Recibir, b.DispatchType as SistemaDes, b.ReceiveType as SistemaRec, ISNULL(c.DocNumITR, 0) AS DocNumITR
+	        a.CompanyId, a.DocEntry as Draft_Numero, a.FromWhsCode as Codigo_Origen, isnull(c.FromWhsName, (select whsname from {0}.dbo.owhs where whscode = a.FromWhsCode)) as Nombre_Origen, a.ToWhsCode as Codigo_Destino, isnull(c.ToWhsName, (select whsname from {0}.dbo.owhs where whscode = a.toWhsCode)) as Nombre_Destino, isnull(a.DocStatus,'O') as Estatus, isnull(c.Dispatched, 'N') as Despachado, CASE WHEN isnull(c.Received,'N') NOT IN ('N','P') THEN 'Y' ELSE isnull(c.Received,'N') END as Recibido, isnull((select max(UserOrigin) from AuditODRF where docentry = a.docentry),(select max(created_By) from TransdiscrepODRF where docentry = a.docentry)) as Usuario_Originador, c.UserDispatch Usuario_Despacho, c.UserReceive as Usuario_Recibo, c.DocEntryTraRec2 as Doc_Entry_Sap, c.DocNumTraRec2 Doc_Num_Sap, a.DocDate as Fecha_Originacion, b.DispatchDate as Fecha_Despacho, b.ReceiveDate as Fecha_Recibo, round(cast(dateDiff(minute,c.DocDate,b.DispatchDate) as float)/60,2) as Tiempo_Despachar, round(cast(dateDiff(minute,b.DispatchDate,b.ReceiveDate)as float)/60, 2) as Tiempo_Recibir, b.DispatchType as SistemaDes, b.ReceiveType as SistemaRec, ISNULL(c.DocNumITR, 0) AS DocNumITR
         from (
-	        select aa.CompanyId, aa.DocEntry, aa.FromWhsCode, aa.ToWhsCode, aa.DocStatus, min(aa.DocDate) as DocDate
+	        select aa.CompanyId, aa.DocEntry, aa.FromWhsCode, aa.ToWhsCode, MIN(aa.DocStatus) as DocStatus, min(aa.DocDate) as DocDate
 	        from (
 		        select CompanyId, DocEntry, FromWhsCode, ToWhsCode, DocStatus, DocDate
 		        from TransdiscrepODRF
 		        union
 		        select CompanyId, DocEntry, FromWhsCode, ToWhsCode, isnull((select DocStatus from TransdiscrepODRF b where b.docentry = a.docentry and b.CompanyId = a.CompanyId), 'O') as DocStatus, DocDate
-		        from AuditODRF a 
+		        from AuditODRF a
+		        WHERE NOT EXISTS (SELECT 1 FROM TransdiscrepODRF td WHERE td.DocEntry = a.DocEntry AND td.CompanyId = a.CompanyId)
 		        union
 		        select CompanyId, DocEntry, Filler AS FromWhsCode, WhsCode AS ToWhsCode, DocStatus, DocDate
-		        from SmmDraft 
+		        from SmmDraft
+		        WHERE NOT EXISTS (SELECT 1 FROM TransdiscrepODRF td WHERE td.DocEntry = SmmDraft.DocEntry AND td.CompanyId = SmmDraft.CompanyId)
 	        ) aa
-	        group by aa.CompanyId, aa.DocEntry, aa.FromWhsCode, aa.ToWhsCode, aa.DocStatus
-        ) a 
+	        WHERE EXISTS (
+	            SELECT 1 FROM smm_Transdiscrep_drf1 d WITH(NOLOCK)
+	            INNER JOIN {0}.dbo.OITM i WITH(NOLOCK) ON d.ItemCode = i.ItemCode
+	            WHERE d.DocEntry = aa.DocEntry AND d.CompanyId = aa.CompanyId
+	        )
+	        group by aa.CompanyId, aa.DocEntry, aa.FromWhsCode, aa.ToWhsCode
+        ) a
         left join smm_Transdiscrep_audit_odrf b on a.DocEntry = b.DocEntry and b.CompanyId = a.CompanyId
         left join TransdiscrepODRF c on a.DocEntry = c.DocEntry and c.CompanyId = a.CompanyId
         where not exists (

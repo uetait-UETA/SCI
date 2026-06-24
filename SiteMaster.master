@@ -77,13 +77,13 @@
                                                 <GroupSettings />
                                                 <Items>
                                                     <tel:RadMenuItem Text="Delivery Errors" Value="DeliveryErrores" NavigateUrl="DeliveryErrors.aspx" />
-                                                    <tel:RadMenuItem Text="Delivery Errors by Items" Value="DeliveryErroresItems" NavigateUrl="DeliveryErrorsItems.aspx" />
+                                                    <%--<tel:RadMenuItem Text="Delivery Errors by Items" Value="DeliveryErroresItems" NavigateUrl="DeliveryErrorsItems.aspx" />--%>
                                                     <tel:RadMenuItem Text="Transfer Errors" Value="ErroresdeTransferencia" NavigateUrl="TransferErrors.aspx" />
                                                 </Items>
                                             </tel:RadMenuItem>
-                                             <tel:RadMenuItem Text="Receiving" Value="Receiving" Visible="false">
+                                             <tel:RadMenuItem Text="Receiving" Value="Receiving">
                                                 <Items>
-                                                     <tel:RadMenuItem Text="Goods Receipt"  Value="GoodsReceiptPO"              NavigateUrl="GoodsReceiptPO.aspx" />
+                                                     <tel:RadMenuItem Text="Direct Purchase"  Value="ComprasDirectas"  NavigateUrl="ComprasDirectas.aspx" />
                                                 </Items>
                                             </tel:RadMenuItem>
                                             <tel:RadMenuItem IsSeparator="true" />

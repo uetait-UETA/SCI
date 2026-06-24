@@ -41,7 +41,8 @@ public class Transfer
         try
         {
             sql = Queries.With_SmmDraftHeader() + @"
-    SELECT t1.*, isnull(t2.dispatched,'P') dispatched, isnull(t2.received,'P') received, isnull(t2.DispCompleted,'P') DispCompleted, isnull(t2.ReceCompleted,'P') ReceCompleted, isnull(substring(t2.InputType,1,1),'I') InputType, isnull(substring(t2.ScanStatus,1,1),'N') ScanStatus, ISNULL(t2.DocNumITR,0) DocNumITR
+    SELECT t1.*, isnull(t2.dispatched,'P') dispatched, isnull(t2.received,'P') received, isnull(t2.DispCompleted,'P') DispCompleted, isnull(t2.ReceCompleted,'P') ReceCompleted, isnull(substring(t2.InputType,1,1),'I') InputType, isnull(substring(t2.ScanStatus,1,1),'N') ScanStatus, ISNULL(t2.DocNumITR,0) DocNumITR,
+           CASE ISNULL(t2.TransferType,'') WHEN 'APRI' THEN 'APRI' WHEN 'SO' THEN 'SO' ELSE CASE WHEN ISNULL(t2.DocNumITR,0)>0 THEN 'ITR' ELSE '' END END SapDocType
     FROM SmmDraftHeader t1 " + Queries.WITH_NOLOCK + @"
     LEFT JOIN TransdiscrepODRF t2 " + Queries.WITH_NOLOCK + @"  ON t1.docentry = t2.docentry AND t1.CompanyId = t2.CompanyId
     WHERE t1.CompanyId = '{0}' AND ";
@@ -241,32 +242,46 @@ public class Transfer
     {
         DataTable dt = new DataTable();
         string sql = "";
-        
+
+        int branchId = 0;
+        HttpContext ctx = HttpContext.Current;
+        if (ctx != null && ctx.Session != null)
+            int.TryParse(ctx.Session["BranchId"] as string, out branchId);
+
         try
         {
             //sql = @"select * from smm_draft_header_vw ";
             //sql = @"select t1.*, isnull((select isnull(dispatched,'_') + '/' + isnull(received,'_') + ' /   ' + isnull(DispCompleted,'_') + '/' + isnull(ReceCompleted,'_') from smm_Transdiscrep_odrf where docentry = t1.docentry),'___/___') drfst from smm_draft_header_vw t1  ";
             sql = Queries.With_SmmDraftHeader() + @"
-             select t1.*, isnull((select isnull(a1.dispatched,'P') 
+             select t1.*, isnull((select isnull(a1.dispatched,'P')
 		    from smm_Transdiscrep_odrf a1 where a1.CompanyId = t1.CompanyId and a1.docentry = t1.docentry),'N') dispatched,
-		    isnull((select isnull(a1.received,'P') 
+		    isnull((select isnull(a1.received,'P')
 		    from smm_Transdiscrep_odrf a1 where a1.CompanyId = t1.CompanyId and a1.docentry = t1.docentry),'N') received,
-		    isnull((select isnull(a1.DispCompleted,'P') 
+		    isnull((select isnull(a1.DispCompleted,'P')
 		    from smm_Transdiscrep_odrf a1 where a1.CompanyId = t1.CompanyId and a1.docentry = t1.docentry),'N') DispCompleted,
-		    isnull((select isnull(a1.ReceCompleted,'P') 
+		    isnull((select isnull(a1.ReceCompleted,'P')
                     from smm_Transdiscrep_odrf a1 where a1.CompanyId = t1.CompanyId and a1.docentry = t1.docentry),'N') ReceCompleted
-                    --from smm_draft_header_vw t1 
+                    --from smm_draft_header_vw t1
                     from SmmDraftHeader t1
                     left outer join smm_Transdiscrep_odrf t2
                     on t1.CompanyId = t2.CompanyId and t1.docentry = t2.docentry
-                    where  t1.DocStatus = 'O' 
+                    where  t1.DocStatus = 'O'
                     --and isnull(t2.dispatched,'P') <> 'Y'
-                    and isnull(t2.received,'P') <> 'Y' order by t1.docentry ";
+                    and isnull(t2.received,'P') <> 'Y'
+                    and EXISTS (
+                        SELECT 1 FROM {0}.dbo.OWHS ow WITH(NOLOCK)
+                        WHERE ow.WhsCode IN (t1.FromLoc, t1.ToLoc) AND ow.BPLId = @branchId
+                    )
+                    order by t1.docentry ";
 
             sql = string.Format(sql, CompanyId);
-        
-            db.adapter = new SqlDataAdapter(sql, db.Conn);
-            db.adapter.Fill(dt);
+
+            using (var cmd = new SqlCommand(sql, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@branchId", branchId);
+                db.adapter = new SqlDataAdapter(cmd);
+                db.adapter.Fill(dt);
+            }
         }
         catch (Exception ex)
         {
@@ -276,7 +291,7 @@ public class Transfer
         {
             db.Disconnect();
         }
-        
+
         return dt;
     }
     
@@ -771,13 +786,16 @@ public DataTable GetTransferAudit(string statusDoc, string txtDocNum,
                 sql += sDocNum + andOr1 + sDate + andOr2 + sLoc + andOr3 + sStatus + doQry;
             }
 
-            if (branchId > 1)
+            if (branchId > 0)
             {
                 sql += string.Format(
                     " and EXISTS (" +
                     "   SELECT 1 FROM {0}.dbo.OWHS w WITH(NOLOCK)" +
-                    "   WHERE (w.WhsCode = Codigo_Origen OR w.WhsCode = Codigo_Destino)" +
-                    "     AND w.BPLId = {1}" +
+                    "   WHERE (" +
+                    "       w.WhsCode = Codigo_Origen" +
+                    "       OR w.WhsCode IN (SELECT d.ToWhsCode FROM smm_Transdiscrep_drf1 d WITH(NOLOCK) WHERE d.DocEntry = Draft_Numero)" +
+                    "   )" +
+                    "   AND w.BPLId = {1}" +
                     ")", sap_db, branchId);
             }
 
@@ -1103,7 +1121,7 @@ public DataTable GetTransferAudit(string statusDoc, string txtDocNum,
     
             sql += sItem;
 
-            if (branchId > 1)
+            if (branchId > 0)
             {
                 sql += string.Format(
                     " and EXISTS (" +

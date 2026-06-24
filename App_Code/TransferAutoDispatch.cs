@@ -7,7 +7,9 @@ using Newtonsoft.Json.Linq;
 /// <summary>
 /// Auto-dispatch for transfers whose warehouses include at least one with BPLId=1.
 /// After submit_DraftXsap (or smm_populate_Smm_Draft), calling RunAutoDispatch creates
-/// the SAP B1 Stock Transfer Request automatically.
+/// the SAP B1 document automatically:
+///   - Branch 1 → Branch 4 (TIENDA): Sales Order (ORDR)
+///   - Branch 1 → Branch 3 (TIENDA): Inventory Transfer Request (OWTQ) directly
 /// On SAP failure the local draft is deleted so the user can start over.
 /// </summary>
 public static class TransferAutoDispatch
@@ -43,17 +45,19 @@ public static class TransferAutoDispatch
     /// Executes the automatic dispatch flow:
     ///   1. smm_populate_discrep_odrf
     ///   2. TmpQuantity = DraftQuantity for every line
-    ///   3. POST /InventoryTransferRequests to SAP B1
+    ///   3. POST to SAP B1 — ORDR when dest BPLId=4, OWTQ when dest BPLId=3
     ///   4. Smm_populate_whs_transfers_Batch + smm_insert_Transdiscrep_audit_odrf
     ///
     /// Returns null on success.
     /// On any failure: cleans up all draft records for docEntry and returns the error message.
     /// </summary>
     /// <param name="sapDocNum">SAP document number created (0 if unknown/none).</param>
+    /// <param name="sapDocType">"ORDR", "OWTQ", or "" when no SAP doc was created.</param>
     public static string RunAutoDispatch(
-        int docEntry, string companyId, string sapDb, string userApp, out int sapDocNum)
+        int docEntry, string companyId, string sapDb, string userApp, out int sapDocNum, out string sapDocType)
     {
-        sapDocNum = 0;
+        sapDocNum  = 0;
+        sapDocType = "";
         var db = new SqlDb();
         db.Connect();
         try
@@ -83,14 +87,19 @@ public static class TransferAutoDispatch
             return "Error preparando auto-dispatch: " + ex.Message;
         }
 
-        // Step 3: SAP B1 Transfer Request — only when FROM=BODEGA (BPLId=1) and TO=TIENDA
-        if (!IsBodegaToTiendaTransfer(db.Conn, docEntry, companyId, sapDb))
+        // Step 3: SAP B1 document — only when FROM=BODEGA (BPLId=1) and TO=TIENDA
+        string docType = GetBodegaToTiendaDocType(db.Conn, docEntry, companyId, sapDb);
+        if (docType == null)
         {
             db.Disconnect();
             return null;
         }
 
-        string sapError = CreateSapTransferRequest(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
+        sapDocType = docType;
+        string sapError = docType == "ORDR"
+            ? CreateSapTransferRequest(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum)
+            : CreateSapOwtqAutoDispatch(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
+
         if (sapError != null)
         {
             try { CleanupDraft(db.Conn, companyId, docEntry); } catch { }
@@ -156,15 +165,19 @@ public static class TransferAutoDispatch
             string sql = string.Format(
                 @"SELECT ISNULL(tf.TYPEWHS,'') AS FromType,
                          ISNULL(wf.BPLId,0)   AS FromBPLId,
-                         ISNULL(tt.TYPEWHS,'') AS ToType
+                         ISNULL(tt.TYPEWHS,'') AS ToType,
+                         ISNULL(wt.BPLId,0)   AS ToBPLId
                   FROM [{0}]..OWHS wf WITH(NOLOCK)
                   LEFT JOIN dbo.SMM_WHSTYPE tf WITH(NOLOCK)
                       ON tf.WHSCODE = wf.WhsCode AND tf.COMPANYID = @cid
                   LEFT JOIN dbo.SMM_WHSTYPE tt WITH(NOLOCK)
                       ON tt.WHSCODE = @toWhs    AND tt.COMPANYID = @cid
+                  LEFT JOIN [{0}]..OWHS wt WITH(NOLOCK)
+                      ON wt.WhsCode = @toWhs
                   WHERE wf.WhsCode = @fromWhs", sapDb);
 
             bool isBodegaToTienda = false;
+            int  toBPLId          = 0;
             using (var cmd = new SqlCommand(sql, db.Conn))
             {
                 cmd.Parameters.AddWithValue("@fromWhs", fromWhs);
@@ -173,16 +186,22 @@ public static class TransferAutoDispatch
                 using (var dr = cmd.ExecuteReader())
                 {
                     if (dr.Read())
+                    {
                         isBodegaToTienda =
                             string.Equals(dr["FromType"].ToString(), "BODEGA", StringComparison.OrdinalIgnoreCase)
                             && Convert.ToInt32(dr["FromBPLId"]) == 1
                             && string.Equals(dr["ToType"].ToString(), "TIENDA", StringComparison.OrdinalIgnoreCase);
+                        toBPLId = Convert.ToInt32(dr["ToBPLId"]);
+                    }
                 }
             }
 
-            if (!isBodegaToTienda) return null; // not a BODEGA→TIENDA; no SO needed
+            if (!isBodegaToTienda) return null; // not a BODEGA→TIENDA; no doc needed
 
-            // BODEGA→TIENDA confirmed — check CardCode mapping for the destination warehouse
+            // Branch 3 destination uses OWTQ directly — no CardCode mapping required
+            if (toBPLId == 3) return null;
+
+            // Branch 4 (and others) use ORDR — check CardCode mapping for the destination warehouse
             string cardCodeSql = string.Format(
                 "SELECT TOP 1 m.OinvCardCode FROM dbo.ApriCardCodeMapping m " +
                 "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.BPLId = m.DestBPLId " +
@@ -214,7 +233,48 @@ public static class TransferAutoDispatch
 
     // ── Private helpers ─────────────────────────────────────────────────────
 
-    // Creates a Sales Order (ORDR) in SAP B1 for BODEGA→TIENDA (inter-branch) transfers.
+    // Returns "ORDR" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId != 3 (Branch 4 and others).
+    // Returns "OWTQ" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId = 3 (Branch 3).
+    // Returns null when this is not a BODEGA→TIENDA inter-branch transfer.
+    private static string GetBodegaToTiendaDocType(SqlConnection conn, int docEntry, string companyId, string sapDb)
+    {
+        string sql = string.Format(
+            @"SELECT TOP 1
+                  ISNULL(tf.TYPEWHS,'') AS FromType,
+                  ISNULL(wf.BPLId,0)   AS FromBPLId,
+                  ISNULL(tt.TYPEWHS,'') AS ToType,
+                  ISNULL(wt.BPLId,0)   AS ToBPLId
+              FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+              LEFT JOIN [{0}]..OWHS        wf WITH(NOLOCK) ON wf.WhsCode  = h.FromWhsCode
+              LEFT JOIN dbo.SMM_WHSTYPE   tf WITH(NOLOCK) ON tf.WHSCODE  = h.FromWhsCode AND tf.COMPANYID = @cid
+              LEFT JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                  ON d.DocEntry = h.DocEntry AND d.CompanyId = h.CompanyId
+              LEFT JOIN dbo.SMM_WHSTYPE   tt WITH(NOLOCK) ON tt.WHSCODE  = d.ToWhsCode  AND tt.COMPANYID = @cid
+              LEFT JOIN [{0}]..OWHS        wt WITH(NOLOCK) ON wt.WhsCode  = d.ToWhsCode
+              WHERE h.CompanyId = @cid AND h.DocEntry = @de", sapDb);
+
+        using (var cmd = new SqlCommand(sql, conn))
+        {
+            cmd.Parameters.AddWithValue("@cid", companyId);
+            cmd.Parameters.AddWithValue("@de",  docEntry);
+            using (var dr = cmd.ExecuteReader())
+            {
+                if (dr.Read())
+                {
+                    bool fromIsBodega = string.Equals(dr["FromType"].ToString(), "BODEGA", StringComparison.OrdinalIgnoreCase)
+                                        && Convert.ToInt32(dr["FromBPLId"]) == 1;
+                    bool toIsTienda   = string.Equals(dr["ToType"].ToString(), "TIENDA", StringComparison.OrdinalIgnoreCase);
+                    int  toBPLId      = Convert.ToInt32(dr["ToBPLId"]);
+
+                    if (!fromIsBodega || !toIsTienda) return null;
+                    return toBPLId == 3 ? "OWTQ" : "ORDR";
+                }
+            }
+        }
+        return null;
+    }
+
+    // Creates a Sales Order (ORDR) in SAP B1 for BODEGA→TIENDA Branch 4 transfers.
     // Price per line is taken from OITW.AvgPrice of the origin warehouse.
     private static string CreateSapTransferRequest(
         SqlConnection conn, int docEntry, string companyId, string sapDb,
@@ -337,6 +397,116 @@ public static class TransferAutoDispatch
         }
     }
 
+    // Creates an Inventory Transfer Request (OWTQ) directly in SAP B1 for
+    // BODEGA→TIENDA Branch 3 transfers (no Sales Order, no OPCH required).
+    private static string CreateSapOwtqAutoDispatch(
+        SqlConnection conn, int docEntry, string companyId, string sapDb,
+        string userApp, out int sapDocNum)
+    {
+        sapDocNum = 0;
+        string fromWhs = "", toWhs = "", fromWhsUType = "";
+        var lines = new JArray();
+
+        string sql = string.Format(@"
+            SELECT h.FromWhsCode, h.ToWhsCode,
+                   d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
+                   CAST(d.TmpQuantity AS int) AS Qty,
+                   ISNULL(ow.U_Type, '') AS WhsUType
+            FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+            INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+            LEFT JOIN [{0}]..OWHS ow WITH(NOLOCK)
+                ON ow.WhsCode = h.FromWhsCode
+            WHERE h.CompanyId = @cid AND h.DocEntry = @de
+              AND d.TmpQuantity > 0
+            ORDER BY d.LineNum", sapDb);
+
+        using (var cmd = new SqlCommand(sql, conn))
+        {
+            cmd.Parameters.AddWithValue("@cid", companyId);
+            cmd.Parameters.AddWithValue("@de",  docEntry);
+
+            var dt = new DataTable();
+            new SqlDataAdapter(cmd).Fill(dt);
+
+            if (dt.Rows.Count == 0) return null;
+
+            fromWhs      = dt.Rows[0]["FromWhsCode"].ToString();
+            toWhs        = dt.Rows[0]["ToWhsCode"].ToString();
+            fromWhsUType = dt.Rows[0]["WhsUType"].ToString();
+
+            foreach (DataRow row in dt.Rows)
+            {
+                lines.Add(new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
+                ));
+            }
+        }
+
+        if (lines.Count == 0) return null;
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sapDb;
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        toWhs),
+            new JProperty("U_BOL",              docEntry.ToString()),
+            new JProperty("U_DESPATCH",         userApp),
+            new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        if (!string.IsNullOrEmpty(fromWhsUType))
+            payload["U_Type"] = fromWhsUType;
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransferRequest(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                sapDocNum    = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+
+                if (sapEntry > 0)
+                {
+                    using (var upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf " +
+                        "SET DocEntryITR = @entry, DocNumITR = @num, TransferType = 'OWTQ' " +
+                        "WHERE CompanyId = @cid AND DocEntry = @de", conn))
+                    {
+                        upd.Parameters.AddWithValue("@entry", sapEntry);
+                        upd.Parameters.AddWithValue("@num",   sapDocNum);
+                        upd.Parameters.AddWithValue("@cid",   companyId);
+                        upd.Parameters.AddWithValue("@de",    docEntry);
+                        upd.ExecuteNonQuery();
+                    }
+                }
+            }
+            catch { }
+
+            return null; // success
+        }
+        catch (System.Net.WebException wex)
+        {
+            return SapServiceLayer.GetSlErrorMessage(wex);
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
     // Returns the inter-company customer CardCode for a destination warehouse,
     // looked up via ApriCardCodeMapping.DestBPLId = OWHS.BPLId.
     private static string GetOrderCardCode(SqlConnection conn, string toWhs, string sapDb)
@@ -351,38 +521,6 @@ public static class TransferAutoDispatch
             object val = cmd.ExecuteScalar();
             return val != null && val != DBNull.Value ? val.ToString() : null;
         }
-    }
-
-    private static bool IsBodegaToTiendaTransfer(SqlConnection conn, int docEntry, string companyId, string sapDb)
-    {
-        // Uses SMM_WHSTYPE.TYPEWHS (the app's warehouse classification) instead of
-        // OWHS.U_Type (SAP field), which may differ. TO warehouse is read from the
-        // detail lines since smm_Transdiscrep_odrf.ToWhsCode can be NULL.
-        string sql = string.Format(
-            @"SELECT TOP 1
-                  ISNULL(tf.TYPEWHS,'') AS FromType,
-                  ISNULL(wf.BPLId,0)   AS FromBPLId,
-                  ISNULL(tt.TYPEWHS,'') AS ToType
-              FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
-              LEFT JOIN [{0}]..OWHS        wf WITH(NOLOCK) ON wf.WhsCode  = h.FromWhsCode
-              LEFT JOIN dbo.SMM_WHSTYPE   tf WITH(NOLOCK) ON tf.WHSCODE  = h.FromWhsCode AND tf.COMPANYID = @cid
-              LEFT JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
-                  ON d.DocEntry = h.DocEntry AND d.CompanyId = h.CompanyId
-              LEFT JOIN dbo.SMM_WHSTYPE   tt WITH(NOLOCK) ON tt.WHSCODE  = d.ToWhsCode  AND tt.COMPANYID = @cid
-              WHERE h.CompanyId = @cid AND h.DocEntry = @de", sapDb);
-        using (var cmd = new SqlCommand(sql, conn))
-        {
-            cmd.Parameters.AddWithValue("@cid", companyId);
-            cmd.Parameters.AddWithValue("@de",  docEntry);
-            using (var dr = cmd.ExecuteReader())
-            {
-                if (dr.Read())
-                    return string.Equals(dr["FromType"].ToString(), "BODEGA", StringComparison.OrdinalIgnoreCase)
-                           && Convert.ToInt32(dr["FromBPLId"]) == 1
-                           && string.Equals(dr["ToType"].ToString(),  "TIENDA", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-        return false;
     }
 
     // Deletes all local records for docEntry to revert a failed auto-dispatch.

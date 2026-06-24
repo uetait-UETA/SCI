@@ -62,7 +62,9 @@ public class SapServiceLayer
 
     public string CreateGoodsReceiptPO(string jsonPayload)
     {
-        return Post("/GoodsReceiptsPO", jsonPayload);
+        string endpoint = System.Configuration.ConfigurationManager.AppSettings["SL_GrpoEndpoint"]
+                          ?? "GoodsReceiptsPO";
+        return Post("/" + endpoint, jsonPayload);
     }
 
     public string CreateInventoryTransferRequest(string jsonPayload)
@@ -73,6 +75,21 @@ public class SapServiceLayer
     public string CreateInventoryTransfer(string jsonPayload)
     {
         return Post("/StockTransfers", jsonPayload);
+    }
+
+    public string CreateSalesOrder(string jsonPayload)
+    {
+        return Post("/Orders", jsonPayload);
+    }
+
+    public string CreateDeliveryNote(string jsonPayload)
+    {
+        return Post("/DeliveryNotes", jsonPayload);
+    }
+
+    public string CreateARInvoice(string jsonPayload)
+    {
+        return Post("/Invoices", jsonPayload);
     }
 
     public string GetInventoryTransferRequest(int docEntry)

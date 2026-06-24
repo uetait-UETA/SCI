@@ -429,8 +429,9 @@ public partial class CreateTransferXsap : BasePage
         int docEntry = Convert.ToInt32(DocEntry.Text);
 
         int sapDocNum;
+        string sapDocType;
         string dispErr = TransferAutoDispatch.RunAutoDispatch(
-            docEntry, CompanyIdLabel.Text, sap_db, appUserName, out sapDocNum);
+            docEntry, CompanyIdLabel.Text, sap_db, appUserName, out sapDocNum, out sapDocType);
 
         if (dispErr != null)
         {
@@ -443,9 +444,12 @@ public partial class CreateTransferXsap : BasePage
             return;
         }
 
-        string sapRef = sapDocNum > 0
-            ? " Sales Order #" + sapDocNum + " created in SAP B1."
-            : "";
+        string sapRef = "";
+        if (sapDocNum > 0)
+        {
+            string docLabel = sapDocType == "OWTQ" ? "ITR #" : "Sales Order #";
+            sapRef = " " + docLabel + sapDocNum + " created in SAP B1.";
+        }
         LabDocEntry.Text = " Draft " + DocEntry.Text + " completed." + sapRef;
 
         btnCreateDraft.Visible    = false;

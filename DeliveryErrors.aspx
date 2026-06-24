@@ -47,7 +47,7 @@
                                 </tel:GridTemplateColumn>
                                 <tel:GridBoundColumn SortExpression="NewBarCode" HeaderText="New Bar Code Item" HeaderButtonType="TextButton" DataField="NewBarCode" UniqueName="NewBarCode" HeaderStyle-Width="150px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="description" HeaderText="Item Desc." HeaderButtonType="TextButton" DataField="description" UniqueName="description" HeaderStyle-Width="200px" ReadOnly="true" />
-                                <tel:GridBoundColumn SortExpression="transnum" HeaderText="Trans #" HeaderButtonType="TextButton" DataField="transnum" UniqueName="transnum" HeaderStyle-Width="130px" ReadOnly="true" />
+                                <tel:GridBoundColumn SortExpression="TicketNo" HeaderText="Trans #" HeaderButtonType="TextButton" DataField="TicketNo" UniqueName="TicketNo" HeaderStyle-Width="130px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="itemnum" HeaderText="Line #" HeaderButtonType="TextButton" DataField="itemnum" UniqueName="itemnum" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="itemdatetime" HeaderText="Trans Date" HeaderButtonType="TextButton" DataField="itemdatetime" UniqueName="itemdatetime" DataFormatString="{0:d}" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="sale_qty" HeaderText="Trans Qty" HeaderButtonType="TextButton" DataField="sale_qty" UniqueName="sale_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />

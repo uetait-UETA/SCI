@@ -565,6 +565,15 @@ public partial class MinMaxByExcel : BasePage
                 wrongTypeQty = 1;
             }
         }
+
+        if (wrongTypeQty == 1)
+        {
+            for (int i = 0; i < rowCount; i++)
+            {
+                if (GridView2.Rows[i].BackColor != Color.LightCoral)
+                    GridView2.Rows[i].Visible = false;
+            }
+        }
     }
 
     protected void CheckDuplicated()

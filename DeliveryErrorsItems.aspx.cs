@@ -20,8 +20,9 @@ public partial class DeliveryErrorsItems : BasePage
     protected string lCurUser; 
     protected void Page_Load(object sender, EventArgs e)
     {
-        
-        
+        Response.Redirect("DeliveryErrors.aspx");
+        return;
+
         ///////////////Begin New  Control de acceso por Roles
         if ((string)this.Session["UserId"] == "" || (string)this.Session["UserId"] == null)
         {

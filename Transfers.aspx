@@ -121,8 +121,6 @@
                 <asp:CheckBox ID="CheckBoxSelectAllCurrentPageForPrint" runat="server" AutoPostBack="false" CssClass="checkbox" Text="Select All (current page)" Style="position:relative; left:16px; display:block;" />
             </div>
         </div>
-        <div class="row">&nbsp;</div>
-        <%-- ; --%>
         <div class="row">
             <div class="col-md-12">
 				<%-- 2021-MAR-15: Comentado para modificación de la impresión masiva, por Aldo Reina: --%>
@@ -195,7 +193,8 @@
                             <tel:GridBoundColumn SortExpression="ReceCompleted" HeaderText="Rcv. Completed" HeaderButtonType="TextButton" DataField="ReceCompleted" UniqueName="ReceCompleted" DataFormatString="{0:N0}" />
                             <tel:GridBoundColumn SortExpression="InputType" HeaderText="Input Type" HeaderButtonType="TextButton" DataField="InputType" UniqueName="InputType" DataFormatString="{0:N0}" />
                             <tel:GridBoundColumn SortExpression="ScanStatus" HeaderText="Scan Status" HeaderButtonType="TextButton" DataField="ScanStatus" UniqueName="ScanStatus" DataFormatString="{0:N0}" />
-                            <tel:GridBoundColumn SortExpression="DocNumITR" HeaderText="ITR #" HeaderButtonType="TextButton" DataField="DocNumITR" UniqueName="DocNumITR" DataFormatString="{0:#;-;}" HeaderStyle-Width="60px" ItemStyle-HorizontalAlign="Center" />
+                            <tel:GridBoundColumn SortExpression="SapDocType" HeaderText="Type" HeaderButtonType="TextButton" DataField="SapDocType" UniqueName="SapDocType" HeaderStyle-Width="45px" ItemStyle-HorizontalAlign="Center" />
+                            <tel:GridBoundColumn SortExpression="DocNumITR" HeaderText="DocSAP #" HeaderButtonType="TextButton" DataField="DocNumITR" UniqueName="DocNumITR" DataFormatString="{0:#;-;}" HeaderStyle-Width="65px" ItemStyle-HorizontalAlign="Center" />
                             <tel:GridButtonColumn UniqueName="DocEntry" ButtonType="LinkButton" HeaderText="Dispatch" DataTextField="DocEntry" CommandName="Dispatch" />
                         </Columns>
                     </MasterTableView>

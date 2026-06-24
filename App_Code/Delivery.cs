@@ -15,6 +15,7 @@ public class Delivery
     protected string tienda_db;
     protected string whs_code;
     protected string branchId;
+    protected string deeeItemCode;
 
 	public Delivery()
 	{
@@ -27,7 +28,8 @@ public class Delivery
         branchId = (ctx != null && ctx.Session != null) ? ctx.Session["BranchId"] as string : null;
         if (string.IsNullOrEmpty(sap_db)) sap_db = ConfigurationManager.AppSettings.Get("smm_db");
         if (string.IsNullOrEmpty(tienda_db)) tienda_db = ConfigurationManager.AppSettings.Get("tienda_db");
-        whs_code = ConfigurationManager.AppSettings.Get("whs_code");
+        whs_code    = ConfigurationManager.AppSettings.Get("whs_code");
+        deeeItemCode = ConfigurationManager.AppSettings.Get("DeeeItemCode") ?? string.Empty;
 	}
 
     public DataTable GetDeliveryErrors(string companyId)
@@ -44,6 +46,7 @@ public class Delivery
 	                a.id,
                     b.id AS sales_id,
 	                a.transnum,
+                    b.TicketNo,
 	                a.itemnum,
 	                (select TOP 1 bb.whsname
                         from dbo.ADR_TIENDAS_VW aa,
@@ -71,7 +74,9 @@ public class Delivery
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
                     and a.CompanyId = '" + branchId + @"'
-                    and b.CompanyId = '" + branchId + @"'
+                    and b.CompanyId = '" + branchId + @"'" +
+                    (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
+                    and a.skunum <> '" + deeeItemCode + @"'") + @"
                order by CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)), a.storenum,a.itemnum
                 ";
 
@@ -207,15 +212,17 @@ select
                     tt.WhsCode whs_code,
                     tt.STORENUM
 
-                from 
+                from
 	                dbo.la_delivery_errors a  with(nolock)
-				inner join ADR_TIENDAS_VW tt  with(nolock)  ON a.storenum=tt.storenum and a.CompanyId =  '" + branchId + @"'
+				cross apply (SELECT TOP 1 WhsCode, STORENUM FROM ADR_TIENDAS_VW with(nolock) WHERE storenum = a.storenum) tt
 				inner join dbo.la_store_sales b  with(nolock)  on a.id = b.id
 				left outer join " + sap_db + @".dbo.oitw c  with(nolock)  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d  with(nolock)  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and a.CompanyId =  '" + branchId + @"'  
+                    and a.CompanyId =  '" + branchId + @"'" +
+                    (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
+                    and a.skunum <> '" + deeeItemCode + @"'") + @"
 			   )
 
 			   select OldBarCode,	skunum,	NewBarCode,	new_sku,	description,	sum(sale_qty) sale_qty,	sum(whs_qty) whs_qty,	whs_code,STORENUM
