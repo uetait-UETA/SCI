@@ -1900,6 +1900,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         string fromWhs       = "";
         string toWhs         = "";
         int    sapTrReqEntry = 0;
+        int    mainItrDocNum = 0;
         var    lines         = new JArray();
 
         try
@@ -1907,7 +1908,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             db.Connect();
 
             string sql = @"
-                SELECT h.FromWhsCode, h.ToWhsCode, h.DocEntryITR,
+                SELECT h.FromWhsCode, h.ToWhsCode, h.DocEntryITR, h.DocNumITR,
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
                        CAST(d.tmpQuantity AS int)                    AS TmpQty,
                        ISNULL(CAST(d.DispatchQuantity AS int), 0)    AS DispatchQty,
@@ -1933,6 +1934,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             toWhs         = dt.Rows[0]["ToWhsCode"].ToString();
             sapTrReqEntry = dt.Rows[0]["DocEntryITR"] != DBNull.Value
                             ? Convert.ToInt32(dt.Rows[0]["DocEntryITR"]) : 0;
+            mainItrDocNum = dt.Rows[0]["DocNumITR"] != DBNull.Value
+                         ? Convert.ToInt32(dt.Rows[0]["DocNumITR"]) : 0;
 
             for (int i = 0; i < dt.Rows.Count; i++)
             {
@@ -1973,12 +1976,17 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
         string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
 
+        string mainComments = mainItrDocNum > 0
+            ? "Received - ITR #" + mainItrDocNum
+            : "Received";
+
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        toWhs),
             new JProperty("U_BOL",              GloVarDocEntry.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("Comments",           mainComments),
             new JProperty("StockTransferLines", lines)
         );
 
@@ -2181,6 +2189,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         sapDocNum = 0;
         string fromWhs  = "";
         string toOriWhs = "";
+        int    shortageItrDocNum = 0;
         var    lines        = new JArray();
         var    shortageRows = new DataTable();
 
@@ -2189,7 +2198,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             db.Connect();
 
             string sql = @"
-                SELECT h.FromWhsCode, h.ToWhsCode,
+                SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(h.DocNumITR, 0) AS DocNumITR,
                        d.LineNum, d.ItemCode, d.ItemName,
                        CAST(d.DispatchQuantity AS int) AS DispatchQty,
                        CAST(d.tmpQuantity      AS int) AS ReceivedQty,
@@ -2210,6 +2219,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             fromWhs  = shortageRows.Rows[0]["FromWhsCode"].ToString();
             toOriWhs = shortageRows.Rows[0]["ToWhsCode"].ToString();
+            shortageItrDocNum = Convert.ToInt32(shortageRows.Rows[0]["DocNumITR"]);
 
             foreach (DataRow row in shortageRows.Rows)
             {
@@ -2234,12 +2244,17 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
         string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
 
+        string shortageComments = shortageItrDocNum > 0
+            ? "Received short - ITR #" + shortageItrDocNum
+            : "Received short";
+
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        researchWhs),
             new JProperty("U_BOL",              GloVarDocEntry.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("Comments",           shortageComments),
             new JProperty("StockTransferLines", lines)
         );
 
@@ -2319,6 +2334,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         sapDocNum = 0;
         string fromWhs  = "";
         string toWhs    = "";
+        int    surplusItrDocNum = 0;
         var    lines       = new JArray();
         var    surplusRows = new DataTable();
 
@@ -2327,7 +2343,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             db.Connect();
 
             string sql = @"
-                SELECT h.FromWhsCode, h.ToWhsCode,
+                SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(h.DocNumITR, 0) AS DocNumITR,
                        d.LineNum, d.ItemCode, d.ItemName,
                        CAST(d.tmpQuantity      AS int) AS ReceivedQty,
                        CAST(d.DispatchQuantity AS int) AS DispatchQty,
@@ -2349,6 +2365,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             fromWhs = surplusRows.Rows[0]["FromWhsCode"].ToString();
             toWhs   = surplusRows.Rows[0]["ToWhsCode"].ToString();
+            surplusItrDocNum = Convert.ToInt32(surplusRows.Rows[0]["DocNumITR"]);
 
             foreach (DataRow row in surplusRows.Rows)
             {
@@ -2379,7 +2396,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("U_BOL",              GloVarDocEntry.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         toWhs),
-            new JProperty("Comments",           "Surplus receive - qty over dispatched amount"),
+            new JProperty("Comments",           surplusItrDocNum > 0 ? "Received over - ITR #" + surplusItrDocNum : "Received over"),
             new JProperty("StockTransferLines", lines)
         );
 
