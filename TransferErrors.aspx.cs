@@ -76,6 +76,9 @@ public partial class TransferErrors : BasePage
 		if (flagokay == 'Y')
         {
             ObjectDataSource1.SelectParameters["ShowAll"].DefaultValue = radioShowAll.Checked.ToString();
+            int branchId = 0;
+            int.TryParse(Session["BranchId"] as string, out branchId);
+            ObjectDataSource1.SelectParameters["BranchId"].DefaultValue = branchId.ToString();
         }
         ///////////////End  New Control de acceso por Roles
     }

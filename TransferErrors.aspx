@@ -146,6 +146,7 @@
                         <asp:Parameter Name="ShowAll" Type="Boolean" />
                         <asp:ControlParameter ControlID="CompanyIdLabel" Name="CompanyId"
                             PropertyName="Text" Type="String" />
+                        <asp:Parameter Name="BranchId" Type="Int32" DefaultValue="0" />
                     </SelectParameters>
                 </asp:ObjectDataSource>
             </div>

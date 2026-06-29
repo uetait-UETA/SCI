@@ -295,7 +295,7 @@ public class Transfer
         return dt;
     }
     
-    public DataTable GetTransferErrors(bool ShowAll, string CompanyId)
+    public DataTable GetTransferErrors(bool ShowAll, string CompanyId, int BranchId)
     {
         sap_db = CompanyId;
         DataTable dt = new DataTable();
@@ -303,15 +303,17 @@ public class Transfer
 
         try
         {
+            string branchFilter = BranchId > 0
+                ? @" AND EXISTS (SELECT 1 FROM [" + sap_db + @"]..OWHS bw " + Queries.WITH_NOLOCK +
+                  @" WHERE bw.WhsCode = o.ToWhsCode AND bw.BPLId = " + BranchId + ")"
+                : "";
 
-            //sql = @"select * from smm_draft_header_vw ";
-            //sql = @"select t1.*, isnull((select isnull(dispatched,'_') + '/' + isnull(received,'_') + ' /   ' + isnull(DispCompleted,'_') + '/' + isnull(ReceCompleted,'_') from smm_Transdiscrep_odrf where docentry = t1.docentry),'___/___') drfst from smm_draft_header_vw t1  ";
-            sql = @"select DocEntryOri, line, docdate, fromwhscode, 
-                    towhscode, tooriwhscode, itemcode+' - '+ [dbo].[InitCap] (pludesc) itemcode, /*[dbo].[FIVEBCODEPRODS] (itemcode)*/ STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=la_transfer_errors.itemcode FOR XML PATH ('')), 1, 3, '') BarCode, 
-                    convert(int,quantity) as quantity, userapp, error_message, case when fixed = 'N' then 0 else 1 end fixed 
-                    from la_transfer_errors 
-					where DocEntryOri in (select DocEntry from smm_Transdiscrep_odrf
-					                         where CompanyId = '" + sap_db+"') ";
+            sql = @"select DocEntryOri, line, docdate, fromwhscode,
+                    towhscode, tooriwhscode, itemcode+' - '+ [dbo].[InitCap] (pludesc) itemcode, /*[dbo].[FIVEBCODEPRODS] (itemcode)*/ STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=la_transfer_errors.itemcode FOR XML PATH ('')), 1, 3, '') BarCode,
+                    convert(int,quantity) as quantity, userapp, error_message, case when fixed = 'N' then 0 else 1 end fixed
+                    from la_transfer_errors
+                    where DocEntryOri in (select o.DocEntry from smm_Transdiscrep_odrf o
+                                         where o.CompanyId = '" + sap_db + "'" + branchFilter + @") ";
 
             if (!ShowAll)
                 sql += " and fixed = 'N'";

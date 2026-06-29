@@ -879,6 +879,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 string hoistedResearchWhs = "";
                 bool receiveIsApri = false;
                 string dispSapDocType = "";
+                int surplusOwtrDocNum = 0;
+                string surplusOwtrErr = null;
 
                 if (disOrRec == "D")
                 {
@@ -990,6 +992,13 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                                 else
                                     diagInfo += " | ShortageIT OK DocNum=" + shortageDocNum;
                             }
+
+                            // Surplus OWTR: when received > dispatched, create a second OWTR for the extra qty.
+                            surplusOwtrErr = CreateSapDutyPaidSurplusTransfer(LvuserApp, out surplusOwtrDocNum);
+                            if (surplusOwtrErr != null)
+                                diagInfo += " | SurplusIT ERROR: " + surplusOwtrErr;
+                            else if (surplusOwtrDocNum > 0)
+                                diagInfo += " | SurplusIT OK DocNum=" + surplusOwtrDocNum;
                         }
                         else
                         {
@@ -1238,9 +1247,19 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                             : " (Duty Paid: sin faltante detectado — cantidad recibida = despachada).";
                     }
 
+                    string surplusOwtrPart = "";
+                    if (surplusOwtrErr != null)
+                        surplusOwtrPart = isEn
+                            ? " WARNING: Surplus transfer failed (no inventory in origin): " + surplusOwtrErr
+                            : " ADVERTENCIA: Error al crear transferencia de sobrante (sin inventario en origen): " + surplusOwtrErr;
+                    else if (surplusOwtrDocNum > 0)
+                        surplusOwtrPart = isEn
+                            ? " Surplus Inventory Transfer #" + surplusOwtrDocNum + " created in SAP."
+                            : " Transferencia de Sobrante #" + surplusOwtrDocNum + " creada en SAP.";
+
                     message = isEn
-                        ? "Order Received." + itPart + surplusOpdn2Part + shortagePart
-                        : "Orden Recibida." + itPart + surplusOpdn2Part + shortagePart;
+                        ? "Order Received." + itPart + surplusOpdn2Part + shortagePart + surplusOwtrPart
+                        : "Orden Recibida." + itPart + surplusOpdn2Part + shortagePart + surplusOwtrPart;
                     LabelMsg.Text = message;
                 }
 
@@ -1890,7 +1909,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             string sql = @"
                 SELECT h.FromWhsCode, h.ToWhsCode, h.DocEntryITR,
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
-                       CAST(d.tmpQuantity AS int) AS Qty,
+                       CAST(d.tmpQuantity AS int)                    AS TmpQty,
+                       ISNULL(CAST(d.DispatchQuantity AS int), 0)    AS DispatchQty,
                        ISNULL(q1.LineNum, -1) AS SapLineNum
                 FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
                 INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
@@ -1916,10 +1936,16 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
             for (int i = 0; i < dt.Rows.Count; i++)
             {
-                DataRow row  = dt.Rows[i];
-                var     line = new JObject(
+                DataRow row       = dt.Rows[i];
+                int     tmpQty    = Convert.ToInt32(row["TmpQty"]);
+                int     dispQty   = Convert.ToInt32(row["DispatchQty"]);
+                // Cap at dispatched qty; when DispatchQuantity not recorded (old transfers), use full tmpQty.
+                int     normalQty = dispQty > 0 ? Math.Min(tmpQty, dispQty) : tmpQty;
+                if (normalQty <= 0) continue;
+
+                var line = new JObject(
                     new JProperty("ItemCode",          row["ItemCode"].ToString()),
-                    new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
+                    new JProperty("Quantity",          normalQty),
                     new JProperty("FromWarehouseCode", fromWhs),
                     new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
                 );
@@ -2280,6 +2306,129 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 row["ItemCode"].ToString(),
                 row["ItemName"].ToString(),
                 Convert.ToInt32(row["ShortageQty"]),
+                userApp,
+                errorMsg);
+        }
+    }
+
+    // Creates OWTR #2 for surplus qty (tmpQty > DispatchQty, Duty Paid flow): FROM→same destination, no base doc.
+    // On SAP failure, logs each surplus line to la_transfer_errors.
+    // Returns null on success (including when there is no surplus), or error message.
+    private string CreateSapDutyPaidSurplusTransfer(string receiveUser, out int sapDocNum)
+    {
+        sapDocNum = 0;
+        string fromWhs  = "";
+        string toWhs    = "";
+        var    lines       = new JArray();
+        var    surplusRows = new DataTable();
+
+        try
+        {
+            db.Connect();
+
+            string sql = @"
+                SELECT h.FromWhsCode, h.ToWhsCode,
+                       d.LineNum, d.ItemCode, d.ItemName,
+                       CAST(d.tmpQuantity      AS int) AS ReceivedQty,
+                       CAST(d.DispatchQuantity AS int) AS DispatchQty,
+                       CAST(d.tmpQuantity - d.DispatchQuantity AS int) AS SurplusQty
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                WHERE h.CompanyId = @cid AND h.DocEntry = @de
+                  AND d.tmpQuantity > d.DispatchQuantity
+                  AND d.DispatchQuantity > 0
+                ORDER BY d.LineNum";
+
+            db.adapter = new SqlDataAdapter(sql, db.Conn);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@cid", sap_db);
+            db.adapter.SelectCommand.Parameters.AddWithValue("@de",  GloVarDocEntry);
+            db.adapter.Fill(surplusRows);
+
+            if (surplusRows.Rows.Count == 0) return null;
+
+            fromWhs = surplusRows.Rows[0]["FromWhsCode"].ToString();
+            toWhs   = surplusRows.Rows[0]["ToWhsCode"].ToString();
+
+            foreach (DataRow row in surplusRows.Rows)
+            {
+                lines.Add(new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["SurplusQty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     toWhs)
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            return "Error reading surplus data: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        if (lines.Count == 0) return null;
+
+        string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        toWhs),
+            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_RECEIVE",          receiveUser),
+            new JProperty("U_ORITOWHS",         toWhs),
+            new JProperty("Comments",           "Surplus receive - qty over dispatched amount"),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransfer(payload.ToString(Newtonsoft.Json.Formatting.None));
+
+            try
+            {
+                var respObj = JObject.Parse(response);
+                sapDocNum   = respObj["DocNum"] != null ? Convert.ToInt32(respObj["DocNum"]) : 0;
+            }
+            catch { }
+
+            return null;
+        }
+        catch (System.Net.WebException wex)
+        {
+            string err = SapServiceLayer.GetSlErrorMessage(wex);
+            LogSurplusLinesToTransferErrors(surplusRows, fromWhs, toWhs, receiveUser, err);
+            return err;
+        }
+        catch (Exception ex)
+        {
+            LogSurplusLinesToTransferErrors(surplusRows, fromWhs, toWhs, receiveUser, ex.Message);
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
+    // Logs surplus lines (tmpQty > DispatchQty) to la_transfer_errors.
+    private void LogSurplusLinesToTransferErrors(DataTable surplusRows,
+        string fromWhs, string toWhs, string userApp, string errorMsg)
+    {
+        foreach (DataRow row in surplusRows.Rows)
+        {
+            InsertTransferError(
+                Convert.ToInt32(row["LineNum"]),
+                fromWhs,
+                toWhs,
+                toWhs,
+                row["ItemCode"].ToString(),
+                row["ItemName"].ToString(),
+                Convert.ToInt32(row["SurplusQty"]),
                 userApp,
                 errorMsg);
         }
