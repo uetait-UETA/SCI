@@ -108,6 +108,7 @@
                                             </tel:RadMenuItem>--%>
                                             <tel:RadMenuItem IsSeparator="true" />
                                             <tel:RadMenuItem Text="Fill Priority" Value="FILL" NavigateUrl="FillPriority.aspx" />
+                                            <tel:RadMenuItem Text="Fill Brand Priority" Value="FILLBRAND" NavigateUrl="FillBrandPriority.aspx" />
                                             <tel:RadMenuItem IsSeparator="true" />
                                             <tel:RadMenuItem Text="Warehouses" Value="Bodegas">
                                                 <GroupSettings />
