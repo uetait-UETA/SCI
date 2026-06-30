@@ -2420,7 +2420,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         toWhs),
             new JProperty("U_Type",             "Duty Paid"),
-            new JProperty("Comments",           surplusItrDocNum > 0 ? "Received over - ITR #" + surplusItrDocNum : "Received over"),
+            new JProperty("Comments",           "Received over - Surplus qty received from origin warehouse - Transfer #" + GloVarDocNum + (surplusItrDocNum > 0 ? " - ITR #" + surplusItrDocNum : "")),
             new JProperty("StockTransferLines", lines)
         );
         if (GloVarDocNumITR > 0)
