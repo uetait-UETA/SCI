@@ -19,7 +19,7 @@ public partial class TransferDetailsPrint : System.Web.UI.Page
     protected string RecUser;
     string order_multiple;
     protected string LvUser = "";
-    protected string OriCopy = "SCREEN of ";
+    protected string OriCopy = "ORIGINAL of ";
     protected string TotProds = "";
     protected string sap_db;
     protected SqlDb db = new SqlDb();
@@ -400,7 +400,7 @@ public partial class TransferDetailsPrint : System.Web.UI.Page
         if (lNumPrintsDone == 0)
         {
             Button1.Visible = true;
-            OriCopy = "SCREEN of ";
+            OriCopy = "ORIGINAL of ";
         }
         else
         {

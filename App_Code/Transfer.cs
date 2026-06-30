@@ -400,7 +400,7 @@ SELECT
     ISNULL(lta.DraftUser, '_') AS DraftUser,
     ISNULL(lta.DespUser, '_') AS DespUser,
     ISNULL(lta.RecUser, '_') AS RecUser,
-    (SELECT CASE WHEN COUNT(*)=0 THEN 'ORIGINAL del ' ELSE 'COPIA del ' END FROM smm_Print_Control WITH(NOLOCK) WHERE docentry=a.DocEntry) AS oricopy,
+    (SELECT CASE WHEN COUNT(*)=0 THEN 'ORIGINAL of ' ELSE 'COPY of ' END FROM smm_Print_Control WITH(NOLOCK) WHERE docentry=a.DocEntry) AS oricopy,
     ws.bins,
     CASE WHEN oi.U_brand='REEBOK' THEN STUFF((SELECT ' - '+BcdCode FROM {0}.dbo.OBCD a1 WITH(NOLOCK) WHERE a1.ItemCode=oi.ItemCode AND a1.BcdCode<>a1.ItemCode FOR XML PATH('')),1,3,'') ELSE STUFF((SELECT ' - '+RIGHT(BcdCode,5) FROM {0}.dbo.OBCD a1 WITH(NOLOCK) WHERE a1.ItemCode=oi.ItemCode FOR XML PATH('')),1,3,'') END AS BarCode,
     (SELECT CONVERT(INT,SUM(TotalQty)) FROM SmmDraftHeader WHERE DocEntry={1}) AS TotalProds
