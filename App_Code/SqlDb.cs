@@ -74,9 +74,12 @@ public class SqlDb
                 Conn.Open();
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            HttpContext.Current.Response.Redirect("AccessDenied.aspx", true);
+            if (HttpContext.Current != null)
+                HttpContext.Current.Response.Redirect("AccessDenied.aspx", true);
+            else
+                throw new Exception("DB Connect failed: " + ex.Message, ex);
         }
     }
 
