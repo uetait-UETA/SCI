@@ -272,6 +272,7 @@ public partial class FillPriority : BasePage
                               b.ItmsGrpNam AS CategoryName,
                               w.WhsCode,
                               w.WhsName,
+                              ISNULL(w.U_POSCode, '') AS U_POSCode,
                               ISNULL(p.[Priority], 99) AS Priority
                        FROM " + sap_db + @".dbo.oitb b
                        CROSS JOIN " + sap_db + @".dbo.OWHS w " + Queries.WITH_NOLOCK + @"
