@@ -3066,9 +3066,12 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     new JProperty("TaxDate",                 today),
                     new JProperty("DocDueDate",              today),
                     new JProperty("Comments",                comment),
-                    new JProperty("U_bol",                   GloVarDocEntry.ToString()),
+                    new JProperty("U_bol",                   GloVarDocNum.ToString()),
+                    new JProperty("U_Type",                  "Duty Paid"),
                     new JProperty("DocumentLines",           oinvLines)
                 );
+                if (GloVarDocNumITR > 0)
+                    oinvPayload["NumAtCard"] = GloVarDocNumITR.ToString();
             }
         }
 
