@@ -23,7 +23,9 @@ public partial class TransferDiscreOrdf : System.Web.UI.Page
     string LvDispatched = null;
     string LvReceived = null;
     string LvUserDisp = null;
-    int GloVarDocEntry = 0;
+    int GloVarDocEntry  = 0;
+    int GloVarDocNum    = 0;
+    int GloVarDocNumITR = 0;
     char flagPerDeskay = 'N';
     char flagPerReckay = 'N';
     char GloVarDesRec = 'X';
@@ -115,6 +117,20 @@ public partial class TransferDiscreOrdf : System.Web.UI.Page
             DocEntry = Request.QueryString["DocEntry"].ToString();
             GloVarDocEntry = Convert.ToInt32(DocEntry);
             DocEntryLabel.Text = DocEntry;
+
+            try
+            {
+                using (var rdCmd = new SqlCommand(
+                    "SELECT ISNULL(DocNum,0), ISNULL(DocNumITR,0) FROM smm_Transdiscrep_odrf " +
+                    "WHERE DocEntry=@de AND CompanyId=@cid", db.Conn))
+                {
+                    rdCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                    rdCmd.Parameters.AddWithValue("@cid", sap_db);
+                    using (var rdr = rdCmd.ExecuteReader())
+                        if (rdr.Read()) { GloVarDocNum = rdr.GetInt32(0); GloVarDocNumITR = rdr.GetInt32(1); }
+                }
+            }
+            catch { }
 
             //btnPrint.OnClientClick = "window.open('DisTransferDetails.aspx?DocEntry=" + DocEntry + "','PrintWindow','status=0,toolbar=0,resizable=1,scrollbars=1')";
 
@@ -1816,13 +1832,12 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 new JProperty("DocDate",                   today),
                 new JProperty("DocDueDate",                today),
                 new JProperty("TaxDate",                   today),
-                new JProperty("U_BOL",                     GloVarDocEntry.ToString()),
+                new JProperty("U_BOL",                     GloVarDocNum.ToString()),
                 new JProperty("U_DESPATCH",                despatchUser),
                 new JProperty("U_ORITOWHS",                toWhs),
+                new JProperty("U_Type",                    "Duty Paid"),
                 new JProperty("DocumentLines",             ordrLines)
             );
-            if (!string.IsNullOrEmpty(fromWhsUType))
-                payload["U_Type"] = fromWhsUType;
         }
         else
         {
@@ -1831,14 +1846,13 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             payload = new JObject(
                 new JProperty("FromWarehouse",      fromWhs),
                 new JProperty("ToWarehouse",        toWhs),
-                new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+                new JProperty("U_BOL",              GloVarDocNum.ToString()),
                 new JProperty("U_DESPATCH",         despatchUser),
                 new JProperty("U_ORITOWHS",         fromWhs),
                 new JProperty("U_ACTION_CODE",      actionCode),
+                new JProperty("U_Type",             "Duty Paid"),
                 new JProperty("StockTransferLines", owtqLines)
             );
-            if (!string.IsNullOrEmpty(fromWhsUType))
-                payload["U_Type"] = fromWhsUType;
         }
 
         var sl = new SapServiceLayer();
@@ -1983,12 +1997,15 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        toWhs),
-            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_BOL",              GloVarDocNum.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("U_Type",             "Duty Paid"),
             new JProperty("Comments",           mainComments),
             new JProperty("StockTransferLines", lines)
         );
+        if (GloVarDocNumITR > 0)
+            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2105,11 +2122,14 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        researchWhs),
-            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_BOL",              GloVarDocNum.ToString()),
             new JProperty("U_DESPATCH",         dispatchUser),
             new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("U_Type",             "Duty Paid"),
             new JProperty("StockTransferLines", lines)
         );
+        if (GloVarDocNumITR > 0)
+            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2251,12 +2271,15 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        researchWhs),
-            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_BOL",              GloVarDocNum.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("U_Type",             "Duty Paid"),
             new JProperty("Comments",           shortageComments),
             new JProperty("StockTransferLines", lines)
         );
+        if (GloVarDocNumITR > 0)
+            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2393,12 +2416,15 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        toWhs),
-            new JProperty("U_BOL",              GloVarDocEntry.ToString()),
+            new JProperty("U_BOL",              GloVarDocNum.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         toWhs),
+            new JProperty("U_Type",             "Duty Paid"),
             new JProperty("Comments",           surplusItrDocNum > 0 ? "Received over - ITR #" + surplusItrDocNum : "Received over"),
             new JProperty("StockTransferLines", lines)
         );
+        if (GloVarDocNumITR > 0)
+            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2742,7 +2768,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         int    opchDocNum = Convert.ToInt32(opchHeader["DocNum"]);
 
         string payload = gr.BuildGrpoFromOpchWithQty(
-            cardCode, bplId, opchDocEntry, opchDocNum, dtLines, receivedQtys);
+            cardCode, bplId, opchDocEntry, opchDocNum, dtLines, receivedQtys,
+            sciDocNum: GloVarDocNum, docNumITR: GloVarDocNumITR);
 
         string companyDb = ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
         var sl = new SapServiceLayer();
@@ -3006,11 +3033,12 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("TaxDate",                 today),
             new JProperty("DocDueDate",              today),
             new JProperty("Comments",                comment),
-            new JProperty("U_bol",                   GloVarDocEntry.ToString()),
+            new JProperty("U_bol",                   GloVarDocNum.ToString()),
+            new JProperty("U_Type",                  "Duty Paid"),
             new JProperty("DocumentLines",           opdnLines)
         );
-        if (!string.IsNullOrEmpty(opchWhsType))
-            opdnPayload["U_Type"] = opchWhsType;
+        if (GloVarDocNumITR > 0)
+            opdnPayload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         // ── 8. Build OINV payload (AR Invoice at origin/FROM branch via ORDR) ───
         JObject oinvPayload = null;

@@ -587,10 +587,15 @@ WHERE  p.DocEntry = {2}",
 
     public string BuildGrpoFromOpchWithQty(string cardCode, int bplId,
         int opchDocEntry, int opchDocNum, DataTable dtLines,
-        System.Collections.Generic.Dictionary<int, decimal> receivedQtys)
+        System.Collections.Generic.Dictionary<int, decimal> receivedQtys,
+        int sciDocNum = 0, int docNumITR = 0)
     {
         string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var sb = new StringBuilder();
+
+        string numAtCard = docNumITR > 0
+            ? docNumITR.ToString(CultureInfo.InvariantCulture)
+            : opchDocNum.ToString(CultureInfo.InvariantCulture);
 
         sb.Append("{");
         sb.AppendFormat("\"CardCode\":\"{0}\",",   EscJson(cardCode));
@@ -598,25 +603,12 @@ WHERE  p.DocEntry = {2}",
         sb.AppendFormat("\"DocDate\":\"{0}\",",    today);
         sb.AppendFormat("\"TaxDate\":\"{0}\",",    today);
         sb.AppendFormat("\"DocDueDate\":\"{0}\",", today);
-        sb.AppendFormat("\"NumAtCard\":\"{0}\",",
-            opchDocNum.ToString(CultureInfo.InvariantCulture));
+        sb.AppendFormat("\"NumAtCard\":\"{0}\",",  numAtCard);
         sb.AppendFormat("\"Comments\":\"Receipt from AP Reserve Invoice #{0}\",",
             opchDocNum);
-
-        // Include U_Type matching the warehouse to pass SAP purchasing validation
-        string whsType = "";
-        for (int k = 0; k < dtLines.Rows.Count && string.IsNullOrEmpty(whsType); k++)
-        {
-            DataRow rk   = dtLines.Rows[k];
-            int     lnum = Convert.ToInt32(rk["LineNum"]);
-            decimal qtyk = receivedQtys.ContainsKey(lnum)
-                ? receivedQtys[lnum]
-                : Convert.ToDecimal(rk["Quantity"]);
-            if (qtyk > 0)
-                whsType = rk["WhsType"].ToString();
-        }
-        if (!string.IsNullOrEmpty(whsType))
-            sb.AppendFormat("\"U_Type\":\"{0}\",", EscJson(whsType));
+        sb.AppendFormat("\"U_Type\":\"Duty Paid\",");
+        if (sciDocNum > 0)
+            sb.AppendFormat("\"U_bol\":\"{0}\",", sciDocNum.ToString(CultureInfo.InvariantCulture));
 
         sb.Append("\"DocumentLines\":[");
         bool firstLine = true;
