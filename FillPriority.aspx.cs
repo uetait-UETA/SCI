@@ -17,6 +17,7 @@ public partial class FillPriority : BasePage
     protected string  sap_db;
 
     // ── Page lifecycle ────────────────────────────────────────────────────────
+
     protected void Page_Load(object sender, EventArgs e)
     {
         if (string.IsNullOrEmpty((string)Session["UserId"]) ||
@@ -36,7 +37,8 @@ public partial class FillPriority : BasePage
 
         if (strAccessType == "N")
         {
-            string msg = "User " + lCurUser + ", with Role " + strRole_Description + " does not have permissions to access this screen.";
+            string msg = "User " + lCurUser + ", with Role " + strRole_Description +
+                         " does not have permissions to access this screen.";
             ScriptManager.RegisterStartupScript(this.Page, Page.GetType(), "alert",
                 "{ alert('" + msg + "'); window.location = 'Default.aspx'; }", true);
             return;
@@ -44,57 +46,49 @@ public partial class FillPriority : BasePage
 
         if (strAccessType == "R")
         {
-            rbtnSave.Enabled  = false;
-            rbtnSave.ForeColor = Color.Silver;
-            btnImport.Enabled  = false;
-            labelForm.InnerText = "Fill Priority (Read-Only Access)";
+            rbtnSave.Enabled    = false;
+            rbtnSave.ForeColor  = Color.Silver;
+            rbtnAdd.Enabled     = false;
+            rbtnAdd.ForeColor   = Color.Silver;
+            btnImport.Enabled   = false;
+            labelForm.InnerText = "Fill Category Priority (Read-Only Access)";
         }
         else if (strAccessType == "F")
         {
             rbtnSave.Enabled    = true;
-            labelForm.InnerText = "Fill Priority (Full Access)";
+            labelForm.InnerText = "Fill Category Priority (Full Access)";
         }
 
         if (!IsPostBack)
         {
-            try   { LoadItemGroup(); }
-            catch (Exception ex) { ShowMasterPageMessage("Error", "Failed in Page_Load", ex.Message); }
+            try
+            {
+                LoadFilterCategories();
+                LoadFilterWarehouses();
+                LoadAddCategories();
+                LoadAddWarehouses();
+            }
+            catch (Exception ex) { ShowMsg("Error", "Failed in Page_Load", ex.Message); }
         }
     }
 
-    private void ShowMasterPageMessage(string type, string title, string message)
+    private void ShowMsg(string type, string title, string message)
     {
         try { ((SiteMaster)this.Master).ShowDivMessage(type, title, message); }
         catch { }
     }
 
-    // ── Data load ─────────────────────────────────────────────────────────────
-    private void LoadItemGroup()
+    // ── Dropdown loaders ──────────────────────────────────────────────────────
+
+    private void LoadFilterCategories()
     {
-        string sql = @"SELECT ItmsGrpCod GroupCode,
-                              CAST(ItmsGrpCod AS varchar) + ' - ' + [dbo].[InitCap](ItmsGrpNam) GroupName
-                       FROM " + sap_db + @".dbo.oitb
+        string sql = @"SELECT DISTINCT p.Dept AS GroupCode,
+                              CAST(p.Dept AS varchar) + ' - ' + [dbo].[InitCap](b.ItmsGrpNam) AS GroupName
+                       FROM dbo.Repln_Location_Priority p " + Queries.WITH_NOLOCK + @"
+                       INNER JOIN " + sap_db + @".dbo.oitb b " + Queries.WITH_NOLOCK + @"
+                           ON b.ItmsGrpCod = p.Dept
+                       WHERE p.Company = @company AND p.Branch = @branch
                        ORDER BY GroupName";
-        DataTable dt = new DataTable();
-        db.Connect();
-        try   { using (SqlDataAdapter a = new SqlDataAdapter(sql, db.Conn)) a.Fill(dt); }
-        finally { db.Disconnect(); }
-
-        rcbCategory.DataTextField  = "GroupName";
-        rcbCategory.DataValueField = "GroupCode";
-        rcbCategory.DataSource     = dt;
-        rcbCategory.DataBind();
-    }
-
-    private DataTable GetFillPriority()
-    {
-        string sql = @"SELECT a.Company, a.[Location], b.WhsName AS LocationName,
-                              a.Dept, a.[Priority], b.U_POSCode
-                       FROM dbo.Repln_Location_Priority a " + Queries.WITH_NOLOCK + @"
-                       INNER JOIN " + sap_db + @".dbo.OWHS b " + Queries.WITH_NOLOCK + @"
-                           ON a.[Location] = b.WhsCode
-                       WHERE a.Company = @company AND a.Dept = @dept AND b.BPLId = @branch
-                       ORDER BY a.[Priority], b.U_POSCode";
 
         DataTable dt = new DataTable();
         db.Connect();
@@ -103,21 +97,71 @@ public partial class FillPriority : BasePage
             using (SqlDataAdapter a = new SqlDataAdapter(sql, db.Conn))
             {
                 a.SelectCommand.Parameters.AddWithValue("@company", sap_db);
-                a.SelectCommand.Parameters.AddWithValue("@dept",    Convert.ToInt32(rcbCategory.SelectedValue));
                 a.SelectCommand.Parameters.AddWithValue("@branch",  BranchId);
                 a.Fill(dt);
             }
         }
         finally { db.Disconnect(); }
-        return dt;
+
+        rcbCategoryFilter.DataTextField  = "GroupName";
+        rcbCategoryFilter.DataValueField = "GroupCode";
+        rcbCategoryFilter.DataSource     = dt;
+        rcbCategoryFilter.DataBind();
     }
 
-    private DataTable GetWarehousesAsNewPriority()
+    private void LoadFilterWarehouses()
     {
-        string sql = @"SELECT b.WhsCode AS [Location], b.WhsName AS LocationName, b.U_POSCode
-                       FROM " + sap_db + @".dbo.OWHS b " + Queries.WITH_NOLOCK + @"
-                       WHERE b.BPLId = @branch
-                       ORDER BY b.U_POSCode, b.WhsCode";
+        string sql = @"SELECT DISTINCT p.[Location] AS WhsCode,
+                              p.[Location] + ' - ' + w.WhsName AS DisplayName
+                       FROM dbo.Repln_Location_Priority p " + Queries.WITH_NOLOCK + @"
+                       INNER JOIN " + sap_db + @".dbo.OWHS w " + Queries.WITH_NOLOCK + @"
+                           ON w.WhsCode = p.[Location]
+                       WHERE p.Company = @company AND p.Branch = @branch
+                       ORDER BY DisplayName";
+
+        DataTable dt = new DataTable();
+        db.Connect();
+        try
+        {
+            using (SqlDataAdapter a = new SqlDataAdapter(sql, db.Conn))
+            {
+                a.SelectCommand.Parameters.AddWithValue("@company", sap_db);
+                a.SelectCommand.Parameters.AddWithValue("@branch",  BranchId);
+                a.Fill(dt);
+            }
+        }
+        finally { db.Disconnect(); }
+
+        rcbWhsFilter.DataTextField  = "DisplayName";
+        rcbWhsFilter.DataValueField = "WhsCode";
+        rcbWhsFilter.DataSource     = dt;
+        rcbWhsFilter.DataBind();
+    }
+
+    private void LoadAddCategories()
+    {
+        string sql = @"SELECT ItmsGrpCod GroupCode,
+                              CAST(ItmsGrpCod AS varchar) + ' - ' + [dbo].[InitCap](ItmsGrpNam) GroupName
+                       FROM " + sap_db + @".dbo.oitb
+                       ORDER BY GroupName";
+
+        DataTable dt = new DataTable();
+        db.Connect();
+        try   { using (SqlDataAdapter a = new SqlDataAdapter(sql, db.Conn)) a.Fill(dt); }
+        finally { db.Disconnect(); }
+
+        rcbAddCategory.DataTextField  = "GroupName";
+        rcbAddCategory.DataValueField = "GroupCode";
+        rcbAddCategory.DataSource     = dt;
+        rcbAddCategory.DataBind();
+    }
+
+    private void LoadAddWarehouses()
+    {
+        string sql = @"SELECT WhsCode, WhsCode + ' - ' + WhsName AS DisplayName
+                       FROM " + sap_db + @".dbo.OWHS " + Queries.WITH_NOLOCK + @"
+                       WHERE BPLId = @branch
+                       ORDER BY WhsCode";
 
         DataTable dt = new DataTable();
         db.Connect();
@@ -131,93 +175,178 @@ public partial class FillPriority : BasePage
         }
         finally { db.Disconnect(); }
 
-        dt.Columns.Add("Company",  typeof(string));
-        dt.Columns.Add("Dept",     typeof(int));
-        dt.Columns.Add("Priority", typeof(int));
+        rcbAddWarehouse.DataTextField  = "DisplayName";
+        rcbAddWarehouse.DataValueField = "WhsCode";
+        rcbAddWarehouse.DataSource     = dt;
+        rcbAddWarehouse.DataBind();
+    }
 
-        foreach (DataRow row in dt.Rows)
+    // ── Main data query ───────────────────────────────────────────────────────
+
+    private DataTable GetAllPriorities()
+    {
+        int catCode = 0;
+        int.TryParse(rcbCategoryFilter.SelectedValue, out catCode);
+        string whsFilter = rcbWhsFilter.SelectedValue ?? "";
+
+        string sql = @"SELECT p.Dept          AS CategoryCode,
+                              b.ItmsGrpNam    AS CategoryName,
+                              p.[Location]    AS WhsCode,
+                              w.WhsName,
+                              ISNULL(w.U_POSCode, '') AS U_POSCode,
+                              p.[Priority]
+                       FROM dbo.Repln_Location_Priority p " + Queries.WITH_NOLOCK + @"
+                       INNER JOIN " + sap_db + @".dbo.oitb b " + Queries.WITH_NOLOCK + @"
+                           ON b.ItmsGrpCod = p.Dept
+                       INNER JOIN " + sap_db + @".dbo.OWHS w " + Queries.WITH_NOLOCK + @"
+                           ON w.WhsCode = p.[Location]
+                       WHERE p.Company = @company
+                         AND p.Branch  = @branch
+                         AND (@catCode = 0    OR p.Dept        = @catCode)
+                         AND (@whs     = ''   OR p.[Location]  = @whs)
+                       ORDER BY b.ItmsGrpNam, p.[Priority], w.U_POSCode";
+
+        DataTable dt = new DataTable();
+        db.Connect();
+        try
         {
-            row["Company"]  = sap_db;
-            row["Dept"]     = Convert.ToInt32(rcbCategory.SelectedValue);
-            row["Priority"] = 99;   // default: no priority
+            using (SqlDataAdapter a = new SqlDataAdapter(sql, db.Conn))
+            {
+                a.SelectCommand.Parameters.AddWithValue("@company", sap_db);
+                a.SelectCommand.Parameters.AddWithValue("@branch",  BranchId);
+                a.SelectCommand.Parameters.AddWithValue("@catCode", catCode);
+                a.SelectCommand.Parameters.AddWithValue("@whs",     whsFilter);
+                a.Fill(dt);
+            }
         }
+        finally { db.Disconnect(); }
         return dt;
     }
 
-    // ── Grid events ──────────────────────────────────────────────────────────
-    protected void rcbCategory_SelectedIndexChanged(object sender, RadComboBoxSelectedIndexChangedEventArgs e)
+    // ── Grid events ───────────────────────────────────────────────────────────
+
+    protected void rcbCategoryFilter_SelectedIndexChanged(object sender, RadComboBoxSelectedIndexChangedEventArgs e)
     {
-        if (rcbCategory.SelectedValue != "")
-            rgPriority.Rebind();
+        rgPriority.Rebind();
+    }
+
+    protected void rcbWhsFilter_SelectedIndexChanged(object sender, RadComboBoxSelectedIndexChangedEventArgs e)
+    {
+        rgPriority.Rebind();
     }
 
     protected void rgPriority_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
     {
-        if (rcbCategory.SelectedValue == "") return;
-        divGrid.Attributes.Add("style", "display:block");
-        DataTable dtExisting = GetFillPriority();
-        rgPriority.DataSource = dtExisting.Rows.Count > 0 ? dtExisting : GetWarehousesAsNewPriority();
+        rgPriority.DataSource = GetAllPriorities();
     }
 
-    // ── Save (manual grid) ───────────────────────────────────────────────────
+    protected void rgPriority_ItemCommand(object sender, GridCommandEventArgs e)
+    {
+        if (e.CommandName != "DeleteRow") return;
+
+        GridDataItem item   = (GridDataItem)e.Item;
+        string whsCode      = item["WhsCode"].Text;
+        int    categoryCode = int.Parse(item["CategoryCode"].Text);
+
+        db.Connect();
+        try
+        {
+            using (SqlCommand cmd = new SqlCommand(
+                "DELETE FROM dbo.Repln_Location_Priority " +
+                "WHERE Company=@cid AND [Location]=@whs AND Dept=@dept AND Branch=@branch",
+                db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@cid",    sap_db);
+                cmd.Parameters.AddWithValue("@whs",    whsCode);
+                cmd.Parameters.AddWithValue("@dept",   categoryCode);
+                cmd.Parameters.AddWithValue("@branch", BranchId);
+                cmd.ExecuteNonQuery();
+            }
+        }
+        finally { db.Disconnect(); }
+
+        rgPriority.Rebind();
+    }
+
+    // ── Save (inline priority edit — current page) ────────────────────────────
+
     protected void rbtnSave_Click(object sender, EventArgs e)
     {
         if (rgPriority.MasterTableView.Items.Count == 0)
         {
-            ShowMasterPageMessage("Error", "Error", "No data to save.");
-            return;
-        }
-        if (rcbCategory.SelectedValue == "")
-        {
-            ShowMasterPageMessage("Error", "Error", "Please select a category.");
+            ShowMsg("Error", "Error", "No rows to save.");
             return;
         }
 
-        DataTable dt = new DataTable();
-        dt.Columns.Add("Location", typeof(string));
-        dt.Columns.Add("Priority", typeof(int));
-
+        var rows = new List<Tuple<string, int, int>>();  // WhsCode, CategoryCode, Priority
         foreach (GridDataItem item in rgPriority.MasterTableView.Items)
         {
-            string loc = item["Location"].Text;
-            TextBox txtPriority = (TextBox)item["Priority"].FindControl("txtPriority");
+            string whsCode = item["WhsCode"].Text;
+            int    catCode;
+            if (!int.TryParse(item["CategoryCode"].Text, out catCode)) continue;
+
+            TextBox txt = (TextBox)item["Priority"].FindControl("txtPriority");
             int priority;
-            if (!int.TryParse(txtPriority.Text.Trim(), out priority) || priority < 1 || priority > 99)
+            if (!int.TryParse(txt.Text.Trim(), out priority) || priority < 1 || priority > 99)
             {
-                ShowMasterPageMessage("Error", "Invalid priority", "Priority for '" + loc + "' must be a number between 1 and 99.");
+                ShowMsg("Error", "Invalid priority",
+                    "Priority for '" + item["CategoryName"].Text + " / " + whsCode + "' must be 1-99.");
                 return;
             }
-            dt.Rows.Add(loc, priority);
+            rows.Add(Tuple.Create(whsCode, catCode, priority));
         }
 
-        // Duplicate check — 99 can repeat, 1-98 cannot
-        var dupes = dt.AsEnumerable()
-            .Where(r => (int)r["Priority"] < 99)
-            .GroupBy(r => r["Priority"])
-            .Where(g => g.Count() > 1).ToList();
-        if (dupes.Count > 0)
-        {
-            ShowMasterPageMessage("Error", "Duplicate priorities", "Priority values 1-98 must be unique per category.");
-            return;
-        }
-
-        // Normalise to the column names MergePriorities expects
         DataTable dtMerge = new DataTable();
         dtMerge.Columns.Add("WhsCode",      typeof(string));
         dtMerge.Columns.Add("CategoryCode", typeof(int));
         dtMerge.Columns.Add("Priority",     typeof(int));
-        foreach (DataRow r in dt.Rows)
-            dtMerge.Rows.Add(r["Location"].ToString(), Convert.ToInt32(rcbCategory.SelectedValue), (int)r["Priority"]);
+        foreach (var r in rows)
+            dtMerge.Rows.Add(r.Item1, r.Item2, r.Item3);
 
-        string successMsg;
-        if (MergePriorities(dtMerge, out successMsg))
+        string msg;
+        if (MergePriorities(dtMerge, out msg))
         {
-            ShowMasterPageMessage("Ok", "Success", successMsg);
+            ShowMsg("Ok", "Success", msg);
             rgPriority.Rebind();
         }
     }
 
-    // Shared MERGE engine — expects DataTable with columns: WhsCode, CategoryCode, Priority
+    // ── Add new row ───────────────────────────────────────────────────────────
+
+    protected void rbtnAdd_Click(object sender, EventArgs e)
+    {
+        if (rcbAddCategory.SelectedValue == "" || rcbAddWarehouse.SelectedValue == "")
+        {
+            ShowMsg("Error", "Error", "Please select both a category and a warehouse.");
+            return;
+        }
+
+        int priority;
+        if (!int.TryParse(txtAddPriority.Text.Trim(), out priority) || priority < 1 || priority > 99)
+        {
+            ShowMsg("Error", "Invalid priority", "Priority must be a number between 1 and 99.");
+            return;
+        }
+
+        DataTable dtMerge = new DataTable();
+        dtMerge.Columns.Add("WhsCode",      typeof(string));
+        dtMerge.Columns.Add("CategoryCode", typeof(int));
+        dtMerge.Columns.Add("Priority",     typeof(int));
+        dtMerge.Rows.Add(rcbAddWarehouse.SelectedValue, Convert.ToInt32(rcbAddCategory.SelectedValue), priority);
+
+        string msg;
+        if (MergePriorities(dtMerge, out msg))
+        {
+            txtAddPriority.Text = "99";
+            ShowMsg("Ok", "Success", "Priority added.");
+            LoadFilterCategories();
+            LoadFilterWarehouses();
+            rgPriority.Rebind();
+        }
+    }
+
+    // ── Shared MERGE engine ───────────────────────────────────────────────────
+
     private bool MergePriorities(DataTable dt, out string message)
     {
         string mergeSql = @"
@@ -258,14 +387,15 @@ public partial class FillPriority : BasePage
             {
                 tx.Rollback();
                 message = ex.Message;
-                ShowMasterPageMessage("Error", "Failed to save priorities", ex.Message);
+                ShowMsg("Error", "Failed to save priorities", ex.Message);
                 return false;
             }
             finally { db.Disconnect(); }
         }
     }
 
-    // ── Export ───────────────────────────────────────────────────────────────
+    // ── Export ────────────────────────────────────────────────────────────────
+
     protected void btnExport_Click(object sender, EventArgs e)
     {
         string sql = @"SELECT b.ItmsGrpCod AS CategoryCode,
@@ -313,7 +443,8 @@ public partial class FillPriority : BasePage
         Response.End();
     }
 
-    // ── Import preview ───────────────────────────────────────────────────────
+    // ── Import preview ────────────────────────────────────────────────────────
+
     protected void btnPreview_Click(object sender, EventArgs e)
     {
         Session.Remove("FillPriorityImport");
@@ -346,7 +477,6 @@ public partial class FillPriority : BasePage
         gvImport.DataSource = dtPreview;
         gvImport.DataBind();
 
-        // Highlight error rows
         for (int i = 0; i < gvImport.Rows.Count; i++)
         {
             if (dtPreview.Rows[i]["Status"].ToString() != "OK")
@@ -362,17 +492,18 @@ public partial class FillPriority : BasePage
         }
         else
         {
-            lblImportMsg.Text     = dtPreview.Rows.Count + " row(s) ready to import.";
-            btnImport.Enabled     = true;
+            lblImportMsg.Text             = dtPreview.Rows.Count + " row(s) ready to import.";
+            btnImport.Enabled             = true;
             Session["FillPriorityImport"] = dtPreview;
         }
     }
 
     private DataTable ReadExcel(string path, string ext)
     {
-        string props  = ext == ".xlsx" ? "Excel 12.0 Xml;HDR=YES" : "Excel 8.0;HDR=YES";
-        string conn   = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + path + ";Extended Properties='" + props + "'";
-        DataTable dt  = new DataTable();
+        string props = ext == ".xlsx" ? "Excel 12.0 Xml;HDR=YES" : "Excel 8.0;HDR=YES";
+        string conn  = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + path +
+                       ";Extended Properties='" + props + "'";
+        DataTable dt = new DataTable();
         using (OleDbConnection oleConn = new OleDbConnection(conn))
         {
             oleConn.Open();
@@ -386,10 +517,8 @@ public partial class FillPriority : BasePage
 
     private DataTable ValidateImportData(DataTable dtRaw)
     {
-        // Load reference data for validation
-        var validCategories = new Dictionary<int, string>();             // ItmsGrpCod → name
-        var posToWhs        = new Dictionary<string, string>(            // U_POSCode → WhsCode
-                                  StringComparer.OrdinalIgnoreCase);
+        var validCategories = new Dictionary<int, string>();
+        var posToWhs        = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         db.Connect();
         try
@@ -403,7 +532,8 @@ public partial class FillPriority : BasePage
                     validCategories[Convert.ToInt32(r["ItmsGrpCod"])] = r["ItmsGrpNam"].ToString();
             }
             using (SqlDataAdapter a = new SqlDataAdapter(
-                "SELECT WhsCode, ISNULL(U_POSCode,'') U_POSCode FROM " + sap_db + ".dbo.OWHS WHERE BPLId = @branch", db.Conn))
+                "SELECT WhsCode, ISNULL(U_POSCode,'') U_POSCode FROM " + sap_db +
+                ".dbo.OWHS WHERE BPLId = @branch", db.Conn))
             {
                 a.SelectCommand.Parameters.AddWithValue("@branch", BranchId);
                 DataTable dt = new DataTable();
@@ -424,13 +554,10 @@ public partial class FillPriority : BasePage
         preview.Columns.Add("POSCode",      typeof(string));
         preview.Columns.Add("Priority",     typeof(string));
         preview.Columns.Add("Status",       typeof(string));
-        // internal column — not shown in grid, used by import
         preview.Columns.Add("WhsCode",      typeof(string));
 
-        // Track used priorities (< 99) per category to detect duplicates
         var usedPriorities = new Dictionary<int, HashSet<int>>();
 
-        // Find columns case-insensitively; accept alternate names from user-created sheets
         string catColName = null, posColName = null, priColName = null;
         foreach (DataColumn col in dtRaw.Columns)
         {
@@ -442,37 +569,30 @@ public partial class FillPriority : BasePage
             else if (n == "priority" || n == "prio")
                 priColName = col.ColumnName;
         }
-        bool hasCatCol = catColName != null;
-        bool hasPosCol = posColName != null;
-        bool hasPriCol = priColName != null;
 
         foreach (DataRow raw in dtRaw.Rows)
         {
-            string catStr  = hasCatCol && raw[catColName] != DBNull.Value ? raw[catColName].ToString().Trim() : "";
-            string posCode = hasPosCol && raw[posColName] != DBNull.Value ? raw[posColName].ToString().Trim() : "";
-            string priStr  = hasPriCol && raw[priColName] != DBNull.Value ? raw[priColName].ToString().Trim() : "";
+            string catStr  = catColName != null && raw[catColName] != DBNull.Value ? raw[catColName].ToString().Trim() : "";
+            string posCode = posColName != null && raw[posColName] != DBNull.Value ? raw[posColName].ToString().Trim() : "";
+            string priStr  = priColName != null && raw[priColName] != DBNull.Value ? raw[priColName].ToString().Trim() : "";
             string error   = null;
             string whsCode = "";
 
-            // Validate CategoryCode
             int catCode = 0;
             if (!int.TryParse(catStr, out catCode))
                 error = "Invalid CategoryCode";
             else if (!validCategories.ContainsKey(catCode))
                 error = "CategoryCode not found";
 
-            // Resolve POSCode → WhsCode
             if (string.IsNullOrEmpty(posCode))
                 error = error ?? "POSCode is empty";
             else if (!posToWhs.TryGetValue(posCode, out whsCode))
                 error = error ?? "POSCode not found in branch";
 
-            // Validate Priority
             int priority = 0;
             if (!int.TryParse(priStr, out priority) || priority < 1 || priority > 99)
                 error = error ?? "Priority must be 1-99";
 
-            // Duplicate priority check (< 99) within same category
             if (error == null && priority < 99)
             {
                 if (!usedPriorities.ContainsKey(catCode))
@@ -488,32 +608,35 @@ public partial class FillPriority : BasePage
         return preview;
     }
 
-    // ── Import save ──────────────────────────────────────────────────────────
+    // ── Import save ───────────────────────────────────────────────────────────
+
     protected void btnImport_Click(object sender, EventArgs e)
     {
         DataTable dtPreview = Session["FillPriorityImport"] as DataTable;
         if (dtPreview == null || dtPreview.Rows.Count == 0)
         {
-            ShowMasterPageMessage("Error", "Error", "No data to import. Please preview first.");
+            ShowMsg("Error", "Error", "No data to import. Please preview first.");
             return;
         }
 
-        // Map preview columns to the names MergePriorities expects
         DataTable dtMerge = new DataTable();
         dtMerge.Columns.Add("WhsCode",      typeof(string));
         dtMerge.Columns.Add("CategoryCode", typeof(int));
         dtMerge.Columns.Add("Priority",     typeof(int));
         foreach (DataRow r in dtPreview.Rows)
-            dtMerge.Rows.Add(r["WhsCode"].ToString(), Convert.ToInt32(r["CategoryCode"]), Convert.ToInt32(r["Priority"]));
+            dtMerge.Rows.Add(r["WhsCode"].ToString(),
+                             Convert.ToInt32(r["CategoryCode"]),
+                             Convert.ToInt32(r["Priority"]));
 
         string msg;
         if (MergePriorities(dtMerge, out msg))
         {
             Session.Remove("FillPriorityImport");
             btnImport.Enabled = false;
-            ShowMasterPageMessage("Ok", "Success", msg);
-            if (rcbCategory.SelectedValue != "")
-                rgPriority.Rebind();
+            ShowMsg("Ok", "Success", msg);
+            LoadFilterCategories();
+            LoadFilterWarehouses();
+            rgPriority.Rebind();
         }
     }
 }
