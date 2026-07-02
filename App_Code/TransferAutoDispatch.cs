@@ -5,11 +5,12 @@ using System.Data.SqlClient;
 using Newtonsoft.Json.Linq;
 
 /// <summary>
-/// Auto-dispatch for transfers whose warehouses include at least one with BPLId=1.
+/// Auto-dispatch for transfers FROM Branch 1 (LAX DC) TO TIENDA.
 /// After submit_DraftXsap (or smm_populate_Smm_Draft), calling RunAutoDispatch creates
 /// the SAP B1 document automatically:
-///   - Branch 1 → Branch 4 (TIENDA): Sales Order (ORDR)
 ///   - Branch 1 → Branch 3 (TIENDA): Inventory Transfer Request (OWTQ) directly
+///   - Branch 1 → Branch 4 (TIENDA): Sales Order (ORDR)
+/// Branch 4 Relay warehouse acts as a tienda — Branch 4→Branch 4 does NOT auto-dispatch.
 /// On SAP failure the local draft is deleted so the user can start over.
 /// </summary>
 public static class TransferAutoDispatch
@@ -233,9 +234,9 @@ public static class TransferAutoDispatch
 
     // ── Private helpers ─────────────────────────────────────────────────────
 
-    // Returns "ORDR" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId != 3 (Branch 4 and others).
-    // Returns "OWTQ" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId = 3 (Branch 3).
-    // Returns null when this is not a BODEGA→TIENDA inter-branch transfer.
+    // Returns "ORDR" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId != 3.
+    // Returns "OWTQ" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId = 3.
+    // Returns null when this is not a Branch-1-BODEGA → TIENDA transfer.
     private static string GetBodegaToTiendaDocType(SqlConnection conn, int docEntry, string companyId, string sapDb)
     {
         string sql = string.Format(

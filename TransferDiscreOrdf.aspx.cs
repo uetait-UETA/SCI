@@ -2004,8 +2004,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("Comments",           mainComments),
             new JProperty("StockTransferLines", lines)
         );
-        if (GloVarDocNumITR > 0)
-            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2128,8 +2126,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("U_Type",             "Duty Paid"),
             new JProperty("StockTransferLines", lines)
         );
-        if (GloVarDocNumITR > 0)
-            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2278,8 +2274,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("Comments",           shortageComments),
             new JProperty("StockTransferLines", lines)
         );
-        if (GloVarDocNumITR > 0)
-            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -2423,8 +2417,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("Comments",           "Received over - Surplus qty received from origin warehouse - Transfer #" + GloVarDocNum + (surplusItrDocNum > 0 ? " - ITR #" + surplusItrDocNum : "")),
             new JProperty("StockTransferLines", lines)
         );
-        if (GloVarDocNumITR > 0)
-            payload["NumAtCard"] = GloVarDocNumITR.ToString();
 
         var sl = new SapServiceLayer();
         try
@@ -3034,7 +3026,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             new JProperty("DocDueDate",              today),
             new JProperty("Comments",                comment),
             new JProperty("U_bol",                   GloVarDocNum.ToString()),
-            new JProperty("U_Type",                  "Duty Paid"),
+            new JProperty("U_Type",                  !string.IsNullOrEmpty(opchWhsType) ? opchWhsType : "Duty Paid"),
             new JProperty("DocumentLines",           opdnLines)
         );
         if (GloVarDocNumITR > 0)
@@ -3067,7 +3059,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     new JProperty("DocDueDate",              today),
                     new JProperty("Comments",                comment),
                     new JProperty("U_bol",                   GloVarDocNum.ToString()),
-                    new JProperty("U_Type",                  "Duty Paid"),
+                    new JProperty("U_Type",                  !string.IsNullOrEmpty(opchWhsType) ? opchWhsType : "Duty Paid"),
                     new JProperty("DocumentLines",           oinvLines)
                 );
                 if (GloVarDocNumITR > 0)

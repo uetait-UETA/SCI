@@ -49,9 +49,10 @@ public partial class Login1 : BasePage
     {
         Session["FlagNoPerPag"] = "Y";
 
-        if (companyDDL.SelectedValue == "0")
+        int selectedCompanyId;
+        if (!int.TryParse(companyDDL.SelectedValue, out selectedCompanyId) || selectedCompanyId == 0)
         {
-            Alert.Show("Select the Company");
+            divMessage.InnerText = "Select the Company";
             return;
         }
 
@@ -75,7 +76,7 @@ public partial class Login1 : BasePage
               FROM dbo.SMM_COMPANIES
               WHERE CompanyId = @numId",
             db.Conn);
-        cmdCompany.Parameters.AddWithValue("@numId", Convert.ToInt32(companyDDL.SelectedValue));
+        cmdCompany.Parameters.AddWithValue("@numId", selectedCompanyId);
 
         string companyCode = "";
         string companyName = "";

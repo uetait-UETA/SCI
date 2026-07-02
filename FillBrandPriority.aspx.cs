@@ -4,6 +4,7 @@ using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
 using System.Web.UI;
+using System.Web.UI.WebControls;
 using Telerik.Web.UI;
 
 public partial class FillBrandPriority : BasePage
@@ -71,10 +72,11 @@ public partial class FillBrandPriority : BasePage
 
     private void LoadLocations()
     {
-        string sql = @"SELECT w.WhsCode, w.WhsCode + ' - ' + w.WhsName AS DisplayName
+        string sql = @"SELECT w.WhsCode,
+                              ISNULL(CONVERT(nvarchar(30), w.U_POSCode), '') + ' - ' + w.WhsCode + ' - ' + w.WhsName AS DisplayName
                        FROM " + sap_db + @".dbo.OWHS w " + Queries.WITH_NOLOCK + @"
                        WHERE w.BPLId = @branch
-                       ORDER BY w.WhsCode";
+                       ORDER BY w.U_POSCode, w.WhsCode";
 
         DataTable dt = new DataTable();
         db.Connect();

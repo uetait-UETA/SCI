@@ -7,15 +7,14 @@
 <asp:Content ID="Content2" ContentPlaceHolderID="cphMain" runat="Server">
     <div class="container">
         <div class="row">
-            <div class="col-md-7">
+            <div class="col-md-10">
                 <asp:Panel ID="pnlHeader" runat="server" CssClass="Panel">
                     <label ID="labelForm" runat="server" class="PanelHeading">Brand Replenishment Priority</label>
-                    <div class="row">
-                        <div class="col-md-5">
-                            &nbsp;&nbsp;
-                            <label class="myLabelXtraSmall">Location (Warehouse)</label>
+                    <div style="padding:6px 8px 10px 8px;">
+                        <label class="myLabelXtraSmall" style="white-space:nowrap;">Location (Warehouse)</label>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:2px;">
                             <tel:RadComboBox ID="rcbLocation" runat="server" Height="120px"
-                                Width="250px" DropDownWidth="250px" DropDownAutoWidth="Disabled"
+                                Width="550px" DropDownWidth="580px" DropDownAutoWidth="Disabled"
                                 HighlightTemplatedItems="true"
                                 AppendDataBoundItems="true"
                                 EmptyMessage="Select a Location"
@@ -25,10 +24,6 @@
                                 <ExpandAnimation Type="OutQuart" Duration="500" />
                                 <CollapseAnimation Type="OutQuint" Duration="300" />
                             </tel:RadComboBox>
-                            &nbsp;&nbsp;
-                        </div>
-                        <div class="col-md-2" style="padding-top:18px;">
-                            &nbsp;&nbsp;
                             <tel:RadButton runat="server" ID="rbtnSave" Text="Save" OnClick="rbtnSave_Click" />
                         </div>
                     </div>

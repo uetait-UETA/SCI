@@ -597,6 +597,16 @@ WHERE  p.DocEntry = {2}",
             ? docNumITR.ToString(CultureInfo.InvariantCulture)
             : opchDocNum.ToString(CultureInfo.InvariantCulture);
 
+        string uType = "Duty Paid";
+        if (dtLines != null && dtLines.Columns.Contains("WhsType"))
+        {
+            foreach (DataRow r0 in dtLines.Rows)
+            {
+                string wt = r0["WhsType"] != DBNull.Value ? r0["WhsType"].ToString() : "";
+                if (!string.IsNullOrEmpty(wt)) { uType = wt; break; }
+            }
+        }
+
         sb.Append("{");
         sb.AppendFormat("\"CardCode\":\"{0}\",",   EscJson(cardCode));
         sb.AppendFormat("\"BPL_IDAssignedToInvoice\":{0},", bplId);
@@ -606,7 +616,7 @@ WHERE  p.DocEntry = {2}",
         sb.AppendFormat("\"NumAtCard\":\"{0}\",",  numAtCard);
         sb.AppendFormat("\"Comments\":\"Receipt from AP Reserve Invoice #{0}\",",
             opchDocNum);
-        sb.AppendFormat("\"U_Type\":\"Duty Paid\",");
+        sb.AppendFormat("\"U_Type\":\"{0}\",", EscJson(uType));
         if (sciDocNum > 0)
             sb.AppendFormat("\"U_bol\":\"{0}\",", sciDocNum.ToString(CultureInfo.InvariantCulture));
 
