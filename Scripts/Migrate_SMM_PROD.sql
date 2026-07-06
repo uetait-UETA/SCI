@@ -124,44 +124,64 @@ GO
 -- 3a. FillBrandPriority.aspx
 IF NOT EXISTS (SELECT 1 FROM dbo.SISINV_CONTROLS WHERE ControlName = 'FillBrandPriority.aspx')
 BEGIN
-    INSERT INTO dbo.SISINV_CONTROLS (ControlName, ControlDescription)
-    VALUES ('FillBrandPriority.aspx', 'Brand Replenishment Priority');
+    INSERT INTO dbo.SISINV_CONTROLS (ControlName, ControlType, ControlDesc, Date_Created, Created_By)
+    VALUES ('FillBrandPriority.aspx', 'FORM', 'Brand Replenishment Priority', GETDATE(), 'SYSTEM');
     PRINT 'Inserted: SISINV_CONTROLS FillBrandPriority.aspx';
 END
 ELSE PRINT 'Exists:  SISINV_CONTROLS FillBrandPriority.aspx';
 GO
 
--- Grant same roles as FillPriority.aspx (adjust if that page exists, otherwise copy from Transfers.aspx)
-INSERT INTO dbo.SISINV_ROLE_CONTROL (RoleID, ControlName, AccessType)
-SELECT rc.RoleID, 'FillBrandPriority.aspx', rc.AccessType
+INSERT INTO dbo.SISINV_ROLE_CONTROL (RoleID, ControlName, AccessType, Date_Created, Created_By)
+SELECT rc.RoleID, 'FillBrandPriority.aspx', rc.AccessType, GETDATE(), 'SYSTEM'
 FROM dbo.SISINV_ROLE_CONTROL rc
 WHERE rc.ControlName = 'FillPriority.aspx'
   AND NOT EXISTS (
       SELECT 1 FROM dbo.SISINV_ROLE_CONTROL x
       WHERE x.ControlName = 'FillBrandPriority.aspx' AND x.RoleID = rc.RoleID
   );
-PRINT 'Inserted SISINV_ROLE_CONTROL rows for FillBrandPriority.aspx (from FillPriority.aspx roles)';
+PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' SISINV_ROLE_CONTROL rows inserted for FillBrandPriority.aspx';
 GO
 
 -- 3b. ComprasDirectas.aspx
 IF NOT EXISTS (SELECT 1 FROM dbo.SISINV_CONTROLS WHERE ControlName = 'ComprasDirectas.aspx')
 BEGIN
-    INSERT INTO dbo.SISINV_CONTROLS (ControlName, ControlDescription)
-    VALUES ('ComprasDirectas.aspx', 'Direct Purchase Receiving');
+    INSERT INTO dbo.SISINV_CONTROLS (ControlName, ControlType, ControlDesc, Date_Created, Created_By)
+    VALUES ('ComprasDirectas.aspx', 'FORM', 'Direct Purchase Receiving', GETDATE(), 'SYSTEM');
     PRINT 'Inserted: SISINV_CONTROLS ComprasDirectas.aspx';
 END
 ELSE PRINT 'Exists:  SISINV_CONTROLS ComprasDirectas.aspx';
 GO
 
-INSERT INTO dbo.SISINV_ROLE_CONTROL (RoleID, ControlName, AccessType)
-SELECT rc.RoleID, 'ComprasDirectas.aspx', rc.AccessType
+INSERT INTO dbo.SISINV_ROLE_CONTROL (RoleID, ControlName, AccessType, Date_Created, Created_By)
+SELECT rc.RoleID, 'ComprasDirectas.aspx', rc.AccessType, GETDATE(), 'SYSTEM'
 FROM dbo.SISINV_ROLE_CONTROL rc
 WHERE rc.ControlName = 'Transfers.aspx'
   AND NOT EXISTS (
       SELECT 1 FROM dbo.SISINV_ROLE_CONTROL x
       WHERE x.ControlName = 'ComprasDirectas.aspx' AND x.RoleID = rc.RoleID
   );
-PRINT 'Inserted SISINV_ROLE_CONTROL rows for ComprasDirectas.aspx (from Transfers.aspx roles)';
+PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' SISINV_ROLE_CONTROL rows inserted for ComprasDirectas.aspx';
+GO
+
+-- 3c. ComprasDirectasDetail.aspx
+IF NOT EXISTS (SELECT 1 FROM dbo.SISINV_CONTROLS WHERE ControlName = 'ComprasDirectasDetail.aspx')
+BEGIN
+    INSERT INTO dbo.SISINV_CONTROLS (ControlName, ControlType, ControlDesc, Date_Created, Created_By)
+    VALUES ('ComprasDirectasDetail.aspx', 'FORM', 'Direct Purchase Receiving Detail', GETDATE(), 'SYSTEM');
+    PRINT 'Inserted: SISINV_CONTROLS ComprasDirectasDetail.aspx';
+END
+ELSE PRINT 'Exists:  SISINV_CONTROLS ComprasDirectasDetail.aspx';
+GO
+
+INSERT INTO dbo.SISINV_ROLE_CONTROL (RoleID, ControlName, AccessType, Date_Created, Created_By)
+SELECT rc.RoleID, 'ComprasDirectasDetail.aspx', rc.AccessType, GETDATE(), 'SYSTEM'
+FROM dbo.SISINV_ROLE_CONTROL rc
+WHERE rc.ControlName = 'Transfers.aspx'
+  AND NOT EXISTS (
+      SELECT 1 FROM dbo.SISINV_ROLE_CONTROL x
+      WHERE x.ControlName = 'ComprasDirectasDetail.aspx' AND x.RoleID = rc.RoleID
+  );
+PRINT CAST(@@ROWCOUNT AS VARCHAR) + ' SISINV_ROLE_CONTROL rows inserted for ComprasDirectasDetail.aspx';
 GO
 
 -- ============================================================
@@ -201,11 +221,12 @@ GO
 --       before running.
 -- ============================================================
 
-INSERT INTO dbo.SMM_REA_BODEGA_TIENDAS (BodegaID, TiendaID, CompanyID, isActive)
+INSERT INTO dbo.SMM_REA_BODEGA_TIENDAS (CompanyID, BodegaID, TiendaID, Priority, isActive)
 SELECT
+    'PRO_DFSC'  AS CompanyID,
     b.WHSCODE   AS BodegaID,
     t.WHSCODE   AS TiendaID,
-    'PRO_DFSC'  AS CompanyID,
+    1           AS Priority,
     1           AS isActive
 FROM dbo.SMM_WHSTYPE b
 CROSS JOIN dbo.SMM_WHSTYPE t
