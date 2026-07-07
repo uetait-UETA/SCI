@@ -60,6 +60,15 @@ public partial class FillBrandPriority : BasePage
             try   { LoadLocations(); }
             catch (Exception ex) { ShowMsg("Error", "Failed in Page_Load", ex.Message); }
         }
+        else if (!string.IsNullOrEmpty(rcbLocation.SelectedValue))
+        {
+            // Items.Clear() inside LoadAvailableBrands wipes the postback-restored Text/SelectedValue.
+            // Save the brand text first, then restore it after DataBind so Telerik re-matches the item.
+            string savedBrand = rcbBrand.Text;
+            try { LoadAvailableBrands(); } catch { }
+            if (!string.IsNullOrEmpty(savedBrand))
+                rcbBrand.Text = savedBrand;
+        }
     }
 
     private void ShowMsg(string type, string title, string message)
@@ -76,6 +85,8 @@ public partial class FillBrandPriority : BasePage
                               ISNULL(CONVERT(nvarchar(30), w.U_POSCode), '') + ' - ' + w.WhsCode + ' - ' + w.WhsName AS DisplayName
                        FROM " + sap_db + @".dbo.OWHS w " + Queries.WITH_NOLOCK + @"
                        WHERE w.BPLId = @branch
+                         AND ISNULL(w.Block, '') <> 'R'
+                         AND ISNULL(w.U_POSCode, '') <> ''
                        ORDER BY w.U_POSCode, w.WhsCode";
 
         DataTable dt = new DataTable();
@@ -275,7 +286,10 @@ public partial class FillBrandPriority : BasePage
             ShowMsg("Error", "Error", "Please select a location first.");
             return;
         }
-        if (rcbBrand.SelectedValue == "")
+        string brandValue = !string.IsNullOrEmpty(rcbBrand.SelectedValue)
+            ? rcbBrand.SelectedValue
+            : rcbBrand.Text.Trim();
+        if (string.IsNullOrEmpty(brandValue))
         {
             ShowMsg("Error", "Error", "Please select a brand to add.");
             return;
@@ -305,7 +319,7 @@ public partial class FillBrandPriority : BasePage
             {
                 cmd.Parameters.AddWithValue("@cid",      sap_db);
                 cmd.Parameters.AddWithValue("@loc",      rcbLocation.SelectedValue);
-                cmd.Parameters.AddWithValue("@brand",    rcbBrand.SelectedValue);
+                cmd.Parameters.AddWithValue("@brand",    brandValue);
                 cmd.Parameters.AddWithValue("@priority", priority);
                 cmd.Parameters.AddWithValue("@branch",   BranchId);
                 cmd.ExecuteNonQuery();
