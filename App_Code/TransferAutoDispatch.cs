@@ -7,10 +7,9 @@ using Newtonsoft.Json.Linq;
 /// <summary>
 /// Auto-dispatch for transfers FROM Branch 1 (LAX DC) TO TIENDA.
 /// After submit_DraftXsap (or smm_populate_Smm_Draft), calling RunAutoDispatch creates
-/// the SAP B1 document automatically:
-///   - Branch 1 → Branch 3 (TIENDA): Inventory Transfer Request (OWTQ) directly
-///   - Branch 1 → Branch 4 (TIENDA): Sales Order (ORDR)
-/// Branch 4 Relay warehouse acts as a tienda — Branch 4→Branch 4 does NOT auto-dispatch.
+/// an Inventory Transfer Request (OWTQ) in SAP B1 for both Branch 3 and Branch 4.
+/// The local draft is NOT marked Dispatched='Y' here — that is done by
+/// TransferDiscreOrdf.SyncFromSapItr() once the WMS sets U_GTK_CONFIRMATION on the OWTQ.
 /// On SAP failure the local draft is deleted so the user can start over.
 /// </summary>
 public static class TransferAutoDispatch
@@ -97,9 +96,8 @@ public static class TransferAutoDispatch
         }
 
         sapDocType = docType;
-        string sapError = docType == "ORDR"
-            ? CreateSapTransferRequest(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum)
-            : CreateSapOwtqAutoDispatch(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
+        // All BODEGA→TIENDA transfers (Branch 3 and 4) now use OWTQ.
+        string sapError = CreateSapOwtqAutoDispatch(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
 
         if (sapError != null)
         {
@@ -108,48 +106,11 @@ public static class TransferAutoDispatch
             return sapError;
         }
 
-        // Step 4: post-SAP local updates
-        try
-        {
-            using (var cmd = new SqlCommand("Smm_populate_whs_transfers_Batch", db.Conn))
-            {
-                cmd.CommandType  = CommandType.StoredProcedure;
-                cmd.CommandTimeout = 0;
-                cmd.Parameters.AddWithValue("@CompanyId",   companyId);
-                cmd.Parameters.AddWithValue("@DocEntryDrf", docEntry);
-                cmd.Parameters.AddWithValue("@TypeTran",    "D");
-                cmd.Parameters.AddWithValue("@UserApp",     userApp);
-                cmd.ExecuteNonQuery();
-            }
-
-            // TraRec2 belongs exclusively to the Receive (OWTR) step — clear any value the SP may have set.
-            using (var cmd = new SqlCommand(
-                "UPDATE smm_Transdiscrep_odrf SET DocEntryTraRec2 = NULL, DocNumTraRec2 = NULL " +
-                "WHERE CompanyId = @cid AND DocEntry = @de", db.Conn))
-            {
-                cmd.Parameters.AddWithValue("@cid", companyId);
-                cmd.Parameters.AddWithValue("@de",  docEntry);
-                cmd.ExecuteNonQuery();
-            }
-
-            using (var cmd = new SqlCommand("smm_insert_Transdiscrep_audit_odrf", db.Conn))
-            {
-                cmd.CommandType = CommandType.StoredProcedure;
-                cmd.Parameters.AddWithValue("@CompanyId",   companyId);
-                cmd.Parameters.AddWithValue("@DocEntry",    docEntry);
-                cmd.Parameters.AddWithValue("@TypeTrans",   "D");
-                cmd.Parameters.AddWithValue("@SourceTrans", "SISINV");
-                cmd.ExecuteNonQuery();
-            }
-
-            db.Disconnect();
-            return null; // success
-        }
-        catch (Exception ex)
-        {
-            db.Disconnect();
-            return "Error post-SAP local: " + ex.Message;
-        }
+        // Step 4 (Smm_populate_whs_transfers_Batch TypeTran='D') is intentionally skipped.
+        // Dispatched='Y' will be set by TransferDiscreOrdf.SyncFromSapItr() once the
+        // WMS confirms dispatch by setting U_GTK_CONFIRMATION on the OWTQ in SAP B1.
+        db.Disconnect();
+        return null; // success
     }
 
     /// <summary>
@@ -199,28 +160,8 @@ public static class TransferAutoDispatch
 
             if (!isBodegaToTienda) return null; // not a BODEGA→TIENDA; no doc needed
 
-            // Branch 3 destination uses OWTQ directly — no CardCode mapping required
-            if (toBPLId == 3) return null;
-
-            // Branch 4 (and others) use ORDR — check CardCode mapping for the destination warehouse
-            string cardCodeSql = string.Format(
-                "SELECT TOP 1 m.OinvCardCode FROM dbo.ApriCardCodeMapping m " +
-                "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.BPLId = m.DestBPLId " +
-                "WHERE w.WhsCode = @toWhs AND m.IsActive = 1", sapDb);
-
-            string cardCode = null;
-            using (var cmd = new SqlCommand(cardCodeSql, db.Conn))
-            {
-                cmd.Parameters.AddWithValue("@toWhs", toWhs);
-                object val = cmd.ExecuteScalar();
-                if (val != null && val != DBNull.Value) cardCode = val.ToString();
-            }
-
-            if (string.IsNullOrEmpty(cardCode))
-                return "No CardCode mapping found in ApriCardCodeMapping for destination warehouse '" + toWhs
-                       + "'. Contact your administrator.";
-
-            return null; // all checks passed
+            // All TIENDA destinations now use OWTQ — no CardCode mapping required
+            return null;
         }
         catch (Exception ex)
         {
@@ -234,8 +175,7 @@ public static class TransferAutoDispatch
 
     // ── Private helpers ─────────────────────────────────────────────────────
 
-    // Returns "ORDR" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId != 3.
-    // Returns "OWTQ" when FROM=BODEGA (BPLId=1) and TO=TIENDA with BPLId = 3.
+    // Returns "OWTQ" when FROM=BODEGA (BPLId=1) and TO=TIENDA (any BPLId).
     // Returns null when this is not a Branch-1-BODEGA → TIENDA transfer.
     private static string GetBodegaToTiendaDocType(SqlConnection conn, int docEntry, string companyId, string sapDb)
     {
@@ -268,7 +208,7 @@ public static class TransferAutoDispatch
                     int  toBPLId      = Convert.ToInt32(dr["ToBPLId"]);
 
                     if (!fromIsBodega || !toIsTienda) return null;
-                    return toBPLId == 3 ? "OWTQ" : "ORDR";
+                    return "OWTQ";
                 }
             }
         }

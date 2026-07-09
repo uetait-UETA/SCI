@@ -23,9 +23,10 @@ public partial class TransferDiscreOrdf : System.Web.UI.Page
     string LvDispatched = null;
     string LvReceived = null;
     string LvUserDisp = null;
-    int GloVarDocEntry  = 0;
-    int GloVarDocNum    = 0;
-    int GloVarDocNumITR = 0;
+    int GloVarDocEntry    = 0;
+    int GloVarDocNum      = 0;
+    int GloVarDocNumITR   = 0;
+    int GloVarDocEntryITR = 0;
     char flagPerDeskay = 'N';
     char flagPerReckay = 'N';
     char GloVarDesRec = 'X';
@@ -121,13 +122,13 @@ public partial class TransferDiscreOrdf : System.Web.UI.Page
             try
             {
                 using (var rdCmd = new SqlCommand(
-                    "SELECT ISNULL(DocNum,0), ISNULL(DocNumITR,0) FROM smm_Transdiscrep_odrf " +
+                    "SELECT ISNULL(DocNum,0), ISNULL(DocNumITR,0), ISNULL(DocEntryITR,0) FROM smm_Transdiscrep_odrf " +
                     "WHERE DocEntry=@de AND CompanyId=@cid", db.Conn))
                 {
                     rdCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
                     rdCmd.Parameters.AddWithValue("@cid", sap_db);
                     using (var rdr = rdCmd.ExecuteReader())
-                        if (rdr.Read()) { GloVarDocNum = rdr.GetInt32(0); GloVarDocNumITR = rdr.GetInt32(1); }
+                        if (rdr.Read()) { GloVarDocNum = rdr.GetInt32(0); GloVarDocNumITR = rdr.GetInt32(1); GloVarDocEntryITR = rdr.GetInt32(2); }
                 }
             }
             catch { }
@@ -309,12 +310,17 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             GridView2.Columns[7].Visible = true;   // Actual Quantity (TextBox)
             GridView2.Columns[8].Visible = false;  // userrecscanner
 
-            if (flagPerDeskay != 'Y')
+            if (GloVarDocEntryITR > 0)
+            {
+                // OWTQ already created; WMS handles the physical dispatch.
+                Button1.Visible = false;
+                GridView2.Columns[7].Visible = false;
+                LabelMsg.Text = "Message: Transfer sent to SAP B1 (ITR #" + GloVarDocNumITR + "). Awaiting WMS dispatch confirmation.";
+            }
+            else if (flagPerDeskay != 'Y')
             {
                 Button1.Visible = false;
                 GridView2.Columns[7].Visible = false;
-                //Button2.Enabled = false;
-                //btnPrint.Enabled = false;
                 LabelMsg.Text = "Message: " + "This user does not have permissions to dispatch.";
                 Alert.Show(LabelMsg.Text);
             }
@@ -363,8 +369,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     LabelMsg.Text = "Message: Dispatch completed successfully. Receiving in R2 is not allowed.";
                 }
 
-                bool isDutyFree = string.Equals(GetFromWhsType(), "Duty Free", StringComparison.OrdinalIgnoreCase);
-                if (isDutyFree && CheckIsBodegaToTienda() && string.IsNullOrWhiteSpace(gtkVal))
+                if (GloVarDocEntryITR > 0 && string.IsNullOrWhiteSpace(gtkVal))
                 {
                     Button2.Enabled = false;
                     LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
@@ -540,9 +545,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Alert.Show(LabelMsg.Text);
                 }
 
-                if (string.Equals(GetFromWhsType(), "Duty Free", StringComparison.OrdinalIgnoreCase)
-                    && CheckIsBodegaToTienda()
-                    && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
+                if (GloVarDocEntryITR > 0 && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
                 {
                     Button1.Enabled = false;
                     Button2.Enabled = false;
@@ -1319,11 +1322,18 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         if (LvDispatched == "N")
         {
             Button1.Text = "Dispatch";
-	      //  ZeroCheckBox.Visible = true;
             btnPrint.Visible = false;
             Button2.Visible = false;
             Button1.Height = 38;
             Button1.Width = 65;
+
+            if (GloVarDocEntryITR > 0)
+            {
+                // OWTQ was created by auto-dispatch; WMS handles the physical dispatch.
+                // Hide the Dispatch button and show a waiting message.
+                Button1.Visible = false;
+                LabelMsg.Text = "Message: Transfer sent to SAP B1 (ITR #" + GloVarDocNumITR + "). Awaiting WMS dispatch confirmation.";
+            }
         }
         else if (LvReceived == "N")
         {
@@ -1515,19 +1525,21 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         return whs;
     }
 
-    // Reads U_GTK_CONFIRMATION and line quantities directly from SAP B1 (OWTQ/WTQ1),
-    // updates the local header and syncs DispatchQuantity for lines that changed.
-    // Locates the OWTQ by DocEntryTraRec2; falls back to U_BOL if not set.
+    // Reads U_GTK_CONFIRMATION and line quantities directly from SAP B1.
+    // Two modes:
+    //   pendingWmsDispatch (Dispatched='N', DocEntryITR>0): OWTQ was created by auto-dispatch;
+    //     reads GTK from OWTQ and if confirmed, completes local dispatch in SCI.
+    //   activeReceive (Dispatched='Y', Received='N'): syncs line quantities from SAP B1.
     private void SyncFromSapItr()
     {
         db.Connect();
         try
         {
-            string dispatched = null, received = null;
+            string dispatched = null, received = null, transferType = null;
             int sapItrEntry = 0;
 
             using (SqlCommand cmd = new SqlCommand(
-                "SELECT Dispatched, Received, ISNULL(DocEntryITR, 0) DocEntryITR " +
+                "SELECT Dispatched, Received, ISNULL(DocEntryITR,0) DocEntryITR, ISNULL(TransferType,'') TransferType " +
                 "FROM smm_Transdiscrep_odrf WHERE CompanyId = @Company AND DocEntry = @Entry",
                 db.Conn))
             {
@@ -1537,20 +1549,86 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 {
                     if (rdr.Read())
                     {
-                        dispatched  = rdr["Dispatched"].ToString();
-                        received    = rdr["Received"].ToString();
-                        sapItrEntry = rdr["DocEntryITR"] != DBNull.Value ? Convert.ToInt32(rdr["DocEntryITR"]) : 0;
+                        dispatched   = rdr["Dispatched"].ToString();
+                        received     = rdr["Received"].ToString();
+                        sapItrEntry  = rdr["DocEntryITR"] != DBNull.Value ? Convert.ToInt32(rdr["DocEntryITR"]) : 0;
+                        transferType = rdr["TransferType"].ToString();
                     }
                 }
             }
 
-            if (dispatched != "Y" || received != "N") return;
+            bool pendingWmsDispatch = dispatched == "N" && sapItrEntry > 0;
+            bool activeReceive      = dispatched == "Y" && received == "N";
+            if (!pendingWmsDispatch && !activeReceive) return;
 
-            bool isBodegaToTienda = CheckIsBodegaToTienda(db.Conn);
-
-            if (isBodegaToTienda)
+            if (pendingWmsDispatch)
             {
-                // Inter-branch: dispatch document is ORDR (Sales Order). Sync from RDR1.
+                // OWTQ was created by auto-dispatch; WMS handles the physical dispatch.
+                // Read GTK from the OWTQ. If confirmed, complete local dispatch in SCI.
+                string gtk = null;
+                using (var cmd = new SqlCommand(
+                    "SELECT U_GTK_CONFIRMATION FROM " + sap_db +
+                    "..OWTQ WITH(NOLOCK) WHERE DocEntry = @SapEntry", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value) gtk = val.ToString();
+                }
+
+                using (var cmd = new SqlCommand(
+                    "UPDATE smm_Transdiscrep_odrf SET U_GTK_CONFIRMATION = @Gtk " +
+                    "WHERE CompanyId = @Company AND DocEntry = @Entry", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@Gtk",     string.IsNullOrEmpty(gtk) ? (object)DBNull.Value : gtk);
+                    cmd.Parameters.AddWithValue("@Company", sap_db);
+                    cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
+
+                if (string.IsNullOrWhiteSpace(gtk)) return; // GTK not yet confirmed — nothing more to do
+
+                // GTK confirmed: complete local dispatch so TransferDiscreOrdf shows the Receive button.
+                string userApp = ((string)Session["UserId"]) ?? "";
+                using (var cmd = new SqlCommand("Smm_populate_whs_transfers_Batch", db.Conn))
+                {
+                    cmd.CommandType    = CommandType.StoredProcedure;
+                    cmd.CommandTimeout = 0;
+                    cmd.Parameters.AddWithValue("@CompanyId",   sap_db);
+                    cmd.Parameters.AddWithValue("@DocEntryDrf", GloVarDocEntry);
+                    cmd.Parameters.AddWithValue("@TypeTran",    "D");
+                    cmd.Parameters.AddWithValue("@UserApp",     userApp);
+                    cmd.ExecuteNonQuery();
+                }
+
+                using (var cmd = new SqlCommand(
+                    "UPDATE smm_Transdiscrep_odrf SET DocEntryTraRec2 = NULL, DocNumTraRec2 = NULL " +
+                    "WHERE CompanyId = @cid AND DocEntry = @de", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", sap_db);
+                    cmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                    cmd.ExecuteNonQuery();
+                }
+
+                using (var cmd = new SqlCommand("smm_insert_Transdiscrep_audit_odrf", db.Conn))
+                {
+                    cmd.CommandType = CommandType.StoredProcedure;
+                    cmd.Parameters.AddWithValue("@CompanyId",   sap_db);
+                    cmd.Parameters.AddWithValue("@DocEntry",    GloVarDocEntry);
+                    cmd.Parameters.AddWithValue("@TypeTrans",   "D");
+                    cmd.Parameters.AddWithValue("@SourceTrans", "SISINV");
+                    cmd.ExecuteNonQuery();
+                }
+
+                return;
+            }
+
+            // activeReceive: sync GTK and line quantities from SAP B1.
+            // Route by TransferType: 'SO' = old Branch-4 ORDR path (backward compat); otherwise OWTQ.
+            bool isOrdrPath = string.Equals(transferType, "SO", StringComparison.OrdinalIgnoreCase);
+
+            if (isOrdrPath)
+            {
+                // Old Branch 4 (ORDR/Sales Order) — kept for backward compatibility.
                 if (sapItrEntry <= 0)
                 {
                     string sqlFind = "SELECT TOP 1 DocEntry FROM " + sap_db +
@@ -1569,7 +1647,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
                 string gtk = null; int docNum = 0;
 
-                // DocNum comes from the ORDR (Sales Order)
                 using (var cmd = new SqlCommand(
                     "SELECT DocNum FROM " + sap_db +
                     "..ORDR WITH(NOLOCK) WHERE DocEntry = @SapEntry", db.Conn))
@@ -1579,8 +1656,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     if (val != null && val != DBNull.Value) docNum = Convert.ToInt32(val);
                 }
 
-                // GTK confirmation is set on the ODLN (Delivery), not on the ORDR.
-                // Find the ODLN created from this ORDR via DLN1.BaseEntry (BaseType=17).
+                // GTK on ORDR path is on the ODLN (Delivery) linked via DLN1.BaseEntry.
                 using (var cmd = new SqlCommand(
                     "SELECT TOP 1 d.U_GTK_CONFIRMATION " +
                     "FROM " + sap_db + "..ODLN d WITH(NOLOCK) " +
@@ -1643,7 +1719,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             }
             else
             {
-                // Intra-branch: dispatch document is OWTQ (ITR). Sync from WTQ1.
+                // OWTQ path — Branch 3 and new Branch 4.
                 if (sapItrEntry <= 0)
                 {
                     string sqlFind = "SELECT TOP 1 DocEntry FROM " + sap_db +
