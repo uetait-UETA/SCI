@@ -369,7 +369,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     LabelMsg.Text = "Message: Dispatch completed successfully. Receiving in R2 is not allowed.";
                 }
 
-                if (GloVarDocEntryITR > 0 && string.IsNullOrWhiteSpace(gtkVal))
+                bool isFromBodega = string.Equals(GetFromWhsSmType(), "BODEGA", StringComparison.OrdinalIgnoreCase);
+                if (GloVarDocEntryITR > 0 && isFromBodega && string.IsNullOrWhiteSpace(gtkVal))
                 {
                     Button2.Enabled = false;
                     LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
@@ -545,7 +546,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     Alert.Show(LabelMsg.Text);
                 }
 
-                if (GloVarDocEntryITR > 0 && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
+                if (GloVarDocEntryITR > 0
+                    && string.Equals(GetFromWhsSmType(), "BODEGA", StringComparison.OrdinalIgnoreCase)
+                    && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
                 {
                     Button1.Enabled = false;
                     Button2.Enabled = false;
