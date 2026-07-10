@@ -264,8 +264,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         string lvDispatched = GridView1.Rows.Count > 0 ? GridView1.Rows[0].Cells[6].Text : "Y";
         bool isDispatch = lvDispatched == "N";
         string fromSmType = isDispatch ? GetFromWhsSmType() : "";
-        // Dispatch: editable for any U_Type (Duty Free or Duty Paid), TIENDA or BODEGA origin
-        bool isDispatchEditable = isDispatch && (
+        // Dispatch: editable only for Duty Paid origin (Duty Free must dispatch full draft qty)
+        bool isDispatchEditable = isDispatch && isDutyPaid && (
             string.Equals(fromSmType, "TIENDA", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(fromSmType, "BODEGA", StringComparison.OrdinalIgnoreCase)
         );
