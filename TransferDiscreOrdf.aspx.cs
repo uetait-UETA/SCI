@@ -924,7 +924,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     {
                         hoistedResearchWhs = GetResearchWarehouse("D", fromWhsUType);
                         if (string.IsNullOrEmpty(hoistedResearchWhs))
-                            hoistedShortageErr = "Research warehouse not found in OWHS (BPLId=3, Block='D', U_Type='" + fromWhsUType + "')";
+                            hoistedShortageErr = "Research warehouse not found in OWHS (Block='D', U_Type='" + fromWhsUType + "')";
                         else
                             hoistedShortageErr = CreateSapDispatchShortageTransfer(LvuserApp, hoistedResearchWhs, out dispShortageDocNum);
                     }
@@ -1001,7 +1001,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                             int shortageDocNum = 0;
                             if (string.IsNullOrEmpty(hoistedResearchWhs))
                             {
-                                hoistedShortageErr = "Research warehouse not found in OWHS (BPLId=3, Block='R', U_Type='" + fromWhsTypeDiag + "')";
+                                hoistedShortageErr = "Research warehouse not found in OWHS (Block='R', U_Type='" + fromWhsTypeDiag + "')";
                                 diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
                             }
                             else
@@ -1498,8 +1498,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         return whsType;
     }
 
-    // Returns the research warehouse code from OWHS (BPLId=3) for the given block type:
+    // Returns the research warehouse code from OWHS for the given block type:
     // 'D' for dispatch operations, 'R' for receive operations.
+    // BPLId is determined dynamically from the transfer's FROM warehouse (not hardcoded).
     // uType: when provided, filters by matching U_Type so SAP item-type validation passes.
     private string GetResearchWarehouse(string blockType, string uType = null)
     {
@@ -1507,16 +1508,32 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         db.Connect();
         try
         {
+            // Resolve BPLId from the FROM warehouse of the current transfer
+            int bplId = 3; // fallback
+            string bplSql = string.Format(
+                "SELECT ISNULL(w.BPLId, 3) FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.WhsCode = h.FromWhsCode " +
+                "WHERE h.CompanyId = @Company AND h.DocEntry = @Entry", sap_db);
+            using (var bplCmd = new SqlCommand(bplSql, db.Conn))
+            {
+                bplCmd.Parameters.AddWithValue("@Company", sap_db);
+                bplCmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                object bplVal = bplCmd.ExecuteScalar();
+                if (bplVal != null && bplVal != DBNull.Value)
+                    bplId = Convert.ToInt32(bplVal);
+            }
+
             string typeClause = string.IsNullOrEmpty(uType)
                 ? ""
                 : " AND ISNULL(U_Type,'') = @utype";
 
             using (var cmd = new SqlCommand(
                 "SELECT TOP 1 WhsCode FROM " + sap_db + "..OWHS WITH(NOLOCK) " +
-                "WHERE BPLId=3 AND Block=@b" + typeClause,
+                "WHERE BPLId=@bplId AND Block=@b" + typeClause,
                 db.Conn))
             {
-                cmd.Parameters.AddWithValue("@b", blockType);
+                cmd.Parameters.AddWithValue("@bplId", bplId);
+                cmd.Parameters.AddWithValue("@b",     blockType);
                 if (!string.IsNullOrEmpty(uType))
                     cmd.Parameters.AddWithValue("@utype", uType);
                 object val = cmd.ExecuteScalar();

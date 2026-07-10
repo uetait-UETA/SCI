@@ -373,7 +373,7 @@ public static class TransferAutoDispatch
             if (dt.Rows.Count == 0) return null;
 
             fromWhs      = dt.Rows[0]["FromWhsCode"].ToString();
-            toWhs        = dt.Rows[0]["ToWhsCode"].ToString();
+            toWhs        = dt.Rows[0]["LineToWhs"].ToString();  // use line-level; header ToWhsCode can be NULL
             fromWhsUType = dt.Rows[0]["WhsUType"].ToString();
 
             foreach (DataRow row in dt.Rows)
