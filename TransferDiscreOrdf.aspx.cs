@@ -1843,6 +1843,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         sapDocType = "";
         string fromWhs = "", toWhs = "", uStore = "", cardCode = "", fromWhsUType = "";
         bool   isBodegaToTienda = false;
+        int    toBPLId = 0;
         var    ordrLines = new JArray();
         var    owtqLines = new JArray();
 
@@ -1853,6 +1854,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             string sql = string.Format(@"
                 SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(w.U_Store, '') AS U_Store,
                        ISNULL(w.U_Type, '') AS WhsUType,
+                       ISNULL(wt.BPLId, 0) AS ToBPLId,
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
                        CAST(d.tmpQuantity AS int) AS Qty,
                        ISNULL(iw.AvgPrice, 0) AS UnitPrice
@@ -1861,6 +1863,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
                 LEFT JOIN [{0}]..OWHS w WITH(NOLOCK)
                     ON w.WhsCode = h.FromWhsCode
+                LEFT JOIN [{0}]..OWHS wt WITH(NOLOCK)
+                    ON wt.WhsCode = h.ToWhsCode
                 LEFT JOIN [{0}]..OITW iw WITH(NOLOCK)
                     ON iw.ItemCode = d.ItemCode AND iw.WhsCode = h.FromWhsCode
                 WHERE h.CompanyId = '{1}' AND h.DocEntry = {2}
@@ -1877,6 +1881,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             toWhs        = dt.Rows[0]["ToWhsCode"].ToString();
             uStore       = dt.Rows[0]["U_Store"].ToString();
             fromWhsUType = dt.Rows[0]["WhsUType"].ToString();
+            toBPLId      = Convert.ToInt32(dt.Rows[0]["ToBPLId"]);
 
             isBodegaToTienda = CheckIsBodegaToTienda(db.Conn);
             sapDocType = isBodegaToTienda ? "ORDR" : "OWTQ";
@@ -1937,7 +1942,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         }
         else
         {
-            string actionCode = string.Equals(uStore, "WHSE", StringComparison.OrdinalIgnoreCase)
+            // "CREATE" when FROM is a WHSE warehouse OR when TO is Branch 1 (BODEGA)
+            string actionCode = (string.Equals(uStore, "WHSE", StringComparison.OrdinalIgnoreCase) || toBPLId == 1)
                                 ? "CREATE" : "NO_ENVIAR";
             payload = new JObject(
                 new JProperty("FromWarehouse",      fromWhs),
