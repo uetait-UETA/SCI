@@ -333,6 +333,9 @@
         }
 
         function onTransferWindowClose(sender, args) {
+            var msg = sender.get_argument ? sender.get_argument() : null;
+            if (msg) alert(msg);
+            sender.set_argument(null);
             $find("<%= rgHead.ClientID %>").rebind();
         }
 

@@ -1285,13 +1285,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     LabelMsg.Text = message;
                 }
 
-                url = string.Format("TransferDiscreOrdf.aspx?Docentry={0}", GloVarDocEntry);
-                script = "{ alert('";
-                script += message;
-                script += "');";
-                script += "window.location = '";
-                script += url;
-                script += "'; }";
+                string safeMsg = (message ?? "").Replace("\\", "\\\\").Replace("'", "\\'").Replace("\r", "").Replace("\n", " ");
+                script = "{ var wnd = GetRadWindow(); if (wnd) { wnd.argument = '" + safeMsg + "'; wnd.close(); } else { alert('" + safeMsg + "'); window.location = 'TransferDiscreOrdf.aspx?Docentry=" + GloVarDocEntry + "'; } }";
                 ScriptManager.RegisterStartupScript(this.Page, Page.GetType(), "alert", script, true);
             }
         }
