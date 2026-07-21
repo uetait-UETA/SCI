@@ -541,7 +541,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     btnPrint.Enabled = true;
                     LvFlag1 = 'N';
                     LabelMsg.Text = isEn
-                        ? "Message: " + sloginTypeWhs + " CANNOT RECEIVE IN " + sTypeWhs + "."
+                        ? "Message: " + TranslateWhsType(sloginTypeWhs) + " CANNOT RECEIVE IN " + TranslateWhsType(sTypeWhs) + "."
                         : "Mensaje: " + sloginTypeWhs + " no puede recibir en " + sTypeWhs + ".";
                     Alert.Show(LabelMsg.Text);
                 }
@@ -571,7 +571,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 btnPrint.Enabled = true;
                 LvFlag1 = 'N';
                 LabelMsg.Text = isEn
-                    ? "Message: " + sloginTypeWhs + " CANNOT DISPATCH IN " + sTypeWhs + "."
+                    ? "Message: " + TranslateWhsType(sloginTypeWhs) + " CANNOT DISPATCH IN " + TranslateWhsType(sTypeWhs) + "."
                     : "Mensaje: " + sloginTypeWhs + " no puede despachar en " + sTypeWhs + ".";
                 Alert.Show(LabelMsg.Text);
             }
@@ -997,22 +997,46 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                             catch (Exception exDiag) { diagInfo += " DiagQueryErr:" + exDiag.Message; }
                             finally { db.Disconnect(); }
 
-                            hoistedResearchWhs = GetResearchWarehouse("R", fromWhsTypeDiag);
                             int shortageDocNum = 0;
-                            if (string.IsNullOrEmpty(hoistedResearchWhs))
+                            bool hasShortageRows = false;
+                            db.Connect();
+                            try
                             {
-                                hoistedShortageErr = "Research warehouse not found in OWHS (Block='R', U_Type='" + fromWhsTypeDiag + "')";
-                                diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
+                                using (var cntCmd = new SqlCommand(
+                                    "SELECT COUNT(*) FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                                    "INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK) ON h.DocEntry=d.DocEntry AND h.CompanyId=d.CompanyId " +
+                                    "WHERE h.CompanyId=@cid AND h.DocEntry=@de AND d.DispatchQuantity > d.tmpQuantity", db.Conn))
+                                {
+                                    cntCmd.Parameters.AddWithValue("@cid", sap_db);
+                                    cntCmd.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                                    hasShortageRows = Convert.ToInt32(cntCmd.ExecuteScalar()) > 0;
+                                }
+                            }
+                            catch { }
+                            finally { db.Disconnect(); }
+
+                            if (!hasShortageRows)
+                            {
+                                diagInfo += " | ShortageIT SKIPPED: no shortage rows (DispatchQty<=ReceivedQty for all lines).";
                             }
                             else
                             {
-                                hoistedShortageErr = CreateSapDutyPaidShortageTransfer(LvuserApp, hoistedResearchWhs, out shortageDocNum);
-                                if (hoistedShortageErr != null)
-                                    diagInfo += " | ShortageIT ERROR: " + hoistedShortageErr;
-                                else if (shortageDocNum == 0)
-                                    diagInfo += " | ShortageIT: 0 shortage rows (DispatchQty<=ReceivedQty).";
+                                hoistedResearchWhs = GetResearchWarehouse("R", fromWhsTypeDiag);
+                                if (string.IsNullOrEmpty(hoistedResearchWhs))
+                                {
+                                    hoistedShortageErr = "Research warehouse not found in OWHS (Block='R', U_Type='" + fromWhsTypeDiag + "')";
+                                    diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
+                                }
                                 else
-                                    diagInfo += " | ShortageIT OK DocNum=" + shortageDocNum;
+                                {
+                                    hoistedShortageErr = CreateSapDutyPaidShortageTransfer(LvuserApp, hoistedResearchWhs, out shortageDocNum);
+                                    if (hoistedShortageErr != null)
+                                        diagInfo += " | ShortageIT ERROR: " + hoistedShortageErr;
+                                    else if (shortageDocNum == 0)
+                                        diagInfo += " | ShortageIT: 0 shortage rows (DispatchQty<=ReceivedQty).";
+                                    else
+                                        diagInfo += " | ShortageIT OK DocNum=" + shortageDocNum;
+                                }
                             }
 
                             // Surplus OWTR: when received > dispatched, create a second OWTR for the extra qty.
@@ -1470,6 +1494,14 @@ select docstatus from SmmDraftHeader where docentry = {1}";
     }
 
     // Returns SMM_WHSTYPE.TYPEWHS ('BODEGA'/'TIENDA') for the FROM warehouse of this document.
+    private static string TranslateWhsType(string whsType)
+    {
+        if (string.Equals(whsType, "BODEGA", StringComparison.OrdinalIgnoreCase)) return "WAREHOUSE";
+        if (string.Equals(whsType, "TIENDA", StringComparison.OrdinalIgnoreCase)) return "STORE";
+        if (string.Equals(whsType, "BODTIE", StringComparison.OrdinalIgnoreCase)) return "WAREHOUSE/STORE";
+        return whsType;
+    }
+
     private string GetFromWhsSmType()
     {
         string whsType = "";
@@ -1931,7 +1963,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 new JProperty("U_BOL",                     GloVarDocNum.ToString()),
                 new JProperty("U_DESPATCH",                despatchUser),
                 new JProperty("U_ORITOWHS",                toWhs),
-                new JProperty("U_Type",                    "Duty Paid"),
+                new JProperty("U_Type",                    fromWhsUType),
                 new JProperty("DocumentLines",             ordrLines)
             );
         }
@@ -1947,7 +1979,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 new JProperty("U_DESPATCH",         despatchUser),
                 new JProperty("U_ORITOWHS",         fromWhs),
                 new JProperty("U_ACTION_CODE",      actionCode),
-                new JProperty("U_Type",             "Duty Paid"),
+                new JProperty("U_Type",             fromWhsUType),
                 new JProperty("StockTransferLines", owtqLines)
             );
         }
@@ -2091,13 +2123,15 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             ? "Received - ITR #" + mainItrDocNum
             : "Received";
 
+        string owtrUType = GetFromWhsType();
+
         var payload = new JObject(
             new JProperty("FromWarehouse",      fromWhs),
             new JProperty("ToWarehouse",        toWhs),
             new JProperty("U_BOL",              GloVarDocNum.ToString()),
             new JProperty("U_RECEIVE",          receiveUser),
             new JProperty("U_ORITOWHS",         fromWhs),
-            new JProperty("U_Type",             "Duty Paid"),
+            new JProperty("U_Type",             owtrUType),
             new JProperty("Comments",           mainComments),
             new JProperty("StockTransferLines", lines)
         );

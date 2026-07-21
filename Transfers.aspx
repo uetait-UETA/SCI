@@ -332,18 +332,23 @@
             myHiddenHeight.value = window.innerHeight;//screen.height;
         }
 
+        function refreshTransfersGrid() {
+            var grid = $find("<%= rgHead.ClientID %>");
+            if (grid) { grid.rebind(); } else { location.reload(); }
+        }
+
         function onTransferWindowClose(sender, args) {
             var msg = sender.get_argument ? sender.get_argument() : null;
             if (msg) alert(msg);
             sender.set_argument(null);
-            $find("<%= rgHead.ClientID %>").rebind();
+            refreshTransfersGrid();
         }
 
         function closeTransferWindow(msg) {
             if (msg) alert(msg);
             var win = $find("<%= rwTransfers.ClientID %>");
             if (win) win.close();
-            $find("<%= rgHead.ClientID %>").rebind();
+            refreshTransfersGrid();
         }
 
         function openDiscrepWindow(url) {
