@@ -225,13 +225,19 @@
 
         function GetRadWindow() {
             var oWindow = null;
-            if (window.radWindow) oWindow = window.radWindow; //Will work in Moz in all cases, including clasic dialog
-            else if (window.frameElement.radWindow) oWindow = window.frameElement.radWindow; //IE (and Moz az well) 
+            if (window.radWindow) oWindow = window.radWindow;
+            else if (window.frameElement && window.frameElement.radWindow) oWindow = window.frameElement.radWindow;
             return oWindow;
         }
 
         function CloseOnReload() {
-            GetRadWindow().close();
+            if (window.parent && window.parent !== window && typeof window.parent.closeTransferWindow === 'function') {
+                window.parent.closeTransferWindow(null);
+            } else {
+                var wnd = GetRadWindow();
+                if (wnd) wnd.close();
+                else window.close();
+            }
         }
 
     </script>

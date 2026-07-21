@@ -1286,7 +1286,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 }
 
                 string safeMsg = (message ?? "").Replace("\\", "\\\\").Replace("'", "\\'").Replace("\r", "").Replace("\n", " ");
-                script = "{ var wnd = GetRadWindow(); if (wnd) { wnd.argument = '" + safeMsg + "'; wnd.close(); } else { alert('" + safeMsg + "'); window.location = 'TransferDiscreOrdf.aspx?Docentry=" + GloVarDocEntry + "'; } }";
+                script = "{ if (window.parent && window.parent !== window && typeof window.parent.closeTransferWindow === 'function') { window.parent.closeTransferWindow('" + safeMsg + "'); } else { var wnd = GetRadWindow(); if (wnd) { wnd.argument = '" + safeMsg + "'; wnd.close(); } else { alert('" + safeMsg + "'); window.location = 'TransferDiscreOrdf.aspx?Docentry=" + GloVarDocEntry + "'; } } }";
                 ScriptManager.RegisterStartupScript(this.Page, Page.GetType(), "alert", script, true);
             }
         }

@@ -339,6 +339,13 @@
             $find("<%= rgHead.ClientID %>").rebind();
         }
 
+        function closeTransferWindow(msg) {
+            if (msg) alert(msg);
+            var win = $find("<%= rwTransfers.ClientID %>");
+            if (win) win.close();
+            $find("<%= rgHead.ClientID %>").rebind();
+        }
+
         function openDiscrepWindow(url) {
             var win = $find("<%= rwTransfers.ClientID %>");
             win.setWidth(Math.round(window.innerWidth * 0.98));
