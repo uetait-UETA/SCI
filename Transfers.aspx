@@ -333,8 +333,7 @@
         }
 
         function refreshTransfersGrid() {
-            var grid = $find("<%= rgHead.ClientID %>");
-            if (grid) { grid.rebind(); } else { location.reload(); }
+            location.reload();
         }
 
         function onTransferWindowClose(sender, args) {
@@ -348,7 +347,7 @@
             if (msg) alert(msg);
             var win = $find("<%= rwTransfers.ClientID %>");
             if (win) win.close();
-            refreshTransfersGrid();
+            else refreshTransfersGrid();
         }
 
         function openDiscrepWindow(url) {
