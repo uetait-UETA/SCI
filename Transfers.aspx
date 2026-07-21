@@ -285,7 +285,7 @@
 
                         <asp:TemplateField HeaderText="Doc #" SortExpression="ReceCompleted">
                             <ItemTemplate>
-                                <%#"<a href=\"javascript:popUpReport3('TransferDiscreOrdf.aspx?DocEntry=" + Eval("DocEntry").ToString().Trim() + "')\">" + Eval("DocEntry") +  "</a>"%>
+                                <%#"<a href=\"javascript:openDiscrepWindow('TransferDiscreOrdf.aspx?DocEntry=" + Eval("DocEntry").ToString().Trim() + "')\">" + Eval("DocEntry") +  "</a>"%>
                             </ItemTemplate>
                         </asp:TemplateField>
                     </Columns>
@@ -334,6 +334,14 @@
 
         function onTransferWindowClose(sender, args) {
             $find("<%= rgHead.ClientID %>").rebind();
+        }
+
+        function openDiscrepWindow(url) {
+            var win = $find("<%= rwTransfers.ClientID %>");
+            win.setWidth(Math.round(window.innerWidth * 0.98));
+            win.setHeight(Math.round(window.innerHeight * 0.90));
+            win.setUrl(url);
+            win.show();
         }
 
         function displayTransfer() {
