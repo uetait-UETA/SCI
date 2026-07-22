@@ -173,6 +173,12 @@ public partial class Transfers : BasePage
             return;
         }
     }
+    protected void btnForceGridRefresh_Click(object sender, EventArgs e)
+    {
+        Session["CiaLabel"] = "";
+        rgHead.Rebind();
+    }
+
     protected void btnSearch_Click(object sender, EventArgs e)
     {
         //ObjectDataSource1.SelectParameters["companyId"].DefaultValue = sap_db;

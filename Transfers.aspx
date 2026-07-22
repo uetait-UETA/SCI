@@ -314,6 +314,7 @@
             Title="" Behaviors="Reload, Move, Resize" VisibleTitlebar="false" VisibleStatusbar="false"
             RegisterWithScriptManager="true" Style="display: inline; overflow: hidden;" ShowContentDuringLoad="false" Top="-10" Left="100"
             OnClientClose="onTransferWindowClose" />
+        <asp:Button ID="btnForceGridRefresh" runat="server" Style="display:none" OnClick="btnForceGridRefresh_Click" CausesValidation="false" />
     </div>
 
     <script type="text/javascript">
@@ -333,18 +334,18 @@
         }
 
         function refreshTransfersGrid() {
-            location.reload();
+            document.getElementById('<%= btnForceGridRefresh.ClientID %>').click();
         }
 
         function onTransferWindowClose(sender, args) {
-            location.reload();
+            document.getElementById('<%= btnForceGridRefresh.ClientID %>').click();
         }
 
         function closeTransferWindow(msg) {
             if (msg) alert(msg);
             var win = $find("<%= rwTransfers.ClientID %>");
             if (win) { win.close(); }
-            else { location.reload(); }
+            else { document.getElementById('<%= btnForceGridRefresh.ClientID %>').click(); }
         }
 
         function openDiscrepWindow(url) {
