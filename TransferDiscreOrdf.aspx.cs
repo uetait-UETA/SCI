@@ -1535,36 +1535,53 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         db.Connect();
         try
         {
-            // Resolve BPLId from the FROM warehouse of the current transfer
-            int bplId = 3; // fallback
+            // Resolve BPLId from FROM and TO warehouses
+            int fromBplId = 3, toBplId = 3;
             string bplSql = string.Format(
-                "SELECT ISNULL(w.BPLId, 3) FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
-                "JOIN [{0}]..OWHS w WITH(NOLOCK) ON w.WhsCode = h.FromWhsCode " +
+                "SELECT ISNULL(wf.BPLId, 3) AS FromBplId, ISNULL(wt.BPLId, 3) AS ToBplId " +
+                "FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                "JOIN [{0}]..OWHS wf WITH(NOLOCK) ON wf.WhsCode = h.FromWhsCode " +
+                "JOIN [{0}]..OWHS wt WITH(NOLOCK) ON wt.WhsCode = h.ToWhsCode " +
                 "WHERE h.CompanyId = @Company AND h.DocEntry = @Entry", sap_db);
             using (var bplCmd = new SqlCommand(bplSql, db.Conn))
             {
                 bplCmd.Parameters.AddWithValue("@Company", sap_db);
                 bplCmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
-                object bplVal = bplCmd.ExecuteScalar();
-                if (bplVal != null && bplVal != DBNull.Value)
-                    bplId = Convert.ToInt32(bplVal);
+                using (var rdr = bplCmd.ExecuteReader())
+                {
+                    if (rdr.Read())
+                    {
+                        fromBplId = Convert.ToInt32(rdr["FromBplId"]);
+                        toBplId   = Convert.ToInt32(rdr["ToBplId"]);
+                    }
+                }
             }
 
             string typeClause = string.IsNullOrEmpty(uType)
                 ? ""
                 : " AND ISNULL(U_Type,'') = @utype";
 
-            using (var cmd = new SqlCommand(
-                "SELECT TOP 1 WhsCode FROM " + sap_db + "..OWHS WITH(NOLOCK) " +
-                "WHERE BPLId=@bplId AND Block=@b" + typeClause,
-                db.Conn))
+            // Try FROM BPLId first; fall back to TO BPLId if no research warehouse found.
+            // e.g. BODEGA (BPLId=1) has no research whs — the shortage is investigated
+            // at the destination branch (BPLId=3 or 4) where research warehouses exist.
+            foreach (int tryBplId in new[] { fromBplId, toBplId })
             {
-                cmd.Parameters.AddWithValue("@bplId", bplId);
-                cmd.Parameters.AddWithValue("@b",     blockType);
-                if (!string.IsNullOrEmpty(uType))
-                    cmd.Parameters.AddWithValue("@utype", uType);
-                object val = cmd.ExecuteScalar();
-                if (val != null && val != DBNull.Value) whs = val.ToString();
+                using (var cmd = new SqlCommand(
+                    "SELECT TOP 1 WhsCode FROM " + sap_db + "..OWHS WITH(NOLOCK) " +
+                    "WHERE BPLId=@bplId AND Block=@b" + typeClause,
+                    db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@bplId", tryBplId);
+                    cmd.Parameters.AddWithValue("@b",     blockType);
+                    if (!string.IsNullOrEmpty(uType))
+                        cmd.Parameters.AddWithValue("@utype", uType);
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value)
+                    {
+                        whs = val.ToString();
+                        break;
+                    }
+                }
             }
         }
         catch { }
