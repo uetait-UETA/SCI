@@ -2714,10 +2714,10 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             db.Connect();
             using (var cmd = new SqlCommand(
                 "INSERT INTO la_transfer_errors " +
-                "(ID, DocEntryOri, line, docdate, fromwhscode, towhscode, tooriwhscode, " +
+                "(ID, docentryori, line, docdate, taxdate, fromwhscode, towhscode, tooriwhscode, " +
                 " itemcode, pludesc, quantity, userapp, error_message, fixed) " +
                 "VALUES ((SELECT ISNULL(MAX(ID),0)+1 FROM la_transfer_errors)," +
-                "        @ori, @line, GETDATE(), @from, @to, @toori, " +
+                "        @ori, @line, GETDATE(), GETDATE(), @from, @to, @toori, " +
                 "        @item, @plu, @qty, @user, @err, 'N')", db.Conn))
             {
                 cmd.Parameters.AddWithValue("@ori",   GloVarDocEntry);
