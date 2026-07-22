@@ -1612,14 +1612,21 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             {
                 // OWTQ was created by auto-dispatch; WMS handles the physical dispatch.
                 // Read GTK from the OWTQ. If confirmed, complete local dispatch in SCI.
-                string gtk = null;
+                string gtk = null, itrDespatchUser = null;
                 using (var cmd = new SqlCommand(
-                    "SELECT U_GTK_CONFIRMATION FROM " + sap_db +
+                    "SELECT U_GTK_CONFIRMATION, ISNULL(U_DESPATCH,'') AS U_DESPATCH FROM " + sap_db +
                     "..OWTQ WITH(NOLOCK) WHERE DocEntry = @SapEntry", db.Conn))
                 {
                     cmd.Parameters.AddWithValue("@SapEntry", sapItrEntry);
-                    object val = cmd.ExecuteScalar();
-                    if (val != null && val != DBNull.Value) gtk = val.ToString();
+                    using (var rdr = cmd.ExecuteReader())
+                    {
+                        if (rdr.Read())
+                        {
+                            object val = rdr["U_GTK_CONFIRMATION"];
+                            if (val != null && val != DBNull.Value) gtk = val.ToString();
+                            itrDespatchUser = rdr["U_DESPATCH"].ToString();
+                        }
+                    }
                 }
 
                 using (var cmd = new SqlCommand(
@@ -1635,7 +1642,10 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 if (string.IsNullOrWhiteSpace(gtk)) return; // GTK not yet confirmed — nothing more to do
 
                 // GTK confirmed: complete local dispatch so TransferDiscreOrdf shows the Receive button.
-                string userApp = ((string)Session["UserId"]) ?? "";
+                // Use U_DESPATCH from the OWTQ so userdispatch matches what's in the ITR.
+                string userApp = !string.IsNullOrEmpty(itrDespatchUser)
+                    ? itrDespatchUser
+                    : ((string)Session["UserId"]) ?? "";
                 using (var cmd = new SqlCommand("Smm_populate_whs_transfers_Batch", db.Conn))
                 {
                     cmd.CommandType    = CommandType.StoredProcedure;
