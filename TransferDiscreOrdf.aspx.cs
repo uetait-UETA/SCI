@@ -1026,6 +1026,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                                 {
                                     hoistedShortageErr = "Research warehouse not found in OWHS (Block='R', U_Type='" + fromWhsTypeDiag + "')";
                                     diagInfo += " | ShortageIT SKIPPED: " + hoistedShortageErr;
+                                    LogShortageLinesToErrorsNoResearchWhs(LvuserApp, hoistedShortageErr);
                                 }
                                 else
                                 {
@@ -2499,6 +2500,41 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 userApp,
                 errorMsg);
         }
+    }
+
+    // Logs shortage lines to la_transfer_errors when the research warehouse was not found.
+    // towhscode is stored empty so TransferErrors.aspx can re-query OWHS during reprocess.
+    private void LogShortageLinesToErrorsNoResearchWhs(string userApp, string errorMsg)
+    {
+        var shortageRows = new DataTable();
+        string fromWhs = "";
+        try
+        {
+            db.Connect();
+            string sql = @"
+                SELECT h.FromWhsCode, d.LineNum, d.ItemCode, d.ItemName,
+                       CAST(d.DispatchQuantity - d.tmpQuantity AS int) AS ShortageQty
+                FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+                INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
+                WHERE h.CompanyId = @cid AND h.DocEntry = @de
+                  AND d.DispatchQuantity > d.tmpQuantity
+                ORDER BY d.LineNum";
+            using (var adapter = new SqlDataAdapter(sql, db.Conn))
+            {
+                adapter.SelectCommand.Parameters.AddWithValue("@cid", sap_db);
+                adapter.SelectCommand.Parameters.AddWithValue("@de",  GloVarDocEntry);
+                adapter.Fill(shortageRows);
+            }
+            if (shortageRows.Rows.Count > 0)
+                fromWhs = shortageRows.Rows[0]["FromWhsCode"].ToString();
+        }
+        catch { }
+        finally { db.Disconnect(); }
+
+        // Log with empty towhscode — ReprocessShortage in TransferErrors will re-query OWHS
+        if (shortageRows.Rows.Count > 0)
+            LogShortageLinesToTransferErrors(shortageRows, fromWhs, "", fromWhs, userApp, errorMsg);
     }
 
     // Creates OWTR #2 for surplus qty (tmpQty > DispatchQty, Duty Paid flow): FROM→same destination, no base doc.

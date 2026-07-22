@@ -41,7 +41,7 @@
         <div class="row">
             <div class="col-md-12">
                 <asp:GridView ID="GridView1" runat="server" AutoGenerateColumns="False" AllowSorting="True" AllowPaging="True" PageSize="50" CssClass="GridViewPanel"
-                    DataSourceID="ObjectDataSource1" OnDataBinding="GridView1_DataBinding" OnRowDataBound="GridView1_RowDataBound">
+                    DataSourceID="ObjectDataSource1" OnDataBinding="GridView1_DataBinding" OnRowDataBound="GridView1_RowDataBound" OnRowCommand="GridView1_RowCommand">
 
                     <RowStyle BackColor="#EEEEEE" ForeColor="Black" />
                     <FooterStyle BackColor="#CCCCCC" ForeColor="Black" />
@@ -135,6 +135,17 @@
                                 <asp:Label ID="Ln" runat="server" Text='<%# Eval("line") %>'>
                                 </asp:Label>
                             </ItemTemplate>
+                        </asp:TemplateField>
+
+                        <asp:TemplateField HeaderText="">
+                            <ItemTemplate>
+                                <asp:LinkButton ID="btnReprocess" runat="server"
+                                    CommandName="ReprocessShortage"
+                                    CommandArgument='<%# Eval("DocEntryOri") %>'
+                                    Text="Reprocess"
+                                    OnClientClick="return confirm('Reprocesar el IT de faltante de esta orden en SAP?');" />
+                            </ItemTemplate>
+                            <ItemStyle HorizontalAlign="Center" />
                         </asp:TemplateField>
 
                     </Columns>

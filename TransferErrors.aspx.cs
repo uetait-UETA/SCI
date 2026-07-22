@@ -10,6 +10,7 @@ using System.Web.UI.WebControls.WebParts;
 using System.Web.UI.HtmlControls;
 using System.Data.SqlClient;
 using System.Drawing;
+using Newtonsoft.Json.Linq;
 
 
 public partial class TransferErrors : BasePage
@@ -182,6 +183,220 @@ public partial class TransferErrors : BasePage
         
         
     }
+    protected void GridView1_RowCommand(object sender, GridViewCommandEventArgs e)
+    {
+        if (e.CommandName != "ReprocessShortage") return;
+        int docEntryOri = Convert.ToInt32(e.CommandArgument);
+        string result = ReprocessShortage(docEntryOri);
+        if (result == null)
+        {
+            divMessage.InnerText = "IT de faltante reprocesado correctamente en SAP.";
+            divMessage.Attributes["class"] = "alert alert-success";
+        }
+        else
+        {
+            divMessage.InnerText = "Error al reprocesar: " + result;
+            divMessage.Attributes["class"] = "alert alert-danger";
+        }
+        GridView1.DataBind();
+    }
+
+    private string ReprocessShortage(int docEntryOri)
+    {
+        string fromWhs      = "";
+        string researchWhs  = "";
+        string fromWhsUType = "";
+        int    docNum       = 0;
+        int    docNumItr    = 0;
+        var    lines        = new JArray();
+        var    shortageRows = new DataTable();
+
+        db.Connect();
+        try
+        {
+            // 1. Try to get research whs from existing error records
+            using (var cmd = new SqlCommand(
+                "SELECT TOP 1 towhscode FROM la_transfer_errors " +
+                "WHERE DocEntryOri=@de AND fixed='N' AND ISNULL(towhscode,'')<>''",
+                db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@de", docEntryOri);
+                object val = cmd.ExecuteScalar();
+                if (val != null && val != DBNull.Value)
+                    researchWhs = val.ToString();
+            }
+
+            // 2. Get draft header + FROM warehouse U_Type
+            using (var cmd = new SqlCommand(
+                "SELECT h.FromWhsCode, h.DocNum, ISNULL(h.DocNumITR,0) AS DocNumITR, " +
+                "ISNULL(w.U_Type,'') AS FromUType " +
+                "FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                "LEFT JOIN [" + sap_db + "]..OWHS w WITH(NOLOCK) ON w.WhsCode=h.FromWhsCode " +
+                "WHERE h.CompanyId=@cid AND h.DocEntry=@de", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@cid", sap_db);
+                cmd.Parameters.AddWithValue("@de",  docEntryOri);
+                using (var rdr = cmd.ExecuteReader())
+                {
+                    if (!rdr.Read())
+                        return "Draft no encontrado en smm_Transdiscrep_odrf.";
+                    fromWhs      = rdr["FromWhsCode"].ToString();
+                    docNum       = Convert.ToInt32(rdr["DocNum"]);
+                    docNumItr    = Convert.ToInt32(rdr["DocNumITR"]);
+                    fromWhsUType = rdr["FromUType"].ToString();
+                }
+            }
+
+            // 3. If research whs not in la_transfer_errors, look it up in OWHS
+            if (string.IsNullOrEmpty(researchWhs))
+            {
+                string uTypeClause = string.IsNullOrEmpty(fromWhsUType) ? "" : " AND ISNULL(U_Type,'')=@utype";
+
+                int fromBplId = 0, toBplId = 0;
+                using (var cmd = new SqlCommand(
+                    "SELECT ISNULL(BPLId,0) FROM [" + sap_db + "]..OWHS WITH(NOLOCK) WHERE WhsCode=@whs",
+                    db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@whs", fromWhs);
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value) fromBplId = Convert.ToInt32(val);
+                }
+                using (var cmd = new SqlCommand(
+                    "SELECT ISNULL(t.BPLId,0) FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                    "JOIN [" + sap_db + "]..OWHS t WITH(NOLOCK) ON t.WhsCode=h.ToWhsCode " +
+                    "WHERE h.CompanyId=@cid AND h.DocEntry=@de", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", sap_db);
+                    cmd.Parameters.AddWithValue("@de",  docEntryOri);
+                    object val = cmd.ExecuteScalar();
+                    if (val != null && val != DBNull.Value) toBplId = Convert.ToInt32(val);
+                }
+
+                int[] tryBplIds = (fromBplId == toBplId || toBplId == 0)
+                    ? new[] { fromBplId }
+                    : new[] { fromBplId, toBplId };
+                foreach (int bplId in tryBplIds)
+                {
+                    if (bplId == 0) continue;
+                    using (var cmd = new SqlCommand(
+                        "SELECT TOP 1 WhsCode FROM [" + sap_db + "]..OWHS WITH(NOLOCK) " +
+                        "WHERE BPLId=@bpl AND Block='R'" + uTypeClause, db.Conn))
+                    {
+                        cmd.Parameters.AddWithValue("@bpl", bplId);
+                        if (!string.IsNullOrEmpty(fromWhsUType))
+                            cmd.Parameters.AddWithValue("@utype", fromWhsUType);
+                        object val = cmd.ExecuteScalar();
+                        if (val != null && val != DBNull.Value) { researchWhs = val.ToString(); break; }
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(researchWhs))
+                return "No se encontró warehouse de investigación (Block='R') en OWHS para este transfer.";
+
+            // 4. Get shortage lines (DispatchQuantity > tmpQuantity)
+            string lineSql = @"
+                SELECT d.LineNum, d.ItemCode, d.ItemName,
+                       CAST(d.DispatchQuantity - d.tmpQuantity AS int) AS ShortageQty
+                FROM smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                WHERE d.CompanyId=@cid AND d.DocEntry=@de
+                  AND d.DispatchQuantity > d.tmpQuantity
+                ORDER BY d.LineNum";
+            using (var adapter = new SqlDataAdapter(lineSql, db.Conn))
+            {
+                adapter.SelectCommand.Parameters.AddWithValue("@cid", sap_db);
+                adapter.SelectCommand.Parameters.AddWithValue("@de",  docEntryOri);
+                adapter.Fill(shortageRows);
+            }
+
+            if (shortageRows.Rows.Count == 0)
+                return "No hay líneas con faltante (DispatchQuantity > tmpQuantity) en el draft.";
+
+            foreach (DataRow row in shortageRows.Rows)
+            {
+                lines.Add(new JObject(
+                    new JProperty("ItemCode",          row["ItemCode"].ToString()),
+                    new JProperty("Quantity",          Convert.ToInt32(row["ShortageQty"])),
+                    new JProperty("FromWarehouseCode", fromWhs),
+                    new JProperty("WarehouseCode",     researchWhs)
+                ));
+            }
+        }
+        catch (Exception ex)
+        {
+            return "Error leyendo datos: " + ex.Message;
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+
+        string companyDb = System.Configuration.ConfigurationManager.AppSettings["SL_CompanyDB"] ?? sap_db;
+        string comments  = docNumItr > 0 ? "Received short - ITR #" + docNumItr : "Received short";
+
+        var payload = new JObject(
+            new JProperty("FromWarehouse",      fromWhs),
+            new JProperty("ToWarehouse",        researchWhs),
+            new JProperty("U_BOL",              docNum.ToString()),
+            new JProperty("U_RECEIVE",          lCurUser),
+            new JProperty("U_ORITOWHS",         fromWhs),
+            new JProperty("U_Type",             "Duty Paid"),
+            new JProperty("Comments",           comments),
+            new JProperty("StockTransferLines", lines)
+        );
+
+        var sl = new SapServiceLayer();
+        try
+        {
+            sl.Login(companyDb);
+            string response = sl.CreateInventoryTransfer(payload.ToString(Newtonsoft.Json.Formatting.None));
+            try
+            {
+                var respObj  = JObject.Parse(response);
+                int sapEntry = respObj["DocEntry"] != null ? Convert.ToInt32(respObj["DocEntry"]) : 0;
+                int sapNum   = respObj["DocNum"]   != null ? Convert.ToInt32(respObj["DocNum"])   : 0;
+                if (sapEntry > 0)
+                {
+                    db.Connect();
+                    using (var upd = new SqlCommand(
+                        "UPDATE smm_Transdiscrep_odrf " +
+                        "SET DocEntryTraRec=@entry, DocNumTraRec=@num " +
+                        "WHERE CompanyId=@cid AND DocEntry=@de", db.Conn))
+                    {
+                        upd.Parameters.AddWithValue("@entry", sapEntry);
+                        upd.Parameters.AddWithValue("@num",   sapNum);
+                        upd.Parameters.AddWithValue("@cid",   sap_db);
+                        upd.Parameters.AddWithValue("@de",    docEntryOri);
+                        upd.ExecuteNonQuery();
+                    }
+                    using (var fix = new SqlCommand(
+                        "UPDATE la_transfer_errors SET fixed='Y' WHERE DocEntryOri=@de AND fixed='N'",
+                        db.Conn))
+                    {
+                        fix.Parameters.AddWithValue("@de", docEntryOri);
+                        fix.ExecuteNonQuery();
+                    }
+                    db.Disconnect();
+                    return null;
+                }
+                return "SAP no devolvió DocEntry en la respuesta.";
+            }
+            catch (Exception ex) { db.Disconnect(); return "Error procesando respuesta SAP: " + ex.Message; }
+        }
+        catch (System.Net.WebException wex)
+        {
+            return SapServiceLayer.GetSlErrorMessage(wex);
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+        finally
+        {
+            sl.Logout();
+        }
+    }
+
     protected void GridView1_DataBinding(object sender, EventArgs e)
     {
         /*if (e.Row.RowType == DataControlRowType.DataRow)
@@ -195,9 +410,8 @@ public partial class TransferErrors : BasePage
     {
         if (e.Row.RowType == DataControlRowType.DataRow)
         {
-            //find contro using
-            RadioButtonList MyList = (RadioButtonList)e.Row.FindControl("rblFixed"); //control id which is in gridview
-            Label lblSelected = (Label)e.Row.FindControl("lblSelected"); //control id which is in gridview
+            RadioButtonList MyList = (RadioButtonList)e.Row.FindControl("rblFixed");
+            Label lblSelected = (Label)e.Row.FindControl("lblSelected");
             if (lblSelected != null && MyList != null)
             {
                 ListItem item = MyList.Items.FindByValue(lblSelected.Text);
@@ -205,6 +419,14 @@ public partial class TransferErrors : BasePage
                 {
                     MyList.Items.FindByValue(lblSelected.Text).Selected = true;
                 }
+            }
+
+            // Show Reprocess button only for unfixed rows when user has full access
+            LinkButton btnReprocess = (LinkButton)e.Row.FindControl("btnReprocess");
+            if (btnReprocess != null)
+            {
+                bool isFixed = lblSelected != null && lblSelected.Text == "1";
+                btnReprocess.Visible = !isFixed && Button2.Enabled;
             }
         }
 
