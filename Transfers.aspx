@@ -344,6 +344,8 @@
 
         function closeTransferWindow(msg) {
             if (msg) alert(msg);
+            var win = $find("<%= rwTransfers.ClientID %>");
+            if (win) win.close();
             location.reload();
         }
 
