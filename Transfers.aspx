@@ -337,16 +337,14 @@
         }
 
         function onTransferWindowClose(sender, args) {
-            var msg = sender.get_argument ? sender.get_argument() : null;
-            if (msg) alert(msg);
             location.reload();
         }
 
         function closeTransferWindow(msg) {
             if (msg) alert(msg);
             var win = $find("<%= rwTransfers.ClientID %>");
-            if (win) win.close();
-            location.reload();
+            if (win) { win.close(); }
+            else { location.reload(); }
         }
 
         function openDiscrepWindow(url) {
