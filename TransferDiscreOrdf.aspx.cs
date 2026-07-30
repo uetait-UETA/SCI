@@ -1910,6 +1910,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                 SELECT h.FromWhsCode, h.ToWhsCode, ISNULL(w.U_Store, '') AS U_Store,
                        ISNULL(w.U_Type, '') AS WhsUType,
                        ISNULL(wt.BPLId, 0) AS ToBPLId,
+                       ISNULL(wt.U_CostLocation,'') AS ToCostLoc,
+                       ISNULL(wt.U_CostCenter,'')   AS ToCostCen,
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
                        CAST(d.tmpQuantity AS int) AS Qty,
                        ISNULL(iw.AvgPrice, 0) AS UnitPrice
@@ -1937,24 +1939,33 @@ select docstatus from SmmDraftHeader where docentry = {1}";
             uStore       = dt.Rows[0]["U_Store"].ToString();
             fromWhsUType = dt.Rows[0]["WhsUType"].ToString();
             toBPLId      = Convert.ToInt32(dt.Rows[0]["ToBPLId"]);
+            string toCostLoc = dt.Rows[0]["ToCostLoc"].ToString();
+            string toCostCen = dt.Rows[0]["ToCostCen"].ToString();
 
             isBodegaToTienda = CheckIsBodegaToTienda(db.Conn);
             sapDocType = isBodegaToTienda ? "ORDR" : "OWTQ";
 
             foreach (DataRow row in dt.Rows)
             {
-                ordrLines.Add(new JObject(
+                var ordrLine = new JObject(
                     new JProperty("ItemCode",      row["ItemCode"].ToString()),
                     new JProperty("Quantity",      Convert.ToInt32(row["Qty"])),
                     new JProperty("UnitPrice",     Convert.ToDecimal(row["UnitPrice"])),
                     new JProperty("WarehouseCode", fromWhs)
-                ));
-                owtqLines.Add(new JObject(
+                );
+                if (!string.IsNullOrEmpty(toCostLoc)) ordrLine.Add("CostingCode",  toCostLoc);
+                if (!string.IsNullOrEmpty(toCostCen)) ordrLine.Add("CostingCode2", toCostCen);
+                ordrLines.Add(ordrLine);
+
+                var owtqLine = new JObject(
                     new JProperty("ItemCode",          row["ItemCode"].ToString()),
                     new JProperty("Quantity",          Convert.ToInt32(row["Qty"])),
                     new JProperty("FromWarehouseCode", fromWhs),
                     new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
-                ));
+                );
+                if (!string.IsNullOrEmpty(toCostLoc)) owtqLine.Add("CostingCode",  toCostLoc);
+                if (!string.IsNullOrEmpty(toCostCen)) owtqLine.Add("CostingCode2", toCostCen);
+                owtqLines.Add(owtqLine);
             }
 
             if (isBodegaToTienda)
@@ -2083,7 +2094,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                        d.LineNum, d.ItemCode, d.ToWhsCode AS LineToWhs,
                        CAST(d.tmpQuantity AS int)                    AS TmpQty,
                        ISNULL(CAST(d.DispatchQuantity AS int), 0)    AS DispatchQty,
-                       ISNULL(q1.LineNum, -1) AS SapLineNum
+                       ISNULL(q1.LineNum, -1) AS SapLineNum,
+                       ISNULL(wt.U_CostLocation,'') AS LineCostLoc,
+                       ISNULL(wt.U_CostCenter,'')   AS LineCostCen
                 FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
                 INNER JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
                     ON h.DocEntry = d.DocEntry AND h.CompanyId = d.CompanyId
@@ -2091,6 +2104,8 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     ON  q1.DocEntry = h.DocEntryITR
                     AND q1.ItemCode = d.ItemCode
                     AND q1.WhsCode  = d.ToWhsCode
+                LEFT JOIN " + sap_db + @"..OWHS wt WITH(NOLOCK)
+                    ON  wt.WhsCode = d.ToWhsCode
                 WHERE h.CompanyId = '" + sap_db + @"' AND h.DocEntry = " + GloVarDocEntry + @"
                   AND d.tmpQuantity > 0
                 ORDER BY d.LineNum";
@@ -2131,6 +2146,10 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     line.Add("BaseEntry", sapTrReqEntry);
                     line.Add("BaseLine",  sapLineNum >= 0 ? sapLineNum : i);
                 }
+                string lineCostLoc = row["LineCostLoc"].ToString();
+                string lineCostCen = row["LineCostCen"].ToString();
+                if (!string.IsNullOrEmpty(lineCostLoc)) line.Add("CostingCode",  lineCostLoc);
+                if (!string.IsNullOrEmpty(lineCostCen)) line.Add("CostingCode2", lineCostCen);
                 lines.Add(line);
             }
         }
