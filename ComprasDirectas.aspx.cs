@@ -90,32 +90,59 @@ public partial class ComprasDirectas : BasePage
         rgInvoices.Rebind();
     }
 
+    protected void chkShowReceived_CheckedChanged(object sender, EventArgs e)
+    {
+        rgInvoices.Rebind();
+    }
+
     protected void rgInvoices_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
     {
-        string sapDb = (string)Session["CompanyId"];
-        int    bplId = BranchId;
+        string sapDb       = (string)Session["CompanyId"];
+        int    bplId       = BranchId;
+        bool   showReceived = chkShowReceived.Checked;
 
-        int    docNum    = 0;
+        int docNum = 0;
         int.TryParse(txtDocNum.Text.Trim(), out docNum);
         string toWhsCode = rcbToLocation.SelectedValue;
 
         DataTable dt = _gr.GetPendingDirectPurchaseInvoices(
             sapDb, bplId, rdpFromDate.SelectedDate, rdpToDate.SelectedDate,
-            docNum, toWhsCode);
+            docNum, toWhsCode, showReceived);
 
         if (_gr.LastError != null)
             ShowMessage("Error", "Query Error", _gr.LastError);
 
-        rgInvoices.DataSource = dt;
+        // Toggle columns visibility
+        var col = rgInvoices.MasterTableView.GetColumn("ReceivedAt");
+        if (col != null) col.Visible = showReceived;
+        col = rgInvoices.MasterTableView.GetColumn("ReceivedBy");
+        if (col != null) col.Visible = showReceived;
 
-        // Disable Receive button in read-only mode
-        if (!_allowReceive)
+        rgInvoices.DataSource = dt;
+    }
+
+    protected void rgInvoices_ItemDataBound(object sender, GridItemEventArgs e)
+    {
+        if (!(e.Item is GridDataItem)) return;
+        var item = (GridDataItem)e.Item;
+
+        int grpoDocNum = 0;
+        object grpoObj = DataBinder.Eval(item.DataItem, "GrpoDocNum");
+        if (grpoObj != null && grpoObj != DBNull.Value)
+            grpoDocNum = Convert.ToInt32(grpoObj);
+
+        Button btnReceive = item.FindControl("btnReceive") as Button;
+        Label  lblGrpo    = item.FindControl("lblGrpo")    as Label;
+
+        if (grpoDocNum > 0)
         {
-            foreach (GridDataItem item in rgInvoices.Items)
-            {
-                Button btn = item.FindControl("btnReceive") as Button;
-                if (btn != null) btn.Enabled = false;
-            }
+            if (btnReceive != null) btnReceive.Visible = false;
+            if (lblGrpo    != null) { lblGrpo.Text = "GRPO #" + grpoDocNum; lblGrpo.Visible = true; }
+        }
+        else
+        {
+            if (btnReceive != null) btnReceive.Enabled = _allowReceive;
+            if (lblGrpo    != null) lblGrpo.Visible = false;
         }
     }
 
@@ -132,6 +159,15 @@ public partial class ComprasDirectas : BasePage
 
         var    keys       = e.Item.OwnerTableView.DataKeyValues[e.Item.ItemIndex];
         int    docEntry   = Convert.ToInt32(keys["DocEntry"]);
+
+        // Safety check — do not re-receive an already received invoice
+        if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry))
+        {
+            ShowMessage("Warning", "Already Received",
+                "This invoice has already been received.");
+            rgInvoices.Rebind();
+            return;
+        }
         string cardCode   = keys["CardCode"].ToString();
         int    opchDocNum = Convert.ToInt32(keys["DocNum"]);
         string sapDb      = (string)Session["CompanyId"];

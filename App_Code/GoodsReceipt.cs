@@ -741,7 +741,8 @@ VALUES
     // ── Pending Direct Purchase AP Reserve Invoices (Indicator = 'CD') ──────
 
     public DataTable GetPendingDirectPurchaseInvoices(string sapDb, int bplId,
-        DateTime? fromDate, DateTime? toDate, int docNum, string toWhsCode)
+        DateTime? fromDate, DateTime? toDate, int docNum, string toWhsCode,
+        bool showReceived = false)
     {
         LastError = null;
         var dt = new DataTable();
@@ -763,7 +764,10 @@ VALUES
                 ? toDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 : DateTime.Today.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-            string sql = string.Format(@"
+            string sql;
+            if (!showReceived)
+            {
+                sql = string.Format(@"
 SELECT
     p.DocEntry,
     p.DocNum,
@@ -773,7 +777,10 @@ SELECT
     ISNULL(p.NumAtCard,  '')        AS NumAtCard,
     ISNULL(p.Comments,   '')        AS Comments,
     p.DocTotal,
-    p.DocCur
+    p.DocCur,
+    0                               AS GrpoDocNum,
+    ''                              AS ReceivedBy,
+    CAST(NULL AS datetime)          AS ReceivedAt
 FROM   {0}..OPCH p {1}
 WHERE  p.DocStatus = 'O'
   AND  p.Indicator = 'CD'
@@ -786,14 +793,45 @@ WHERE  p.DocStatus = 'O'
            WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
        ))
   AND  NOT EXISTS (
-           SELECT 1
-           FROM   dbo.GrpoReceiptLog r {1}
+           SELECT 1 FROM dbo.GrpoReceiptLog r {1}
            WHERE  r.OriginCompany  = '{0}'
              AND  r.OriginDocEntry = p.DocEntry
              AND  r.Status         = 'SUCCESS'
        )
-ORDER  BY p.DocDate DESC, p.DocNum DESC",
-                sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo);
+ORDER  BY p.DocDate DESC, p.DocNum DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo);
+            }
+            else
+            {
+                sql = string.Format(@"
+SELECT
+    p.DocEntry,
+    p.DocNum,
+    CONVERT(DATE, p.DocDate)        AS DocDate,
+    p.CardCode,
+    p.CardName,
+    ISNULL(p.NumAtCard,  '')        AS NumAtCard,
+    ISNULL(p.Comments,   '')        AS Comments,
+    p.DocTotal,
+    p.DocCur,
+    ISNULL(r.GrpoDocNum, 0)         AS GrpoDocNum,
+    ISNULL(r.ReceivedBy, '')        AS ReceivedBy,
+    r.ReceivedAt
+FROM   {0}..OPCH p {1}
+INNER JOIN dbo.GrpoReceiptLog r {1}
+    ON  r.OriginCompany  = '{0}'
+    AND r.OriginDocEntry = p.DocEntry
+    AND r.Status         = 'SUCCESS'
+WHERE  p.Indicator = 'CD'
+  AND  p.BPLId     = {2}
+  AND  p.DocDate  >= '{3}'
+  AND  p.DocDate  <= '{4}'
+  AND  (@docNum = 0 OR p.DocNum = @docNum)
+  AND  (@toWhs = '' OR EXISTS (
+           SELECT 1 FROM {0}..PCH1 l {1}
+           WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
+       ))
+ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo);
+            }
 
             _db.cmd.CommandText = sql;
             _db.cmd.CommandType = CommandType.Text;
@@ -808,6 +846,24 @@ ORDER  BY p.DocDate DESC, p.DocNum DESC",
         }
         finally { _db.Disconnect(); }
         return dt;
+    }
+
+    public bool IsAlreadyReceived(string sapDb, int docEntry)
+    {
+        try
+        {
+            _db.Connect();
+            using (var cmd = new SqlCommand(
+                "SELECT COUNT(1) FROM dbo.GrpoReceiptLog WHERE OriginCompany=@cid AND OriginDocEntry=@de AND Status='SUCCESS'",
+                _db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@cid", sapDb);
+                cmd.Parameters.AddWithValue("@de",  docEntry);
+                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+            }
+        }
+        catch { return false; }
+        finally { _db.Disconnect(); }
     }
 
     private static string EscJson(string s)

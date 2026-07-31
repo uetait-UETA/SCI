@@ -34,7 +34,11 @@
                                 AllowCustomText="false" Filter="Contains">
                             </tel:RadComboBox>
                         </div>
-                        <div class="col-md-1" style="text-align:center;">
+                        <div class="col-md-2" style="text-align:center;">
+                            <br />
+                            <asp:CheckBox ID="chkShowReceived" runat="server" Text=" Show Received"
+                                AutoPostBack="true" OnCheckedChanged="chkShowReceived_CheckedChanged"
+                                CssClass="myLabelMedium" />
                             <br /><br />
                             <tel:RadButton runat="server" ID="rbtnSearch" Text="Search" OnClick="rbtnSearch_Click" />
                         </div>
@@ -53,7 +57,8 @@
                     PageSize="25" AllowPaging="True"
                     ShowStatusBar="true" AutoGenerateColumns="False"
                     OnNeedDataSource="rgInvoices_NeedDataSource"
-                    OnItemCommand="rgInvoices_ItemCommand">
+                    OnItemCommand="rgInvoices_ItemCommand"
+                    OnItemDataBound="rgInvoices_ItemDataBound">
                     <PagerStyle Mode="Slider" />
                     <SortingSettings EnableSkinSortStyles="false" />
                     <MasterTableView Width="100%"
@@ -79,8 +84,15 @@
                                 DataFormatString="{0:N2}" ItemStyle-HorizontalAlign="Right" />
                             <tel:GridBoundColumn SortExpression="DocCur"    HeaderText="Currency"
                                 DataField="DocCur"    UniqueName="DocCur"    HeaderStyle-Width="80px" />
+                            <tel:GridBoundColumn SortExpression="ReceivedAt" HeaderText="Received On"
+                                DataField="ReceivedAt" UniqueName="ReceivedAt"
+                                HeaderStyle-Width="120px" Visible="false"
+                                DataFormatString="{0:MM/dd/yyyy HH:mm}" />
+                            <tel:GridBoundColumn SortExpression="ReceivedBy" HeaderText="Received By"
+                                DataField="ReceivedBy" UniqueName="ReceivedBy"
+                                HeaderStyle-Width="100px" Visible="false" />
                             <tel:GridTemplateColumn HeaderText="Action" UniqueName="ActionReceive"
-                                HeaderStyle-Width="110px" AllowSorting="false"
+                                HeaderStyle-Width="120px" AllowSorting="false"
                                 ItemStyle-HorizontalAlign="Center">
                                 <ItemTemplate>
                                     <asp:Button ID="btnReceive" runat="server"
@@ -88,6 +100,8 @@
                                         CommandName="Receive"
                                         CssClass="btn btn-primary btn-sm"
                                         OnClientClick="return confirmReceive();" />
+                                    <asp:Label ID="lblGrpo" runat="server" Visible="false"
+                                        ForeColor="#2e7d32" Font-Bold="true" />
                                 </ItemTemplate>
                             </tel:GridTemplateColumn>
                         </Columns>
