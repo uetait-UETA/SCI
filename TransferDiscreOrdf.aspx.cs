@@ -1963,8 +1963,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     new JProperty("FromWarehouseCode", fromWhs),
                     new JProperty("WarehouseCode",     row["LineToWhs"].ToString())
                 );
-                if (!string.IsNullOrEmpty(toCostLoc)) owtqLine.Add("CostingCode",  toCostLoc);
-                if (!string.IsNullOrEmpty(toCostCen)) owtqLine.Add("CostingCode2", toCostCen);
                 owtqLines.Add(owtqLine);
             }
 
@@ -2146,10 +2144,6 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     line.Add("BaseEntry", sapTrReqEntry);
                     line.Add("BaseLine",  sapLineNum >= 0 ? sapLineNum : i);
                 }
-                string lineCostLoc = row["LineCostLoc"].ToString();
-                string lineCostCen = row["LineCostCen"].ToString();
-                if (!string.IsNullOrEmpty(lineCostLoc)) line.Add("CostingCode",  lineCostLoc);
-                if (!string.IsNullOrEmpty(lineCostCen)) line.Add("CostingCode2", lineCostCen);
                 lines.Add(line);
             }
         }
