@@ -2144,6 +2144,10 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     line.Add("BaseEntry", sapTrReqEntry);
                     line.Add("BaseLine",  sapLineNum >= 0 ? sapLineNum : i);
                 }
+                string costLoc = row["LineCostLoc"].ToString();
+                string costCen = row["LineCostCen"].ToString();
+                if (!string.IsNullOrEmpty(costLoc)) line.Add("DistributionRule",  costLoc);
+                if (!string.IsNullOrEmpty(costCen)) line.Add("DistributionRule2", costCen);
                 lines.Add(line);
             }
         }
