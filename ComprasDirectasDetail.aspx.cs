@@ -51,8 +51,19 @@ public partial class ComprasDirectasDetail : BasePage
             return;
         }
 
-        _allowReceive      = (accessType == "F");
-        btnConfirm.Enabled = _allowReceive;
+        _allowReceive = (accessType == "F");
+
+        // Disable Confirm if invoice already received
+        if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry))
+        {
+            _allowReceive      = false;
+            btnConfirm.Enabled = false;
+            btnConfirm.Text    = "Already Received";
+        }
+        else
+        {
+            btnConfirm.Enabled = _allowReceive;
+        }
 
         if (!IsPostBack)
             LoadHeader((string)Session["CompanyId"], docEntry);
