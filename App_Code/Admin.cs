@@ -174,7 +174,7 @@ public class Admin
             db.Connect();
 
             sql = @"
-            select 
+            select
 	             a.LoginID
 	            ,a.PassWd
 	            ,a.UserID
@@ -189,6 +189,7 @@ public class Admin
                 ,b.FirstName + ' ' + b.LastName1 as UserFullName
             	,c.role_description role
                 ,case when a.Active_Pdt = 'Y' then 'true' else 'false' end Active_Pdt
+                ,ISNULL(a.AllowedCompanyId, 0) AS AllowedCompanyId
 			from smm_login a inner join smm_users b on a.UserID = b.UserID left outer join sisinv_roles c on c.RoleID = a.RoleID
             order by a.LoginID, c.role_description";
 
@@ -220,7 +221,7 @@ public class Admin
             db.Connect();
 
             sql = @"
-            update smm_login 
+            update smm_login
             set
                  PassWd = @PassWd
                 ,UserID = @UserID
@@ -229,6 +230,7 @@ public class Admin
                 ,TypeWhs = @TypeWhs
                 ,Active = @Active
                 ,Active_Pdt = @Active_Pdt
+                ,AllowedCompanyId = @AllowedCompanyId
             where LoginID = @LoginID";
 
             string Active = Row["Active"].ToString().ToLower() == "true" ? "Y" : "N";
@@ -241,6 +243,7 @@ public class Admin
             db.cmd.Parameters.AddWithValue("@TypeWhs", Row["TypeWhs"].ToString());
             db.cmd.Parameters.AddWithValue("@Active", Active);
             db.cmd.Parameters.AddWithValue("@Active_Pdt", Active_Pdt);
+            db.cmd.Parameters.AddWithValue("@AllowedCompanyId", Convert.ToInt32(Row["AllowedCompanyId"]));
             db.cmd.Parameters.AddWithValue("@LoginID", Row["LoginID"].ToString());
 
             db.cmd.CommandText = sql;
@@ -272,29 +275,31 @@ public class Admin
             db.Connect();
 
             sql = @"
-            insert into smm_login 
-            (    LoginID 
-                ,PassWd 
-                ,UserID 
-                ,RoleId 
-                ,NumPrints                 
-                ,TypeWhs                 
+            insert into smm_login
+            (    LoginID
+                ,PassWd
+                ,UserID
+                ,RoleId
+                ,NumPrints
+                ,TypeWhs
                 ,Active
                 ,Date_Created
                 ,Created_By
                 ,Active_Pdt
+                ,AllowedCompanyId
             )
             values
-             (   @LoginID 
-                ,@PassWd 
-                ,@UserID 
-                ,@RoleId 
-                ,@NumPrints                 
-                ,@TypeWhs                 
+             (   @LoginID
+                ,@PassWd
+                ,@UserID
+                ,@RoleId
+                ,@NumPrints
+                ,@TypeWhs
                 ,@Active
                 ,getdate()
                 ,@Created_By
                 ,@Active_Pdt
+                ,@AllowedCompanyId
             )";
 
             string Active = newRow["Active"].ToString().ToLower() == "true" ? "Y" : "N";
@@ -308,6 +313,7 @@ public class Admin
             db.cmd.Parameters.AddWithValue("@TypeWhs", newRow["TypeWhs"].ToString());
             db.cmd.Parameters.AddWithValue("@Active", Active);
             db.cmd.Parameters.AddWithValue("@Active_Pdt", Active_Pdt);
+            db.cmd.Parameters.AddWithValue("@AllowedCompanyId", Convert.ToInt32(newRow["AllowedCompanyId"]));
             db.cmd.Parameters.AddWithValue("@Created_By", user);
 
             db.cmd.CommandText = sql;
@@ -355,6 +361,28 @@ public class Admin
             db.Disconnect();
         }
 
+        return dt;
+    }
+
+    public static DataTable GetCompanyList()
+    {
+        SqlDb db = new SqlDb();
+        DataTable dt = new DataTable();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = "SELECT Branch, CompanyName FROM SMM_COMPANIES ORDER BY CompanyName";
+            db.adapter.SelectCommand = db.cmd;
+            db.adapter.Fill(dt);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.GetCompanyList. MESSAGE: " + ex.Message);
+        }
+        finally
+        {
+            db.Disconnect();
+        }
         return dt;
     }
 

@@ -152,6 +152,20 @@ public partial class Login1 : BasePage
             return;
         }
 
+        // ── Check company restriction ──
+        SqlCommand cmdAllowed = new SqlCommand(
+            "SELECT ISNULL(AllowedCompanyId, 0) FROM smm_login WHERE LoginID = @lid",
+            db.Conn);
+        cmdAllowed.Parameters.AddWithValue("@lid", UserField1.Text);
+        object allowedObj = cmdAllowed.ExecuteScalar();
+        int allowedCompanyId = allowedObj != null && allowedObj != DBNull.Value
+            ? Convert.ToInt32(allowedObj) : 0;
+        if (allowedCompanyId != 0 && allowedCompanyId != branchId)
+        {
+            divMessage.InnerText = "You do not have access to this company.";
+            return;
+        }
+
         Label3.Text = "Welcome, " + UserField1.Text + " to " + companyCode;
 
         ArrayList controles   = new ArrayList();
