@@ -813,7 +813,7 @@ SELECT
     ISNULL(p.Comments,   '')        AS Comments,
     p.DocTotal,
     p.DocCur,
-    ISNULL(r.GrpoDocNum, 0)         AS GrpoDocNum,
+    ISNULL(r.DestDocNum, 0)         AS GrpoDocNum,
     ISNULL(r.ReceivedBy, '')        AS ReceivedBy,
     r.ReceivedAt
 FROM   {0}..OPCH p {1}
