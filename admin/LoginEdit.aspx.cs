@@ -99,6 +99,7 @@ public partial class LoginEdit : BasePage
         newValues["RoleID"] = (userControl.FindControl("drpRoles") as DropDownList).SelectedItem.Value;
         newValues["Active"] = (userControl.FindControl("chkActive") as CheckBox).Checked.ToString().ToLower();
         newValues["Active_Pdt"] = (userControl.FindControl("chkActivePdt") as CheckBox).Checked.ToString().ToLower();
+        newValues["AllowedCompanyId"] = (userControl.FindControl("drpAllowedCompany") as DropDownList).SelectedValue;
 
         changedRows[0].BeginEdit();
         try
@@ -147,6 +148,7 @@ public partial class LoginEdit : BasePage
         newValues["NumPrints"] = (userControl.FindControl("txtNumPrints") as TextBox).Text;
         newValues["Active"] = (userControl.FindControl("chkActive") as CheckBox).Checked.ToString().ToLower();
         newValues["Active_Pdt"] = (userControl.FindControl("chkActivePdt") as CheckBox).Checked.ToString().ToLower();
+        newValues["AllowedCompanyId"] = (userControl.FindControl("drpAllowedCompany") as DropDownList).SelectedValue;
 
         string LoginID = (userControl.FindControl("txtLoginID") as TextBox).Text;
         try

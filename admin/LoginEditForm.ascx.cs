@@ -22,7 +22,10 @@ public partial class LoginEditForm : System.Web.UI.UserControl
             drpUsers.DataSource = Admin.GetUserList();
             drpUsers.DataBind();
 
-            //SelectedValue='<%# DataBinder.Eval(Container, "DataItem.RoleID") %>'
+            // Load companies into allowed-company dropdown
+            var companies = Admin.GetCompanyList();
+            foreach (System.Data.DataRow cr in companies.Rows)
+                drpAllowedCompany.Items.Add(new ListItem(cr["CompanyName"].ToString(), cr["Branch"].ToString()));
 
             if (DataItem.GetType() == typeof(DataRowView))
             {
@@ -34,28 +37,31 @@ public partial class LoginEditForm : System.Web.UI.UserControl
                 foreach (ListItem li in drpTypeWhs.Items)
                 {
                     if (li.Value == ((DataRowView)DataItem)["TypeWhs"].ToString())
-                    {
                         li.Selected = true;
-                    }
                 }
 
                 foreach (ListItem li in drpUsers.Items)
                 {
                     li.Selected = false;
                     if (li.Value == ((DataRowView)DataItem)["UserID"].ToString())
-                    {
                         li.Selected = true;
-                    }
                 }
 
                 foreach (ListItem li in drpRoles.Items)
                 {
                     li.Selected = false;
                     if (li.Value == ((DataRowView)DataItem)["RoleID"].ToString())
-                    {
                         li.Selected = true;
-                    }
                 }
+
+                string allowedVal = ((DataRowView)DataItem)["AllowedCompanyId"].ToString();
+                foreach (ListItem li in drpAllowedCompany.Items)
+                {
+                    li.Selected = false;
+                    if (li.Value == allowedVal)
+                        li.Selected = true;
+                }
+
                 drpUsers.Enabled = false;
             }
             else if (DataItem.GetType() == typeof(Telerik.Web.UI.GridInsertionObject))
@@ -65,6 +71,7 @@ public partial class LoginEditForm : System.Web.UI.UserControl
                 chkActive.Checked = true;
                 chkActivePdt.Checked = true;
                 drpUsers.Enabled = true;
+                drpAllowedCompany.SelectedValue = "0";
             }
         }
     }

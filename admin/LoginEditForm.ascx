@@ -90,6 +90,15 @@
                         <asp:CheckBox ID="chkActivePdt" runat="server" TabIndex="7" />
                     </td>
                 </tr>
+                <tr>
+                    <td class="tdLabelBold">Allowed Company
+                    </td>
+                    <td class="tdValue">
+                        <asp:DropDownList ID="drpAllowedCompany" runat="server" Width="280px" TabIndex="8">
+                            <asp:ListItem Text="All Companies" Value="0" />
+                        </asp:DropDownList>
+                    </td>
+                </tr>
             </table>
         </td>
     </tr>
