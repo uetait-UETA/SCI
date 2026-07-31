@@ -11,7 +11,7 @@
         <div class="row">
             <div class="col-md-12">
                 <asp:Panel ID="pnlHeader" runat="server" CssClass="Panel">
-                    <label class="PanelHeading">Direct Purchase — Discrepancy Entry</label>
+                    <label class="PanelHeading">Direct Purchase Entry</label>
                     <div class="row" style="margin-top:10px;">
                         <div class="col-md-1">
                             <label class="myLabelMedium">APRI #</label><br />
