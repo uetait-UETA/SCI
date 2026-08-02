@@ -151,6 +151,7 @@
 					    							<Items>
 					    								<tel:RadMenuItem Text="Usuarios" Value="Usuarios" NavigateUrl="/admin/UserEdit.aspx"></tel:RadMenuItem>
 					    								<tel:RadMenuItem Text="Credenciales" Value="Credenciales" NavigateUrl="/admin/LoginEdit.aspx"></tel:RadMenuItem>
+					    								<tel:RadMenuItem Text="Bodega-Tienda" Value="BodegaTienda" NavigateUrl="/admin/BodegaTiendaEdit.aspx"></tel:RadMenuItem>
 					    							</Items>
 					    						</tel:RadMenuItem>
                                             <tel:RadMenuItem IsSeparator="true" />
