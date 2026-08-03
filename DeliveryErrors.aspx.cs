@@ -144,9 +144,49 @@ public partial class DeliveryErrors : BasePage
             item.ExtractValues(values);
 
             string v_SalesId = item.GetDataKeyValue("sales_id").ToString();
+            string newSku    = hfNewSku.Value.Trim();
+
+            if (!string.IsNullOrEmpty(newSku))
+            {
+                string sapDb          = (string)Session["CompanyId"];
+                string originalDutyType = "";
+                string newItemUType     = "";
+
+                db.Connect();
+                using (SqlCommand cmd = new SqlCommand(
+                    "SELECT ISNULL(DutyType,'') FROM dbo.la_store_sales WHERE id = @Id", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@Id", v_SalesId);
+                    object r1 = cmd.ExecuteScalar();
+                    originalDutyType = r1 != null ? r1.ToString() : "";
+                }
+                using (SqlCommand cmd = new SqlCommand(
+                    "SELECT ISNULL(U_Type,'') FROM " + sapDb + ".dbo.OITM WHERE ItemCode = @ItemCode", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@ItemCode", newSku);
+                    object r2 = cmd.ExecuteScalar();
+                    newItemUType = r2 != null ? r2.ToString() : "";
+                }
+                db.Disconnect();
+
+                if (!string.IsNullOrEmpty(originalDutyType) && !string.IsNullOrEmpty(newItemUType))
+                {
+                    string normalizedNew = newItemUType.IndexOf("Free", StringComparison.OrdinalIgnoreCase) >= 0 ? "DF"
+                                        : newItemUType.IndexOf("Paid", StringComparison.OrdinalIgnoreCase) >= 0 ? "DP"
+                                        : "";
+                    if (!string.IsNullOrEmpty(normalizedNew) && normalizedNew != originalDutyType)
+                    {
+                        string origLabel = originalDutyType == "DF" ? "Duty Free" : "Duty Paid";
+                        ShowMasterPageMessage("Error", "Operation Type Mismatch",
+                            "The original item is " + origLabel + " but the selected replacement is " + newItemUType + ". Both items must be the same operation type.");
+                        e.Canceled = true;
+                        return;
+                    }
+                }
+            }
 
             Delivery dy = new Delivery();
-            dy.UpdateDeliveryItemNumber(v_SalesId, hfNewSku.Value, (string)Session["BranchId"]);
+            dy.UpdateDeliveryItemNumber(v_SalesId, newSku, (string)Session["BranchId"]);
             }
 
 

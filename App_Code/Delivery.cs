@@ -65,15 +65,14 @@ public class Delivery
 	                a.error_message
                 from
 	                dbo.la_delivery_errors a " + Queries.WITH_NOLOCK + @"
-				cross apply (SELECT TOP 1 WhsCode FROM ADR_TIENDAS_VW " + Queries.WITH_NOLOCK + @" WHERE storenum = a.storenum) tt
 				inner join dbo.la_store_sales b " + Queries.WITH_NOLOCK + @"  on  a.transnum = b.transnum
                                                                                 and a.itemnum  = b.itemnum
                                                                                 and a.storenum = b.storenum
+				outer apply (SELECT TOP 1 WHSCODE AS WhsCode FROM ADR_TIENDA_SERIE " + Queries.WITH_NOLOCK + @" WHERE NUMSERIE = b.NUMSERIE AND NUMSTORE = TRY_CAST(a.storenum AS INT) AND DUTYTYPE = ISNULL(b.DutyType,'DF')) tt
 				left outer join " + sap_db + @".dbo.oitw c " + Queries.WITH_NOLOCK + @"  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d " + Queries.WITH_NOLOCK + @"  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and (isnull(c.onhand, 0) - isnull(c.iscommited, 0)) < a.qty
                     and a.CompanyId = '" + branchId + @"'
                     and b.CompanyId = '" + branchId + @"'" +
                     (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
@@ -215,13 +214,12 @@ select
 
                 from
 	                dbo.la_delivery_errors a  with(nolock)
-				cross apply (SELECT TOP 1 WhsCode, STORENUM FROM ADR_TIENDAS_VW with(nolock) WHERE storenum = a.storenum) tt
 				inner join dbo.la_store_sales b  with(nolock)  on a.id = b.id
+				outer apply (SELECT TOP 1 WHSCODE AS WhsCode, NUMSTORE AS STORENUM FROM ADR_TIENDA_SERIE with(nolock) WHERE NUMSERIE = b.NUMSERIE AND NUMSTORE = TRY_CAST(a.storenum AS INT) AND DUTYTYPE = ISNULL(b.DutyType,'DF')) tt
 				left outer join " + sap_db + @".dbo.oitw c  with(nolock)  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d  with(nolock)  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and (isnull(c.onhand, 0) - isnull(c.iscommited, 0)) < a.qty
                     and a.CompanyId =  '" + branchId + @"'" +
                     (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
                     and a.skunum <> '" + deeeItemCode + @"'") + @"

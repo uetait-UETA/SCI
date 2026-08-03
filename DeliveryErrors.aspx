@@ -53,7 +53,11 @@
                                 <tel:GridBoundColumn SortExpression="sale_qty" HeaderText="Trans Qty" HeaderButtonType="TextButton" DataField="sale_qty" UniqueName="sale_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="whs_qty" HeaderText="Whs Qty" HeaderButtonType="TextButton" DataField="whs_qty" UniqueName="whs_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="whs_code" HeaderText="Whs Code" HeaderButtonType="TextButton" DataField="whs_code" UniqueName="whs_code" HeaderStyle-Width="80px" ReadOnly="true" />
-                                <tel:GridBoundColumn SortExpression="error_message" HeaderText="Error Message" HeaderButtonType="TextButton" DataField="error_message" UniqueName="error_message" ReadOnly="true" HeaderStyle-Width="200px" />
+                                <tel:GridTemplateColumn SortExpression="error_message" HeaderText="Error Message" UniqueName="error_message" HeaderStyle-Width="200px">
+                                    <ItemTemplate>
+                                        <span title='<%# Eval("error_message") %>' style="cursor:help;"><%# Eval("error_message") %></span>
+                                    </ItemTemplate>
+                                </tel:GridTemplateColumn>
                             </Columns>
                         </MasterTableView>
                         <ClientSettings>
