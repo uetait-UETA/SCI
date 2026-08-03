@@ -73,6 +73,7 @@ public class Delivery
 				left outer join " + sap_db + @".dbo.oitm d " + Queries.WITH_NOLOCK + @"  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
+                    and (isnull(c.onhand, 0) - isnull(c.iscommited, 0)) < a.qty
                     and a.CompanyId = '" + branchId + @"'
                     and b.CompanyId = '" + branchId + @"'" +
                     (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
@@ -220,6 +221,7 @@ select
 				left outer join " + sap_db + @".dbo.oitm d  with(nolock)  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
+                    and (isnull(c.onhand, 0) - isnull(c.iscommited, 0)) < a.qty
                     and a.CompanyId =  '" + branchId + @"'" +
                     (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
                     and a.skunum <> '" + deeeItemCode + @"'") + @"
