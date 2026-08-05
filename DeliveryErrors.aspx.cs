@@ -15,7 +15,8 @@ public partial class DeliveryErrors : BasePage
     protected SqlDb db = new SqlDb();
     public DataTable dt = new DataTable();
     protected string sap_db;
-    protected string lCurUser; 
+    protected string lCurUser;
+
     protected void Page_Load(object sender, EventArgs e)
     {
         
@@ -138,55 +139,121 @@ public partial class DeliveryErrors : BasePage
             }
             else
             {
-            string v_Message = string.Empty;
             GridEditableItem item = e.Item as GridEditableItem;
-            Hashtable values = new Hashtable();
-            item.ExtractValues(values);
+            string sapDb          = (string)Session["CompanyId"];
+            string v_SalesId      = item.GetDataKeyValue("sales_id").ToString();
+            object _whsKey = item.GetDataKeyValue("whs_code");
+            string currentWhsCode = _whsKey != null ? _whsKey.ToString() : "";
 
-            string v_SalesId = item.GetDataKeyValue("sales_id").ToString();
-            string newSku    = hfNewSku.Value.Trim();
+            // Read new item from hidden field (set by RadSearchBox)
+            string newSku = hfNewSku.Value.Trim();
 
-            if (!string.IsNullOrEmpty(newSku))
+            // Read new whs_code directly from the TextBox in the edit row
+            System.Web.UI.WebControls.TextBox txtWhs = item.FindControl("txtWhsCode") as System.Web.UI.WebControls.TextBox;
+            string newWhsCode = txtWhs != null ? txtWhs.Text.Trim() : "";
+
+            bool skuChanged = !string.IsNullOrEmpty(newSku);
+            bool whsChanged = !string.IsNullOrEmpty(newWhsCode) &&
+                              !string.Equals(newWhsCode, currentWhsCode, StringComparison.OrdinalIgnoreCase);
+
+            if (!skuChanged && !whsChanged)
             {
-                string sapDb          = (string)Session["CompanyId"];
-                string originalDutyType = "";
-                string newItemUType     = "";
+                // Nothing changed — just close edit
+                rgHead.Rebind();
+                return;
+            }
 
-                db.Connect();
-                using (SqlCommand cmd = new SqlCommand(
-                    "SELECT ISNULL(DutyType,'') FROM dbo.la_store_sales WHERE id = @Id", db.Conn))
-                {
-                    cmd.Parameters.AddWithValue("@Id", v_SalesId);
-                    object r1 = cmd.ExecuteScalar();
-                    originalDutyType = r1 != null ? r1.ToString() : "";
-                }
-                using (SqlCommand cmd = new SqlCommand(
-                    "SELECT ISNULL(U_Type,'') FROM " + sapDb + ".dbo.OITM WHERE ItemCode = @ItemCode", db.Conn))
-                {
-                    cmd.Parameters.AddWithValue("@ItemCode", newSku);
-                    object r2 = cmd.ExecuteScalar();
-                    newItemUType = r2 != null ? r2.ToString() : "";
-                }
-                db.Disconnect();
+            db.Connect();
 
-                if (!string.IsNullOrEmpty(originalDutyType) && !string.IsNullOrEmpty(newItemUType))
+            // Get current item code to use in validation when only whs changes
+            string currentSku = "";
+            using (SqlCommand cmd = new SqlCommand(
+                "SELECT ISNULL(skunum,'') FROM dbo.la_store_sales WHERE id = @Id", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@Id", v_SalesId);
+                object r = cmd.ExecuteScalar();
+                currentSku = r != null ? r.ToString() : "";
+            }
+
+            string effectiveItem = skuChanged ? newSku : currentSku;
+            string effectiveWhs  = whsChanged ? newWhsCode : currentWhsCode;
+
+            // Validate warehouse exists if it changed
+            if (whsChanged)
+            {
+                using (SqlCommand cmd = new SqlCommand(
+                    "SELECT COUNT(1) FROM " + sapDb + ".dbo.OWHS WHERE WhsCode = @WhsCode", db.Conn))
                 {
-                    string normalizedNew = newItemUType.IndexOf("Free", StringComparison.OrdinalIgnoreCase) >= 0 ? "DF"
-                                        : newItemUType.IndexOf("Paid", StringComparison.OrdinalIgnoreCase) >= 0 ? "DP"
-                                        : "";
-                    if (!string.IsNullOrEmpty(normalizedNew) && normalizedNew != originalDutyType)
+                    cmd.Parameters.AddWithValue("@WhsCode", newWhsCode);
+                    int cnt = (int)cmd.ExecuteScalar();
+                    if (cnt == 0)
                     {
-                        string origLabel = originalDutyType == "DF" ? "Duty Free" : "Duty Paid";
-                        ShowMasterPageMessage("Error", "Operation Type Mismatch",
-                            "The original item is " + origLabel + " but the selected replacement is " + newItemUType + ". Both items must be the same operation type.");
+                        db.Disconnect();
+                        ShowMasterPageMessage("Error", "Invalid Warehouse",
+                            "Warehouse '" + newWhsCode + "' does not exist.");
                         e.Canceled = true;
                         return;
                     }
                 }
             }
 
-            Delivery dy = new Delivery();
-            dy.UpdateDeliveryItemNumber(v_SalesId, newSku, (string)Session["BranchId"]);
+            // Validate item U_Type vs effective warehouse U_Type
+            if (!string.IsNullOrEmpty(effectiveItem) && !string.IsNullOrEmpty(effectiveWhs))
+            {
+                string itemUType = "";
+                string whsUType  = "";
+                using (SqlCommand cmd = new SqlCommand(
+                    "SELECT ISNULL(U_Type,'') FROM " + sapDb + ".dbo.OITM WHERE ItemCode = @ItemCode", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@ItemCode", effectiveItem);
+                    object r = cmd.ExecuteScalar();
+                    itemUType = r != null ? r.ToString() : "";
+                }
+                using (SqlCommand cmd = new SqlCommand(
+                    "SELECT ISNULL(U_Type,'') FROM " + sapDb + ".dbo.OWHS WHERE WhsCode = @WhsCode", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@WhsCode", effectiveWhs);
+                    object r = cmd.ExecuteScalar();
+                    whsUType = r != null ? r.ToString() : "";
+                }
+                if (!string.IsNullOrEmpty(itemUType) && !string.IsNullOrEmpty(whsUType) &&
+                    !string.Equals(itemUType.Trim(), whsUType.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    db.Disconnect();
+                    ShowMasterPageMessage("Error", "Type Mismatch",
+                        "Item '" + effectiveItem + "' is " + itemUType +
+                        " but warehouse '" + effectiveWhs + "' is " + whsUType +
+                        ". They must be the same operation type.");
+                    e.Canceled = true;
+                    return;
+                }
+            }
+
+            db.Disconnect();
+
+            // Save item if changed
+            if (skuChanged)
+            {
+                Delivery dy = new Delivery();
+                dy.UpdateDeliveryItemNumber(v_SalesId, newSku, (string)Session["BranchId"]);
+            }
+
+            // Save whs_code if changed
+            if (whsChanged)
+            {
+                db.Connect();
+                using (SqlCommand cmd = new SqlCommand(
+                    "UPDATE dbo.la_store_sales SET WhsCode = @WhsCode WHERE id = @Id", db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@WhsCode", newWhsCode);
+                    cmd.Parameters.AddWithValue("@Id", v_SalesId);
+                    cmd.ExecuteNonQuery();
+                }
+                db.Disconnect();
+            }
+
+            hfNewSku.Value = "";
+            rgHead.Rebind();
             }
 
 
@@ -195,6 +262,29 @@ public partial class DeliveryErrors : BasePage
         {
             ShowMasterPageMessage("Error", "Faled to update data", ex.Message.ToString());
             return;
+        }
+    }
+
+    protected void rgHead_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
+    {
+        try
+        {
+            string companyId = (string)Session["CompanyId"] ?? "";
+            Delivery dy = new Delivery();
+            rgHead.DataSource = dy.GetDeliveryErrors(companyId);
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                System.IO.File.AppendAllText(
+                    Server.MapPath("~/App_Data/delivery_errors_log.txt"),
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " | " + ex.GetType().Name + ": " + ex.Message + Environment.NewLine + ex.StackTrace + Environment.NewLine + "---" + Environment.NewLine);
+            }
+            catch { }
+            try { ShowMasterPageMessage("Error", "Failed to load Delivery Errors", ex.Message); }
+            catch { }
+            rgHead.DataSource = new System.Data.DataTable();
         }
     }
 

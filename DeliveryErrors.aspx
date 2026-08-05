@@ -18,26 +18,26 @@
             <div class="col-md-12">
                 <asp:Panel ID="pnlHeader" runat="server" CssClass="Panel">
                     <label id="labelForm" runat="server" class="PanelHeading">Delivery Errors</label>
-                    <tel:RadGrid ID="rgHead" runat="server" Width="100%" ShowStatusBar="true" AutoGenerateColumns="False" MasterTableView-NoDetailRecordsText="No delivery errors found"
-                        AllowSorting="true" AllowMultiRowSelection="False" AllowPaging="True" PageSize="15" DataSourceID="ObjectDataSource1" OnUpdateCommand="rgHead_UpdateCommand" Style="margin-left: 0px;">
+                    <tel:RadGrid ID="rgHead" runat="server" Width="100%" ShowStatusBar="true" AutoGenerateColumns="False"
+                        MasterTableView-NoDetailRecordsText="No delivery errors found"
+                        AllowSorting="true" AllowMultiRowSelection="False" AllowPaging="True" PageSize="15"
+                        OnNeedDataSource="rgHead_NeedDataSource"
+                        OnUpdateCommand="rgHead_UpdateCommand" Style="margin-left: 0px;">
                         <PagerStyle Mode="Slider"></PagerStyle>
                         <SortingSettings EnableSkinSortStyles="false" />
-                        <MasterTableView Width="100%" AllowNaturalSort="false" EditMode="InPlace" DataKeyNames="id,sales_id">
+                        <MasterTableView Width="100%" AllowNaturalSort="false" EditMode="InPlace" DataKeyNames="id,sales_id,whs_code">
                             <ItemStyle Wrap="false" Height="22px" />
                             <Columns>
-                                <%--<tel:GridButtonColumn UniqueName="transfer" ButtonType="LinkButton" HeaderText="Transfer / Order" DataTextField="transfer" CommandName="TRANSFER" ItemStyle-Font-Underline="true" />--%>
                                 <tel:GridEditCommandColumn UniqueName="EditColumn" ButtonType="ImageButton" HeaderStyle-Width="40px" />
                                 <tel:GridBoundColumn SortExpression="id" HeaderText="ID" HeaderButtonType="TextButton" DataField="id" UniqueName="id" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="storenum" HeaderText="Store #" HeaderButtonType="TextButton" DataField="storenum" UniqueName="storenum" HeaderStyle-Width="170px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="skunum" HeaderText="Item" HeaderButtonType="TextButton" DataField="skunum" UniqueName="skunum" HeaderStyle-Width="70px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="OldBarCode" HeaderText="Old Bar Code Item" HeaderButtonType="TextButton" DataField="OldBarCode" UniqueName="OldBarCode" HeaderStyle-Width="80px" ReadOnly="true" />
-                                <%--<tel:GridBoundColumn SortExpression="new_sku" HeaderText="New Item" HeaderButtonType="TextButton" DataField="new_sku" UniqueName="new_sku" HeaderStyle-Width="90px" />--%>
                                 <tel:GridTemplateColumn HeaderText="New Item" SortExpression="new_sku" UniqueName="new_sku" HeaderStyle-Width="70px" ItemStyle-Wrap="false">
                                     <ItemTemplate>
                                         <%# Eval("new_sku") %>
                                     </ItemTemplate>
                                     <EditItemTemplate>
-                                        <%--<tel:RadTextBox runat="server" ID="rtbNewSku" Text='<%# Eval("new_sku") %>' />--%>
                                         <tel:RadSearchBox ID="rtbItem" runat="server" Width="300px"
                                             DropDownSettings-Width="400px" DropDownSettings-Height="200px"
                                             DataTextField="ItemName" DataValueField="ItemCode" OnSearch="rtbItem_Search"
@@ -52,7 +52,15 @@
                                 <tel:GridBoundColumn SortExpression="itemdatetime" HeaderText="Trans Date" HeaderButtonType="TextButton" DataField="itemdatetime" UniqueName="itemdatetime" DataFormatString="{0:d}" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="sale_qty" HeaderText="Trans Qty" HeaderButtonType="TextButton" DataField="sale_qty" UniqueName="sale_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="whs_qty" HeaderText="Whs Qty" HeaderButtonType="TextButton" DataField="whs_qty" UniqueName="whs_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
-                                <tel:GridBoundColumn SortExpression="whs_code" HeaderText="Whs Code" HeaderButtonType="TextButton" DataField="whs_code" UniqueName="whs_code" HeaderStyle-Width="80px" ReadOnly="true" />
+                                <tel:GridTemplateColumn HeaderText="Whs Code" SortExpression="whs_code" UniqueName="whs_code" HeaderStyle-Width="100px" ItemStyle-Wrap="false">
+                                    <ItemTemplate>
+                                        <%# Eval("whs_code") %>
+                                    </ItemTemplate>
+                                    <EditItemTemplate>
+                                        <asp:TextBox ID="txtWhsCode" runat="server" Text='<%# Eval("whs_code") %>'
+                                            Width="90px" MaxLength="20" />
+                                    </EditItemTemplate>
+                                </tel:GridTemplateColumn>
                                 <tel:GridTemplateColumn SortExpression="error_message" HeaderText="Error Message" UniqueName="error_message" HeaderStyle-Width="200px">
                                     <ItemTemplate>
                                         <span title='<%# Eval("error_message") %>' style="cursor:help;"><%# Eval("error_message") %></span>
@@ -72,14 +80,4 @@
     </div>
 
     <asp:SqlDataSource ID="ItemAutoComplete" runat="server" ConnectionString='<%$ ConnectionStrings:smm_latConnectionString %>' ProviderName='<%$ ConnectionStrings:smm_latConnectionString.ProviderName %>' />
-    <asp:ObjectDataSource ID="ObjectDataSource1" runat="server" SelectMethod="GetDeliveryErrors" TypeName="Delivery" UpdateMethod="UpdateDeliveryItemNumber">
-        <SelectParameters>
-            <asp:ControlParameter ControlID="CompanyIdLabel" Name="CompanyId" PropertyName="Text" Type="String" />
-        </SelectParameters>
-        <UpdateParameters>
-            <asp:Parameter Name="id" Type="String" />
-            <asp:Parameter Name="new_sku" Type="String" />
-        </UpdateParameters>
-    </asp:ObjectDataSource>
 </asp:Content>
-

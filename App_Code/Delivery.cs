@@ -61,7 +61,7 @@ public class Delivery
                     [dbo].[InitCap] (case when d.itemcode is not null then d.itemname else a.pludesc end) description,
 	                a.qty sale_qty,
                       isnull(c.onhand,0)  whs_qty,
-                    tt.WhsCode whs_code,
+                    ISNULL(b.WhsCode, tt.WhsCode) whs_code,
 	                a.error_message
                 from
 	                dbo.la_delivery_errors a " + Queries.WITH_NOLOCK + @"
@@ -69,7 +69,7 @@ public class Delivery
                                                                                 and a.itemnum  = b.itemnum
                                                                                 and a.storenum = b.storenum
 				outer apply (SELECT TOP 1 WHSCODE AS WhsCode FROM ADR_TIENDA_SERIE " + Queries.WITH_NOLOCK + @" WHERE NUMSERIE = b.NUMSERIE AND NUMSTORE = TRY_CAST(a.storenum AS INT) AND DUTYTYPE = ISNULL(b.DutyType,'DF')) tt
-				left outer join " + sap_db + @".dbo.oitw c " + Queries.WITH_NOLOCK + @"  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
+				left outer join " + sap_db + @".dbo.oitw c " + Queries.WITH_NOLOCK + @"  on b.skunum = c.itemcode and c.WhsCode = ISNULL(b.WhsCode, tt.WhsCode) COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d " + Queries.WITH_NOLOCK + @"  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
@@ -79,7 +79,6 @@ public class Delivery
                     and a.skunum <> '" + deeeItemCode + @"'") + @"
                order by CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)), a.storenum,a.itemnum
                 ";
-
 
             db.adapter = new SqlDataAdapter(sql, db.Conn);
             db.adapter.Fill(dt);
