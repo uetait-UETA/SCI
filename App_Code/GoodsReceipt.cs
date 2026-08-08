@@ -764,6 +764,11 @@ VALUES
                 ? toDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 : DateTime.Today.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
+            string safeDb = sapDb.Replace("'", "''");
+            string vendorFilter = string.IsNullOrEmpty(toWhsCode)
+                ? "AND p.CardCode IN (SELECT vm.CardCode FROM dbo.VendorStoreMapping vm WHERE vm.CompanyId = '" + safeDb + "' AND vm.IsActive = 1)"
+                : "AND p.CardCode IN (SELECT vm.CardCode FROM dbo.VendorStoreMapping vm WHERE vm.CompanyId = '" + safeDb + "' AND vm.WhsCode = @toWhs AND vm.IsActive = 1)";
+
             string sql;
             if (!showReceived)
             {
@@ -780,7 +785,11 @@ SELECT
     p.DocCur,
     0                               AS GrpoDocNum,
     ''                              AS ReceivedBy,
-    CAST(NULL AS datetime)          AS ReceivedAt
+    CAST(NULL AS datetime)          AS ReceivedAt,
+    ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
+                  FROM {0}..PCH1 l {1}
+                  WHERE l.DocEntry = p.DocEntry
+                  FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes
 FROM   {0}..OPCH p {1}
 WHERE  p.DocStatus = 'O'
   AND  p.Indicator = 'CD'
@@ -792,13 +801,14 @@ WHERE  p.DocStatus = 'O'
            SELECT 1 FROM {0}..PCH1 l {1}
            WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
        ))
+  {5}
   AND  NOT EXISTS (
            SELECT 1 FROM dbo.GrpoReceiptLog r {1}
            WHERE  r.OriginCompany  = '{0}'
              AND  r.OriginDocEntry = p.DocEntry
              AND  r.Status         = 'SUCCESS'
        )
-ORDER  BY p.DocDate DESC, p.DocNum DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo);
+ORDER  BY p.DocDate DESC, p.DocNum DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo, vendorFilter);
             }
             else
             {
@@ -815,7 +825,11 @@ SELECT
     p.DocCur,
     ISNULL(r.DestDocNum, 0)         AS GrpoDocNum,
     ISNULL(r.ReceivedBy, '')        AS ReceivedBy,
-    r.ReceivedAt
+    r.ReceivedAt,
+    ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
+                  FROM {0}..PCH1 l {1}
+                  WHERE l.DocEntry = p.DocEntry
+                  FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes
 FROM   {0}..OPCH p {1}
 INNER JOIN dbo.GrpoReceiptLog r {1}
     ON  r.OriginCompany  = '{0}'
@@ -830,7 +844,8 @@ WHERE  p.Indicator = 'CD'
            SELECT 1 FROM {0}..PCH1 l {1}
            WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
        ))
-ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo);
+  {5}
+ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo, vendorFilter);
             }
 
             _db.cmd.CommandText = sql;

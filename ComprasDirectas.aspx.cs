@@ -52,7 +52,6 @@ public partial class ComprasDirectas : BasePage
     private void LoadToLocations()
     {
         string sapDb = (string)Session["CompanyId"];
-        int    bplId = BranchId;
         SqlDb  db    = new SqlDb();
         db.Connect();
         try
@@ -67,8 +66,14 @@ public partial class ComprasDirectas : BasePage
                        AND R.Control   = 'VIEWTRA'
                        AND R.CompanyId = '{0}'
                 WHERE  O.BPLId = {3}
+                  AND  EXISTS (
+                    SELECT 1 FROM {2}.dbo.VendorStoreMapping vm
+                    WHERE  vm.WhsCode   = O.WhsCode
+                      AND  vm.CompanyId = '{0}'
+                      AND  vm.IsActive  = 1
+                )
                 ORDER  BY O.U_POSCode",
-                sapDb, Queries.WITH_NOLOCK, smmDb, bplId);
+                sapDb, Queries.WITH_NOLOCK, smmDb, BranchId);
 
             db.cmd.CommandText = sql;
             db.cmd.CommandType = System.Data.CommandType.Text;

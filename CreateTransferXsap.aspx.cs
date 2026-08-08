@@ -187,12 +187,15 @@ public partial class CreateTransferXsap : BasePage
         catch { }
         Session["UserTypeWhs"] = userTypeWhs;
         bool isBodtie = string.Equals(userTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase);
+        string hideUType = System.Configuration.ConfigurationManager.AppSettings["HideWhsUType"] ?? "";
 
         var dt1Rows = dt.AsEnumerable().Where(x =>
             x.Field<string>("Control") == "CRETRAFROMXSAP" &&
             (isBodtie || string.IsNullOrEmpty(userTypeWhs) ||
              string.IsNullOrEmpty(x.Field<string>("TypeWhs")) ||
-             string.Equals(x.Field<string>("TypeWhs"), userTypeWhs, StringComparison.OrdinalIgnoreCase)));
+             string.Equals(x.Field<string>("TypeWhs"), userTypeWhs, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(hideUType) ||
+             !string.Equals(x.Field<string>("WhsType"), hideUType, StringComparison.OrdinalIgnoreCase)));
         DataTable dt1 = dt1Rows.Any() ? dt1Rows.CopyToDataTable() : dt.Clone();
 
         drpFromWhsCode.DataSource = dt1;
@@ -204,7 +207,9 @@ public partial class CreateTransferXsap : BasePage
             x.Field<string>("Control") == "CRETRATOXSAP" &&
             (isBodtie || string.IsNullOrEmpty(userTypeWhs) ||
              string.IsNullOrEmpty(x.Field<string>("TypeWhs")) ||
-             string.Equals(x.Field<string>("TypeWhs"), userTypeWhs, StringComparison.OrdinalIgnoreCase)));
+             string.Equals(x.Field<string>("TypeWhs"), userTypeWhs, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrEmpty(hideUType) ||
+             !string.Equals(x.Field<string>("WhsType"), hideUType, StringComparison.OrdinalIgnoreCase)));
         DataTable dt2 = dt2Rows.Any() ? dt2Rows.CopyToDataTable() : dt.Clone();
 
         drpToWhsCode.DataSource = dt2;
