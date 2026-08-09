@@ -194,7 +194,7 @@ public partial class createTransferByExcel : BasePage
         }
         catch { }
         Session["UserTypeWhs"] = userTypeWhs;
-        bool isBodtie = string.Equals(userTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase);
+        bool isBodtie = true; // All users see all warehouses; TypeWhs restriction enforced at creation time.
         string hideUType = System.Configuration.ConfigurationManager.AppSettings["HideWhsUType"] ?? "";
 
         var dt1Rows = dt.AsEnumerable().Where(x =>
@@ -352,6 +352,14 @@ public partial class createTransferByExcel : BasePage
             divMessage.InnerHtml = "The Origin and Destination must be different";
             Alert.Show("The Origin and Destination must be different");
             drpToWhsCode.Focus();
+            return;
+        }
+
+        string whsAccessError = ValidateWhsAccess(fromLoc, toLoc);
+        if (whsAccessError != null)
+        {
+            divMessage.InnerHtml = whsAccessError;
+            Alert.Show(whsAccessError);
             return;
         }
 
@@ -1310,5 +1318,69 @@ public partial class createTransferByExcel : BasePage
         {
             throw new Exception("Caught exception in function LoadWarehouses for toloc. ERROR MESSAGE : " + ex.Message);
         }
+    }
+
+    // BODEGA: FROM must be main DC (TypeWhs=BODEGA, BPLId=TorBPLId). TIENDA: opposite. BODTIE/empty: no restriction.
+    private string ValidateWhsAccess(string fromWhs, string toWhs)
+    {
+        string userTypeWhs = Session["UserTypeWhs"] != null ? Session["UserTypeWhs"].ToString() : "";
+
+        if (string.IsNullOrEmpty(userTypeWhs) ||
+            string.Equals(userTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        int torBPLId = 1;
+        int.TryParse(ConfigurationManager.AppSettings["TorBPLId"], out torBPLId);
+
+        int fromBPLId = 0;
+        string fromTypeWhs = "";
+
+        string connStr = System.Configuration.ConfigurationManager
+            .ConnectionStrings["smm_latConnectionString"].ConnectionString;
+        try
+        {
+            using (var conn = new System.Data.SqlClient.SqlConnection(connStr))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand(
+                    @"SELECT O.BPLId, ISNULL(sw.TYPEWHS,'') AS TypeWhs
+                      FROM " + sap_db + @".dbo.OWHS O WITH(NOLOCK)
+                      LEFT JOIN SMM_WHSTYPE sw WITH(NOLOCK)
+                          ON sw.WHSCODE = O.WhsCode AND sw.COMPANYID = @cid
+                      WHERE O.WhsCode = @whs", conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", sap_db);
+                    cmd.Parameters.AddWithValue("@whs", fromWhs);
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        if (r.Read())
+                        {
+                            fromBPLId   = r["BPLId"] != DBNull.Value ? Convert.ToInt32(r["BPLId"]) : 0;
+                            fromTypeWhs = r["TypeWhs"].ToString();
+                        }
+                    }
+                }
+            }
+        }
+        catch { return null; }
+
+        bool fromIsMainBodega = string.Equals(fromTypeWhs, "BODEGA", StringComparison.OrdinalIgnoreCase)
+                                && fromBPLId == torBPLId;
+
+        if (string.Equals(userTypeWhs, "BODEGA", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!fromIsMainBodega)
+                return "BODEGA users can only create transfers from the main distribution center (Branch " + torBPLId + ").";
+            return null;
+        }
+
+        if (string.Equals(userTypeWhs, "TIENDA", StringComparison.OrdinalIgnoreCase))
+        {
+            if (fromIsMainBodega)
+                return "TIENDA users cannot create transfers from the main distribution center (Branch " + torBPLId + "). Use relay or store-to-store transfers.";
+            return null;
+        }
+
+        return null;
     }
 }

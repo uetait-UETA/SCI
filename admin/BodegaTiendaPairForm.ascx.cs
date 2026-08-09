@@ -27,8 +27,7 @@ public partial class BodegaTiendaPairForm : System.Web.UI.UserControl
                 // Update: BodegaID/TiendaID are the natural key — not editable.
                 DataRowView row = (DataRowView)DataItem;
 
-                if (!IsPostBack)
-                    chkActive.Checked = row["isActive"].ToString().ToLower() == "true";
+                chkActive.Checked = row["isActive"].ToString().ToLower() == "true";
 
                 foreach (ListItem li in drpBodega.Items)
                     li.Selected = (li.Value == row["BodegaID"].ToString());

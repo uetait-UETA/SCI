@@ -199,7 +199,8 @@ public partial class CreateTransfer : BasePage
         }
         catch { }
         Session["UserTypeWhs"] = userTypeWhs;
-        bool isBodtie = string.Equals(userTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase);
+        // All users see all warehouses in dropdowns; TypeWhs restriction is enforced at creation time.
+        bool isBodtie = true;
         string hideUType = System.Configuration.ConfigurationManager.AppSettings["HideWhsUType"] ?? "";
 
         var dt1Rows = dt.AsEnumerable().Where(x =>
@@ -336,6 +337,13 @@ public partial class CreateTransfer : BasePage
             return;
         }
 
+        string whsAccessError = ValidateWhsAccess(FromWhsCode, ToWhsCode);
+        if (whsAccessError != null)
+        {
+            divMessage.InnerHtml = whsAccessError;
+            return;
+        }
+
         try
         {
             db.Connect();
@@ -362,75 +370,69 @@ public partial class CreateTransfer : BasePage
             // created smm_net_inventory_vw which includes in_transit quantities (on open transfer draft)  
             // 2011-02-16
             //*************************************************************
-            sql = Queries.With_NetInventory() + @"
-INSERT INTO rss_results
-	SELECT distinct '{0}' AS CompanyId, 
-	a.WhsCode AS FromWhsCode, 
-	c.WhsCode AS ToWhsCode, 
-	d.ItemCode, 
-	d.ItemName AS ItemDescription, 
-	d.ItmsGrpCod AS GroupCode, 
-    (b.max_qty 
-    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
-    - c.net_inventory  
-    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end)
-    - 
-    (
-    (b.max_qty 
-    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
-    - c.net_inventory  
-    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end
-    ) % case when isnull(mult.ORDER_MULTIPLE, 'E') = 'E' then 1 else isnull(d.u_bot,1) end )             
-    AS Requested_Quantity,
-    CASE 
-        WHEN a.OnHand - a.in_transit_out >= 
-            (b.max_qty 
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
-		    - c.net_inventory  
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end)
-		    - 
-		    (
-		    (b.max_qty 
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
-		    - c.net_inventory  
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end
-		    )
-		    % case when isnull(mult.ORDER_MULTIPLE, 'E') = 'E' then 1 else isnull(d.u_bot,1) end )             
-        THEN 
-            (b.max_qty 
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
-		    - c.net_inventory  
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end)
-		    - 
-		    (
-		    (b.max_qty 
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
-		    - c.net_inventory  
-		    + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end
-		    ) % case when isnull(mult.ORDER_MULTIPLE, 'E') = 'E' then 1 else isnull(d.u_bot,1) end 
-        ) 
-        ELSE (a.OnHand - a.in_transit_out) - ((a.OnHand - a.in_transit_out) % case when isnull(mult.ORDER_MULTIPLE, 'E') = 'E' then 1 else isnull(d.u_bot,1) end
-    )
-    END AS Transfer_Quantity, getdate() Date_Created, '{1}' Created_By
-	FROM NetInventory AS a " + Queries.WITH_NOLOCK + @"  
-    INNER JOIN rss_store_item_min_max AS b " + Queries.WITH_NOLOCK + @"  ON a.ItemCode = b.item and a.CompanyId = b.CompanyId 
-	INNER JOIN NetInventory AS c " + Queries.WITH_NOLOCK + @"  ON B.LOC = C.WHSCODE AND b.Item = c.ItemCode and b.CompanyId = c.CompanyId 
-	INNER JOIN {0}.dbo.OITM AS d  " + Queries.WITH_NOLOCK + @"  ON a.ItemCode = d.ItemCode 
-	INNER JOIN rss_loc_dept_multiple mult " + Queries.WITH_NOLOCK + @"  on d.ItmsGrpCod = mult.dept and mult.companyId = a.CompanyId and mult.LOC = b.LOC
-	LEFT OUTER JOIN (
-	    SELECT replacement_item AS item, SUM(b.MIN_QTY) min_qty, SUM(b.MAX_QTY) max_qty, SUM(c.net_inventory) AS net_inventory
-	    FROM rss_store_item_min_max AS b " + Queries.WITH_NOLOCK + @" 
-        INNER JOIN NetInventory AS c " + Queries.WITH_NOLOCK + @"  ON b.loc = c.whscode and b.item = c.ItemCode and b.CompanyId = c.CompanyId and c.CompanyId = '{0}'  
-	    WHERE isnull(replacement_item,'') <> '' and (b.hold = 1) AND (c.net_inventory < b.min_qty) AND (b.loc = c.WhsCode) AND (c.WhsCode = '{2}')
-	    GROUP BY replacement_item
-	) AS e ON e.item = b.item
-	WHERE  1=1 and a.whscode = '{3}' and b.loc = '{2}' and a.CompanyId = '{0}' and a.OnHand - a.in_transit_out > 0 and b.hold = 0 and d.ItmsGrpCod IN ({4}) 
-	and (c.net_inventory < b.min_qty OR (c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) and e.item is not null))";
+            string multExpr = BuildMultipleCaseExpr();
+            string brandFilter = (brands != "'All Brands'")
+                ? " AND replace(d.u_brand, '''','_') IN ({5})"
+                : "";
 
-            if (brands != "'All Brands'")
-            {
-                sql += " and replace(d.u_brand, '''','_') in ({5})";
-            }
+            // BaseData CTE computes RawGap, Available, and the per-category rounding multiple (Mult).
+            // Requested_Quantity rounds UP the gap; Transfer_Quantity rounds UP min(available,gap).
+            // If the rounded-up amount exceeds Available, falls back to the unrounded base quantity.
+            sql = Queries.With_NetInventory() + @"
+, BaseData AS (
+    SELECT DISTINCT
+        '{0}' AS CompanyId,
+        a.WhsCode AS FromWhsCode,
+        c.WhsCode AS ToWhsCode,
+        d.ItemCode,
+        d.ItemName AS ItemDescription,
+        d.ItmsGrpCod AS GroupCode,
+        (b.max_qty
+        + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.max_qty,0) else 0 end
+        - c.net_inventory
+        + case when c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) then isnull(e.net_inventory,0) else 0 end) AS RawGap,
+        a.OnHand - a.in_transit_out AS Available,
+        " + multExpr + @" AS Mult,
+        getdate() AS Date_Created,
+        '{1}' AS Created_By
+    FROM NetInventory AS a " + Queries.WITH_NOLOCK + @"
+    INNER JOIN rss_store_item_min_max AS b " + Queries.WITH_NOLOCK + @" ON a.ItemCode = b.item AND a.CompanyId = b.CompanyId
+    INNER JOIN NetInventory AS c " + Queries.WITH_NOLOCK + @" ON b.LOC = c.WHSCODE AND b.Item = c.ItemCode AND b.CompanyId = c.CompanyId
+    INNER JOIN {0}.dbo.OITM AS d " + Queries.WITH_NOLOCK + @" ON a.ItemCode = d.ItemCode
+    INNER JOIN rss_loc_dept_multiple mult " + Queries.WITH_NOLOCK + @" ON d.ItmsGrpCod = mult.dept AND mult.companyId = a.CompanyId AND mult.LOC = b.LOC
+    LEFT OUTER JOIN (
+        SELECT replacement_item AS item, SUM(b2.MIN_QTY) min_qty, SUM(b2.MAX_QTY) max_qty, SUM(c2.net_inventory) AS net_inventory
+        FROM rss_store_item_min_max AS b2 " + Queries.WITH_NOLOCK + @"
+        INNER JOIN NetInventory AS c2 " + Queries.WITH_NOLOCK + @" ON b2.loc = c2.whscode AND b2.item = c2.ItemCode AND b2.CompanyId = c2.CompanyId AND c2.CompanyId = '{0}'
+        WHERE isnull(replacement_item,'') <> '' AND (b2.hold = 1) AND (c2.net_inventory < b2.min_qty) AND (b2.loc = c2.WhsCode) AND (c2.WhsCode = '{2}')
+        GROUP BY replacement_item
+    ) AS e ON e.item = b.item
+    WHERE a.whscode = '{3}' AND b.loc = '{2}' AND a.CompanyId = '{0}'
+      AND a.OnHand - a.in_transit_out > 0 AND b.hold = 0 AND d.ItmsGrpCod IN ({4})
+      AND (c.net_inventory < b.min_qty OR (c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) AND e.item IS NOT NULL))
+      " + brandFilter + @"
+)
+INSERT INTO rss_results
+SELECT
+    CompanyId, FromWhsCode, ToWhsCode, ItemCode, ItemDescription, GroupCode,
+    CASE WHEN Mult <= 1 THEN RawGap
+         ELSE RawGap + (Mult - RawGap % Mult) % Mult
+    END AS Requested_Quantity,
+    CASE WHEN Mult <= 1 THEN
+        CASE WHEN Available >= RawGap THEN RawGap ELSE Available END
+    ELSE
+        CASE
+            WHEN (CASE WHEN Available >= RawGap THEN RawGap ELSE Available END)
+                 + (Mult - (CASE WHEN Available >= RawGap THEN RawGap ELSE Available END) % Mult) % Mult
+                 <= Available
+            THEN (CASE WHEN Available >= RawGap THEN RawGap ELSE Available END)
+                 + (Mult - (CASE WHEN Available >= RawGap THEN RawGap ELSE Available END) % Mult) % Mult
+            ELSE CASE WHEN Available >= RawGap THEN RawGap ELSE Available END
+        END
+    END AS Transfer_Quantity,
+    Date_Created, Created_By
+FROM BaseData
+WHERE RawGap > 0";
 
             sql = string.Format(sql, sap_db, usr, ToWhsCode, FromWhsCode, ItemGroups, brands);
 
@@ -777,6 +779,121 @@ INSERT INTO rss_results
         }
         lstItemGroups.DataSource = dt;
         lstItemGroups.DataBind();
+    }
+
+    // Validates that the user's TypeWhs role allows the selected FROM→TO warehouse pair.
+    // BODEGA: FROM must be the main distribution center (TypeWhs=BODEGA, BPLId=TorBPLId).
+    // TIENDA: FROM must NOT be the main distribution center (relay and store-to-store allowed).
+    // BODTIE / empty: no restriction.
+    private string ValidateWhsAccess(string fromWhs, string toWhs)
+    {
+        string userTypeWhs = Session["UserTypeWhs"] != null ? Session["UserTypeWhs"].ToString() : "";
+
+        if (string.IsNullOrEmpty(userTypeWhs) ||
+            string.Equals(userTypeWhs, "BODTIE", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        int torBPLId = 1;
+        int.TryParse(ConfigurationManager.AppSettings["TorBPLId"], out torBPLId);
+
+        int fromBPLId = 0;
+        string fromTypeWhs = "";
+
+        string connStr = System.Configuration.ConfigurationManager
+            .ConnectionStrings["smm_latConnectionString"].ConnectionString;
+        try
+        {
+            using (var conn = new System.Data.SqlClient.SqlConnection(connStr))
+            {
+                conn.Open();
+                using (var cmd = new SqlCommand(
+                    @"SELECT O.BPLId, ISNULL(sw.TYPEWHS,'') AS TypeWhs
+                      FROM " + sap_db + @".dbo.OWHS O WITH(NOLOCK)
+                      LEFT JOIN SMM_WHSTYPE sw WITH(NOLOCK)
+                          ON sw.WHSCODE = O.WhsCode AND sw.COMPANYID = @cid
+                      WHERE O.WhsCode = @whs", conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", sap_db);
+                    cmd.Parameters.AddWithValue("@whs", fromWhs);
+                    using (var r = cmd.ExecuteReader())
+                    {
+                        if (r.Read())
+                        {
+                            fromBPLId   = r["BPLId"] != DBNull.Value ? Convert.ToInt32(r["BPLId"]) : 0;
+                            fromTypeWhs = r["TypeWhs"].ToString();
+                        }
+                    }
+                }
+            }
+        }
+        catch { return null; }
+
+        bool fromIsMainBodega = string.Equals(fromTypeWhs, "BODEGA", StringComparison.OrdinalIgnoreCase)
+                                && fromBPLId == torBPLId;
+
+        if (string.Equals(userTypeWhs, "BODEGA", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!fromIsMainBodega)
+                return "BODEGA users can only create transfers from the main distribution center (Branch " + torBPLId + ").";
+            return null;
+        }
+
+        if (string.Equals(userTypeWhs, "TIENDA", StringComparison.OrdinalIgnoreCase))
+        {
+            if (fromIsMainBodega)
+                return "TIENDA users cannot create transfers from the main distribution center (Branch " + torBPLId + "). Use relay or store-to-store transfers.";
+            return null;
+        }
+
+        return null;
+    }
+
+    // Builds a SQL CASE expression that returns the rounding multiple for each item,
+    // driven by Web.config CategoryOrderMultiples ("ItmsGrpCod:multiple,...").
+    // "BOT" means use OITM.U_BOT; if U_BOT <= 1, uses LiquorNoCasePackFallbackMultiple (default 12).
+    // Fixed integer means round UP to that multiple regardless of case pack.
+    // Categories not listed fall back to rss_loc_dept_multiple.ORDER_MULTIPLE (existing behavior).
+    private string BuildMultipleCaseExpr()
+    {
+        string raw = ConfigurationManager.AppSettings["CategoryOrderMultiples"] ?? "";
+        int fallbackMult;
+        if (!int.TryParse(ConfigurationManager.AppSettings["LiquorNoCasePackFallbackMultiple"], out fallbackMult) || fallbackMult < 2)
+            fallbackMult = 12;
+
+        var sb = new System.Text.StringBuilder("CASE");
+        bool hasCases = false;
+
+        if (!string.IsNullOrEmpty(raw))
+        {
+            foreach (string pair in raw.Split(','))
+            {
+                string[] parts = pair.Trim().Split(':');
+                int dept;
+                if (parts.Length == 2 && int.TryParse(parts[0].Trim(), out dept))
+                {
+                    string multVal = parts[1].Trim();
+                    if (string.Equals(multVal, "BOT", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sb.AppendFormat(
+                            " WHEN d.ItmsGrpCod = {0} THEN CASE WHEN ISNULL(d.U_BOT,1) > 1 THEN ISNULL(d.U_BOT,1) ELSE {1} END",
+                            dept, fallbackMult);
+                        hasCases = true;
+                    }
+                    else
+                    {
+                        int fixedMult;
+                        if (int.TryParse(multVal, out fixedMult) && fixedMult > 1)
+                        {
+                            sb.AppendFormat(" WHEN d.ItmsGrpCod = {0} THEN {1}", dept, fixedMult);
+                            hasCases = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        sb.Append(" ELSE CASE WHEN ISNULL(mult.ORDER_MULTIPLE,'E') = 'E' THEN 1 ELSE ISNULL(d.U_BOT,1) END END");
+        return hasCases ? sb.ToString() : "CASE WHEN ISNULL(mult.ORDER_MULTIPLE,'E') = 'E' THEN 1 ELSE ISNULL(d.U_BOT,1) END";
     }
 
     protected void btnCreateTransfer_Load(object sender, EventArgs e)

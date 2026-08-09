@@ -62,12 +62,17 @@ public partial class BodegaTiendaEdit : BasePage
 
     protected void gridPairs_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
     {
-        DataTable dt = Admin.GetBodegaTiendaPairs(sap_db, sap_db);
-        gridPairs.DataSource = dt;
-
-        this.Session["BodegaTiendaPairs"] = dt;
-        this.Pairs.PrimaryKey = new DataColumn[] { this.Pairs.Columns["BodegaID"], this.Pairs.Columns["TiendaID"] };
-        gridPairs.MasterTableView.EditFormSettings.EditFormType = GridEditFormType.WebUserControl;
+        try
+        {
+            DataTable dt = Admin.GetBodegaTiendaPairs(sap_db, sap_db);
+            gridPairs.DataSource = dt;
+            this.Session["BodegaTiendaPairs"] = dt;
+            gridPairs.MasterTableView.EditFormSettings.EditFormType = GridEditFormType.WebUserControl;
+        }
+        catch (Exception ex)
+        {
+            AddLabel(gridPairs, "Error loading pairs: " + ex.Message);
+        }
     }
 
     protected void gridPairs_UpdateCommand(object source, GridCommandEventArgs e)
@@ -206,12 +211,17 @@ public partial class BodegaTiendaEdit : BasePage
 
     protected void gridSchedule_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
     {
-        DataTable dt = Admin.GetBodegaTiendaSchedule(sap_db, sap_db);
-        gridSchedule.DataSource = dt;
-
-        this.Session["BodegaTiendaSchedule"] = dt;
-        this.Schedule.PrimaryKey = new DataColumn[] { this.Schedule.Columns["BodegaID"], this.Schedule.Columns["TiendaID"] };
-        gridSchedule.MasterTableView.EditFormSettings.EditFormType = GridEditFormType.WebUserControl;
+        try
+        {
+            DataTable dt = Admin.GetBodegaTiendaSchedule(sap_db, sap_db);
+            gridSchedule.DataSource = dt;
+            this.Session["BodegaTiendaSchedule"] = dt;
+            gridSchedule.MasterTableView.EditFormSettings.EditFormType = GridEditFormType.WebUserControl;
+        }
+        catch (Exception ex)
+        {
+            AddLabel(gridSchedule, "Error loading schedule: " + ex.Message);
+        }
     }
 
     protected void gridSchedule_UpdateCommand(object source, GridCommandEventArgs e)

@@ -16,39 +16,45 @@ public partial class BodegaTiendaHrsForm : System.Web.UI.UserControl
     {
         if (DataItem != null)
         {
-            string sap_db = (string)Session["CompanyId"];
-
-            drpPair.DataSource = Admin.GetActiveBodegaTiendaPairsForDropdown(sap_db, sap_db);
-            drpPair.DataBind();
-
-            if (DataItem.GetType() == typeof(DataRowView))
+            try
             {
-                // Update: the Bodega->Tienda pair is the natural key — not editable.
-                DataRowView row = (DataRowView)DataItem;
+                string sap_db = (string)Session["CompanyId"];
 
-                string pairKey = row["BodegaID"].ToString() + "|" + row["TiendaID"].ToString();
-                drpPair.Items.Insert(1, new ListItem(
-                    row["BodegaName"].ToString() + "  ->  " + row["TiendaName"].ToString(), pairKey));
-                foreach (ListItem li in drpPair.Items)
-                    li.Selected = (li.Value == pairKey);
-                drpPair.Enabled = false;
+                drpPair.DataSource = Admin.GetActiveBodegaTiendaPairsForDropdown(sap_db, sap_db);
+                drpPair.DataBind();
 
-                if (!IsPostBack)
+                if (DataItem.GetType() == typeof(DataRowView))
                 {
+                    // Update: the Bodega->Tienda pair is the natural key — not editable.
+                    DataRowView row = (DataRowView)DataItem;
+
+                    string pairKey = row["BodegaID"].ToString() + "|" + row["TiendaID"].ToString();
+                    int insertAt = drpPair.Items.Count >= 1 ? 1 : 0;
+                    drpPair.Items.Insert(insertAt, new ListItem(
+                        row["BodegaName"].ToString() + "  ->  " + row["TiendaName"].ToString(), pairKey));
+                    foreach (ListItem li in drpPair.Items)
+                        li.Selected = (li.Value == pairKey);
+                    drpPair.Enabled = false;
+
                     chkActive.Checked = row["isActive"].ToString().ToLower() == "true";
                     SetDayCheckboxes(row["Days"].ToString());
                     SetTime(timeFrom, row["FromHrs"].ToString());
                     SetTime(timeTo, row["ToHrs"].ToString());
                 }
+                else if (DataItem.GetType() == typeof(Telerik.Web.UI.GridInsertionObject))
+                {
+                    // Insert
+                    chkActive.Checked = true;
+                    drpPair.Enabled = true;
+                    chkAllDays.Checked = true;
+                    SetTime(timeFrom, "00:01");
+                    SetTime(timeTo, "23:59");
+                }
             }
-            else if (DataItem.GetType() == typeof(Telerik.Web.UI.GridInsertionObject))
+            catch (Exception ex)
             {
-                // Insert
-                chkActive.Checked = true;
-                drpPair.Enabled = true;
-                chkAllDays.Checked = true;
-                SetTime(timeFrom, "00:01");
-                SetTime(timeTo, "23:59");
+                errLabel.Text = "Error loading schedule form: " + ex.Message;
+                errLabel.Visible = true;
             }
         }
     }

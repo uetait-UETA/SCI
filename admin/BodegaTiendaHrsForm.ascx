@@ -75,7 +75,9 @@
         </td>
     </tr>
     <tr>
-        <td colspan="2"></td>
+        <td colspan="2">
+            <asp:Label ID="errLabel" runat="server" ForeColor="Red" Visible="false" />
+        </td>
     </tr>
     <tr>
         <td align="right" colspan="2">

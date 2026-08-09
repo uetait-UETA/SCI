@@ -535,14 +535,77 @@ where c.CompanyId = '{0}' and a.OrderId = '{1}' and a.BinId = '{2}'
             sqlDB = new SqlDb();
             sqlDB.Connect();
 
-            sqlDB.cmd.CommandText = "SP_INVENTORY_KARDEX";
-            sqlDB.cmd.CommandType = CommandType.StoredProcedure;
+            sqlDB.cmd.CommandText = @"
+                SELECT
+                    T0.TransNum,
+                    CONVERT(DATE, T0.DocDate)                    AS DocDate,
+                    ISNULL(T0.BASE_REF, '')                      AS BaseDoc,
+                    CAST(ISNULL(T0.CreatedBy, 0) AS NVARCHAR(20)) AS CreatedBy,
+                    CASE T0.TransType
+                        WHEN 13  THEN 'AR Invoice'
+                        WHEN 14  THEN 'AR Credit'
+                        WHEN 15  THEN 'Delivery'
+                        WHEN 16  THEN 'Returns'
+                        WHEN 18  THEN 'AP Invoice'
+                        WHEN 19  THEN 'AP Credit'
+                        WHEN 20  THEN 'Receipt from PO'
+                        WHEN 21  THEN 'Goods Return'
+                        WHEN 59  THEN 'Goods Receipt'
+                        WHEN 60  THEN 'Goods Issue'
+                        WHEN 67  THEN 'Inv. Transfer'
+                        WHEN 162 THEN 'Transfer Request'
+                        ELSE CAST(T0.TransType AS NVARCHAR(10))
+                    END                                          AS NomDoc,
+                    T0.ItemCode,
+                    T1.ItemName                                  AS Dscription,
+                    ISNULL(T3.AllBcds, '')                       AS BarCode,
+                    T0.Warehouse,
+                    ISNULL(T2.U_POSCode, '')                     AS U_POSCode,
+                    T0.InQty - T0.OutQty                         AS QtyTrans,
+                    SUM(T0.InQty - T0.OutQty) OVER (
+                        PARTITION BY T0.ItemCode, T0.Warehouse
+                        ORDER BY T0.DocDate, T0.TransNum
+                        ROWS UNBOUNDED PRECEDING
+                    )                                            AS CurrentBalance,
+                    SUM(T0.InQty - T0.OutQty) OVER (
+                        PARTITION BY T0.ItemCode
+                        ORDER BY T0.DocDate, T0.TransNum
+                        ROWS UNBOUNDED PRECEDING
+                    )                                            AS Balance
+                FROM " + v_Company + @".dbo.OINM  T0 WITH (NOLOCK)
+                JOIN " + v_Company + @".dbo.OITM  T1 WITH (NOLOCK) ON T1.ItemCode  = T0.ItemCode
+                LEFT JOIN " + v_Company + @".dbo.OWHS  T2 WITH (NOLOCK) ON T2.WhsCode  = T0.Warehouse
+                OUTER APPLY (
+                    SELECT STUFF((
+                        SELECT ', ' + BcdCode
+                        FROM " + v_Company + @".dbo.OBCD WITH (NOLOCK)
+                        WHERE ItemCode = T0.ItemCode
+                        FOR XML PATH('')
+                    ), 1, 2, '') AS AllBcds
+                ) T3
+                WHERE T0.ItemCode = @Item
+                  AND (@FromDate IS NULL OR T0.DocDate >= @FromDate)
+                  AND (@ToDate   IS NULL OR T0.DocDate <= @ToDate)
+                  AND (@Grupo    IS NULL OR T1.ItmsGrpCod = @Grupo)
+                ORDER BY T0.Warehouse, T0.DocDate, T0.TransNum";
+
+            sqlDB.cmd.CommandType = CommandType.Text;
             sqlDB.cmd.CommandTimeout = 240;
-            sqlDB.cmd.Parameters.Add(new SqlParameter("@Company", SqlDbType.NVarChar)).Value = v_Company;
-            sqlDB.cmd.Parameters.Add(new SqlParameter("@Grupo", SqlDbType.NVarChar)).Value = v_Groupo;
             sqlDB.cmd.Parameters.Add(new SqlParameter("@Item", SqlDbType.NVarChar)).Value = v_Item;
-            sqlDB.cmd.Parameters.Add(new SqlParameter("@FromDate", SqlDbType.NVarChar)).Value = v_FromDate;
-            sqlDB.cmd.Parameters.Add(new SqlParameter("@ToDate", SqlDbType.NVarChar)).Value = v_ToDate;
+
+            SqlParameter pGrupo = sqlDB.cmd.Parameters.Add(new SqlParameter("@Grupo", SqlDbType.SmallInt));
+            short grupoVal;
+            pGrupo.Value = short.TryParse(v_Groupo, out grupoVal) ? (object)grupoVal : DBNull.Value;
+
+            SqlParameter pFrom = sqlDB.cmd.Parameters.Add(new SqlParameter("@FromDate", SqlDbType.DateTime));
+            DateTime fromDate;
+            pFrom.Value = (!string.IsNullOrEmpty(v_FromDate) && DateTime.TryParse(v_FromDate, out fromDate))
+                ? (object)fromDate : DBNull.Value;
+
+            SqlParameter pTo = sqlDB.cmd.Parameters.Add(new SqlParameter("@ToDate", SqlDbType.DateTime));
+            DateTime toDate;
+            pTo.Value = (!string.IsNullOrEmpty(v_ToDate) && DateTime.TryParse(v_ToDate, out toDate))
+                ? (object)toDate : DBNull.Value;
             dt.Load(sqlDB.cmd.ExecuteReader());
         }
         catch (Exception ex)
