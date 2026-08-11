@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Data;
+using System.Web.UI;
 using Telerik.Web.UI;
 
 public partial class R_Kardex : BasePage
@@ -325,6 +326,21 @@ public partial class R_Kardex : BasePage
     //        return;
     //    }
     //}
+    protected void rgHead_ItemDataBound(object sender, GridItemEventArgs e)
+    {
+        if (!(e.Item is GridDataItem)) return;
+        var item = (GridDataItem)e.Item;
+        object qtyObj = DataBinder.Eval(item.DataItem, "QtyTrans");
+        if (qtyObj != null && qtyObj != DBNull.Value)
+        {
+            decimal qty = Convert.ToDecimal(qtyObj);
+            if (qty > 0)
+                item["QtyTrans"].ForeColor = System.Drawing.Color.Green;
+            else if (qty < 0)
+                item["QtyTrans"].ForeColor = System.Drawing.Color.Red;
+        }
+    }
+
     protected void rgHead_ItemCommand(object sender, GridCommandEventArgs e)
     {
         if (e.CommandName == RadGrid.ExportToExcelCommandName)

@@ -91,7 +91,8 @@
         <div class="row">
             <div class="col-md-8">
                 <tel:RadGrid ID="rgHead" AllowSorting="True" CssClass="Panel" PageSize="20" AllowPaging="false" runat="server" ShowStatusBar="true" AutoGenerateColumns="False"
-                    OnNeedDataSource="rgHead_NeedDataSource" OnItemCommand="rgHead_ItemCommand" 
+                    OnNeedDataSource="rgHead_NeedDataSource" OnItemCommand="rgHead_ItemCommand"
+                    OnItemDataBound="rgHead_ItemDataBound"
                     Visible="false">
                     <PagerStyle Mode="Slider"></PagerStyle>
                     <SortingSettings EnableSkinSortStyles="false" />
@@ -127,6 +128,7 @@
                     <ClientSettings>
                         <Resizing AllowColumnResize="true" />
                         <Selecting AllowRowSelect="true" />
+                        <Scrolling AllowScroll="true" UseStaticHeaders="true" ScrollHeight="500px" />
                     </ClientSettings>
                 </tel:RadGrid>
             </div>
