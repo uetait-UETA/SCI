@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Data.SqlClient;
@@ -912,6 +913,42 @@ ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateT
         }
         finally { _db.Disconnect(); }
         return dt;
+    }
+
+    // Returns actual received qty per OPCH line (BaseLine → Qty) from the OPDN created
+    public Dictionary<int, decimal> GetReceivedQtyByLine(string sapDb, int opchDocEntry)
+    {
+        var result = new Dictionary<int, decimal>();
+        try
+        {
+            _db.Connect();
+            // PDN1 = PurchaseDeliveryNotes lines; IGN1 = GoodsReceiptsPO lines — query both
+            string sql = string.Format(@"
+SELECT BaseLine, SUM(Quantity) AS Qty
+FROM (
+    SELECT BaseLine, Quantity FROM {0}..PDN1 WITH(NOLOCK) WHERE BaseType=18 AND BaseEntry=@de
+    UNION ALL
+    SELECT BaseLine, Quantity FROM {0}..IGN1 WITH(NOLOCK) WHERE BaseType=18 AND BaseEntry=@de
+) x
+WHERE BaseLine IS NOT NULL
+GROUP BY BaseLine", sapDb);
+            using (var cmd = new SqlCommand(sql, _db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@de", opchDocEntry);
+                using (var rdr = cmd.ExecuteReader())
+                {
+                    while (rdr.Read())
+                    {
+                        int line = Convert.ToInt32(rdr["BaseLine"]);
+                        decimal qty = Convert.ToDecimal(rdr["Qty"]);
+                        result[line] = qty;
+                    }
+                }
+            }
+        }
+        catch { }
+        finally { _db.Disconnect(); }
+        return result;
     }
 
     public bool IsAlreadyReceived(string sapDb, int docEntry)

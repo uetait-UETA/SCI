@@ -142,5 +142,12 @@
             if (e.target && e.target.classList.contains('recv-qty'))
                 checkQtyDiff(e.target);
         });
+
+        // Show diff on page load for already-received rows
+        window.addEventListener('load', function () {
+            document.querySelectorAll('.recv-qty[data-loaded="1"]').forEach(function (txt) {
+                checkQtyDiff(txt);
+            });
+        });
     </script>
 </asp:Content>

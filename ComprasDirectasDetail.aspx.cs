@@ -12,6 +12,7 @@ public partial class ComprasDirectasDetail : BasePage
 {
     private readonly GoodsReceipt _gr = new GoodsReceipt();
     private bool _allowReceive = false;
+    private Dictionary<int, decimal> _receivedQtyByLine = null;
 
     private int DocEntry
     {
@@ -59,6 +60,7 @@ public partial class ComprasDirectasDetail : BasePage
             _allowReceive      = false;
             btnConfirm.Enabled = false;
             btnConfirm.Text    = "Already Received";
+            _receivedQtyByLine = _gr.GetReceivedQtyByLine((string)Session["CompanyId"], docEntry);
         }
         else
         {
@@ -105,13 +107,36 @@ public partial class ComprasDirectasDetail : BasePage
         TextBox txt = item.FindControl("txtReceivedQty") as TextBox;
         if (txt != null)
         {
-            object qty = DataBinder.Eval(item.DataItem, "Quantity");
-            if (qty != null)
+            object qtyObj  = DataBinder.Eval(item.DataItem, "Quantity");
+            object lineObj = DataBinder.Eval(item.DataItem, "LineNum");
+            if (qtyObj != null)
             {
-                string apriStr = Convert.ToDecimal(qty)
-                    .ToString("0.######", CultureInfo.InvariantCulture);
-                txt.Text = apriStr;
+                decimal apriQty = Convert.ToDecimal(qtyObj);
+                string apriStr  = apriQty.ToString("0.######", CultureInfo.InvariantCulture);
                 txt.Attributes["data-apri"] = apriStr;
+
+                if (!_allowReceive)
+                {
+                    // Already received — show actual qty, lock the field
+                    txt.ReadOnly  = true;
+                    txt.BackColor = System.Drawing.Color.FromArgb(240, 240, 240);
+                    txt.ForeColor = System.Drawing.Color.FromArgb(80, 80, 80);
+
+                    int lineNum = lineObj != null ? Convert.ToInt32(lineObj) : -1;
+                    decimal recvQty = (_receivedQtyByLine != null && _receivedQtyByLine.ContainsKey(lineNum))
+                        ? _receivedQtyByLine[lineNum]
+                        : apriQty;
+
+                    txt.Text = recvQty.ToString("0.######", CultureInfo.InvariantCulture);
+                    txt.Attributes["data-apri"] = apriStr; // keep so JS diff shows
+
+                    // Trigger diff calculation on load via inline style hint
+                    txt.Attributes["data-loaded"] = "1";
+                }
+                else
+                {
+                    txt.Text = apriStr;
+                }
             }
         }
     }
