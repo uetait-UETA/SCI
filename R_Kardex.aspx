@@ -89,7 +89,7 @@
             &nbsp;
         </div>
         <div class="row">
-            <div class="col-md-8">
+            <div class="col-md-12">
                 <tel:RadGrid ID="rgHead" AllowSorting="True" CssClass="Panel" PageSize="20" AllowPaging="false" runat="server" ShowStatusBar="true" AutoGenerateColumns="False"
                     OnNeedDataSource="rgHead_NeedDataSource" OnItemCommand="rgHead_ItemCommand"
                     OnItemDataBound="rgHead_ItemDataBound"
