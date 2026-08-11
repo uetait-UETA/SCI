@@ -312,9 +312,9 @@ public partial class ProductLocator : BasePage
             //order by loc_name";
 
             string sql = Queries.With_SmmReserved() + @"
-select loc, loc_name, pos_code, item_type, category_name category, item, item_desc, soh, reserved, soh_avail, local_in_transit, colon_in_transit, total_in_transit, net_inventory, min, max
+select loc, loc_name, pos_code, u_sap_store, item_type, category_name category, item, item_desc, soh, reserved, soh_avail, local_in_transit, colon_in_transit, total_in_transit, net_inventory, min, max
 from (
-    select '{0}' company, a.WhsCode loc, dbo.InitCap(c.WhsName) loc_name, ISNULL(c.U_POSCode, '') AS pos_code, c.BPLId, b.ItmsGrpCod category_id, dbo.InitCap(d.ItmsGrpNam) category_name, a.ItemCode item, dbo.InitCap(b.ItemName) item_desc, cast(a.OnHand as int)soh, cast(isnull(f.reserved,0) as int) reserved, cast(a.OnHand - isnull(f.reserved,0) as int) soh_avail, cast(isnull(e.in_transit,0) as int)local_in_transit, cast(isnull(g.Quantity,0) as int) colon_in_transit, cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) total_in_transit, cast(a.OnHand - isnull(f.reserved,0) as int) + cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) net_inventory, cast(isnull(h.Min_Qty,0) as int) min, cast(isnull(h.Max_qty,0) as int) max,
+    select '{0}' company, a.WhsCode loc, dbo.InitCap(c.WhsName) loc_name, ISNULL(c.U_POSCode, '') AS pos_code, ISNULL(c.U_SAP_Store, '') AS u_sap_store, c.BPLId, b.ItmsGrpCod category_id, dbo.InitCap(d.ItmsGrpNam) category_name, a.ItemCode item, dbo.InitCap(b.ItemName) item_desc, cast(a.OnHand as int)soh, cast(isnull(f.reserved,0) as int) reserved, cast(a.OnHand - isnull(f.reserved,0) as int) soh_avail, cast(isnull(e.in_transit,0) as int)local_in_transit, cast(isnull(g.Quantity,0) as int) colon_in_transit, cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) total_in_transit, cast(a.OnHand - isnull(f.reserved,0) as int) + cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) net_inventory, cast(isnull(h.Min_Qty,0) as int) min, cast(isnull(h.Max_qty,0) as int) max,
         ISNULL(b.U_Type,'') AS item_type, ISNULL(c.U_Type,'') AS whs_type
     from {0}..oitw a " + Queries.WITH_NOLOCK + @"  join {0}..oitm b " + Queries.WITH_NOLOCK + @"  on a.itemCode = b.itemCode 
     join {0}..owhs c " + Queries.WITH_NOLOCK + @" on a.WhsCode = c.WhsCode 
@@ -424,8 +424,10 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
             om.itemcode,
             om.ItemCode AS CodigoSap,
             om.ItemName AS Description,
-            ISNULL(om.U_Type,'') AS ItemType
+            ISNULL(om.U_Type,'') AS ItemType,
+            ISNULL(grp.ItmsGrpNam,'') AS ItmsGrpNam
         from {0}..OITM AS om " + Queries.WITH_NOLOCK + @"
+        left join {0}..OITB AS grp " + Queries.WITH_NOLOCK + @" on grp.ItmsGrpCod = om.ItmsGrpCod
         where om.itemcode = '{1}' ";
 
             v_Sql = string.Format(v_Sql, v_CompanyID, v_Item);
@@ -439,6 +441,7 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
                 lblCodSAP.InnerHtml = dtData.Rows[0]["itemcode"].ToString();
                 lblDesc.InnerHtml = dtData.Rows[0]["Description"].ToString();
                 lblItemType.InnerHtml = dtData.Rows[0]["ItemType"].ToString();
+                lblItmsGrpNam.InnerHtml = dtData.Rows[0]["ItmsGrpNam"].ToString();
                 lblBarCode.InnerHtml = dtData.Rows[0]["Posibles_CodigoBarras"].ToString();
                 ulData.Visible = true;
             }

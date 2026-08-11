@@ -22,7 +22,6 @@ public partial class R_Kardex : BasePage
                 Session["RptFromDateTxt"] = "-";
                 Session["RpttoDateTxt"] = "-";
                 Session["RptrtbItem"] = "-";
-                Session["RptrcbGrupo"] = "-";
                 Session["RptrcbCorte"] = "-";
 
                 GetCias();
@@ -107,24 +106,6 @@ public partial class R_Kardex : BasePage
             ShowMasterPageMessage("Error", "Failed to Get CIA data", ex.Message.ToString());
         }
     }
-    private void GetGrupos()
-    {
-        try
-        {
-            DataTable dtGrupo = dm.GetGruposKardex(rcbCorte.SelectedValue.ToString());
-
-            rcbGrupo.DataSource = dtGrupo;
-            rcbGrupo.DataValueField = "ItmsGrpCod";
-            rcbGrupo.DataTextField = "ItmsGrpNam";
-            rcbGrupo.DataBind();
-
-            rcbGrupo.ClearSelection();
-        }
-        catch (Exception ex)
-        {
-            ShowMasterPageMessage("Error", "Failed to Get Grupo data", ex.Message.ToString());
-        }
-    }
 
     private DataTable GetData(string sFromDate, string sToDate, string sRtbItem, string sRcbGrupo, string sRcbCorte)
     {
@@ -162,7 +143,7 @@ public partial class R_Kardex : BasePage
                 rgHead.MasterTableView.ShowGroupFooter = false;
             }
 
-            if (rcbCorte.SelectedIndex >= 0 && !string.IsNullOrEmpty(rcbGrupo.SelectedValue) && !string.IsNullOrEmpty(rtbItem.Text) && !string.IsNullOrWhiteSpace(rtbItem.Text))
+            if (rcbCorte.SelectedIndex >= 0 && !string.IsNullOrEmpty(rtbItem.Text) && !string.IsNullOrWhiteSpace(rtbItem.Text))
             {
                 goToRebind = ValidateByBarCode("", rtbItem.Text);
             }
@@ -185,7 +166,6 @@ public partial class R_Kardex : BasePage
     protected void rcbCorte_SelectedIndexChanged(object sender, RadComboBoxSelectedIndexChangedEventArgs e)
     {
         //Session["dtKardex"] = null;
-        GetGrupos();
         rgHead.Visible = false;
         divHeading.Visible = false;
     }
@@ -203,13 +183,13 @@ public partial class R_Kardex : BasePage
 
         try
         {
-            if (rcbCorte.SelectedIndex >= 0 && !string.IsNullOrEmpty(rcbGrupo.SelectedValue) && !string.IsNullOrEmpty(rtbItem.Text) && !string.IsNullOrWhiteSpace(rtbItem.Text))
+            if (rcbCorte.SelectedIndex >= 0 && !string.IsNullOrEmpty(rtbItem.Text) && !string.IsNullOrWhiteSpace(rtbItem.Text))
             {
                 DataTable dtOrdenes = new DataTable();
                 string sFromDate;
                 string sToDate;
                 string sRtbItem = rtbItem.Text;
-                string sRcbGrupo = rcbGrupo.SelectedValue;
+                string sRcbGrupo = "";
                 string sRcbCorte = rcbCorte.SelectedValue;
                 
                 if (FromDateTxt.SelectedDate == null)
@@ -237,14 +217,12 @@ public partial class R_Kardex : BasePage
                 if (Session["RptFromDateTxt"].ToString() != sFromDate ||
                     Session["RpttoDateTxt"].ToString() != sToDate ||
                     Session["RptrtbItem"].ToString() != sRtbItem ||
-                    Session["RptrcbGrupo"].ToString() != sRcbGrupo ||
                     Session["RptrcbCorte"].ToString() != sRcbCorte)
                 {
                     Session["RptData"] = GetData(sFromDate, sToDate, sRtbItem, sRcbGrupo, sRcbCorte);
                     Session["RptFromDateTxt"] = sFromDate;
                     Session["RpttoDateTxt"] = sToDate;
                     Session["RptrtbItem"] = sRtbItem;
-                    Session["RptrcbGrupo"] = sRcbGrupo;
                     Session["RptrcbCorte"] = sRcbCorte;
                 }
 
@@ -281,11 +259,10 @@ public partial class R_Kardex : BasePage
             {
                 divHeading.Visible = false;
                 rgHead.Visible = false;
-                string dbg = string.Format("CIA idx={0} val='{1}' | GRP idx={2} val='{3}' | Item='{4}'",
+                string dbg = string.Format("CIA idx={0} val='{1}' | Item='{2}'",
                     rcbCorte.SelectedIndex, rcbCorte.SelectedValue,
-                    rcbGrupo.SelectedIndex, rcbGrupo.SelectedValue,
                     rtbItem.Text);
-                ShowMasterPageMessage("Error", "Failed to Get data", "Please select CIA, Grupo & Item. [" + dbg + "]");
+                ShowMasterPageMessage("Error", "Failed to Get data", "Please select Company & Item. [" + dbg + "]");
             }
         }
         catch (Exception ex)
@@ -366,7 +343,6 @@ public partial class R_Kardex : BasePage
             Session["RptFromDateTxt"] = "-";
             Session["RpttoDateTxt"] = "-";
             Session["RptrtbItem"] = "-";
-            Session["RptrcbGrupo"] = "-";
             Session["RptrcbCorte"] = "-";
 
             Session["SearchItemByBarCodesData"] = null;

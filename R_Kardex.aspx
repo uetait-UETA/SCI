@@ -27,17 +27,7 @@
                                         <CollapseAnimation Type="OutQuint" Duration="300" />
                                     </tel:RadComboBox>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
                                 </li>
-                                <li style="display: inline;">
-                                    <label class="myLabelXtraSmall">Group</label>
-                                    <tel:RadComboBox ID="rcbGrupo" runat="server" Height="200px" DropDownAutoWidth="Disabled" Width="180px"
-                                        HighlightTemplatedItems="true"
-                                        AppendDataBoundItems="true"
-                                        EmptyMessage="Select Group"
-                                        Font-Italic="false">
-                                        <ExpandAnimation Type="OutQuart" Duration="500" />
-                                        <CollapseAnimation Type="OutQuint" Duration="300" />
-                                    </tel:RadComboBox>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-                                </li>
+
                                 <li style="display: inline;">
                                     <label class="myLabelMedium">Item &#47; BarCode</label>
                                     <tel:RadTextBox ID="rtbItem" runat="server" Width="100px" />&nbsp;&nbsp;

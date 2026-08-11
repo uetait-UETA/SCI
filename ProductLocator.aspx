@@ -53,6 +53,9 @@
                                 <li>
                                     <label class="myLabelXLarge">Item Type:</label>
                                     <label class="myLabelXXXXLarge" runat="server" id="lblItemType" style="color:red;"></label>
+                                    &nbsp;&nbsp;
+                                    <label class="myLabelXLarge">Category:</label>
+                                    <label class="myLabelXXXXLarge" runat="server" id="lblItmsGrpNam" style="color:red;"></label>
                                 </li>
                                 <li>
                                     <label class="myLabelXLarge">Possible Barcodes</label>
@@ -77,6 +80,7 @@
                     <SortingSettings EnableSkinSortStyles="false" />
                     <MasterTableView Width="100%" AllowNaturalSort="false" ShowFooter="true" FooterStyle-Font-Bold="true">
                         <Columns>
+                            <tel:GridBoundColumn SortExpression="u_sap_store" HeaderText="SAP Store" HeaderButtonType="TextButton" DataField="u_sap_store" UniqueName="u_sap_store" HeaderStyle-Width="90px" />
                             <tel:GridBoundColumn SortExpression="pos_code" HeaderText="POS Code" HeaderButtonType="TextButton" DataField="pos_code" UniqueName="pos_code" HeaderStyle-Width="80px" />
                             <tel:GridBoundColumn SortExpression="loc" HeaderText="Loc" HeaderButtonType="TextButton" DataField="loc" UniqueName="loc" HeaderStyle-Width="100px" />
                             <tel:GridBoundColumn SortExpression="loc_name" HeaderText="Loc Name" HeaderButtonType="TextButton" DataField="loc_name" UniqueName="loc_name" />
