@@ -41,10 +41,16 @@ public partial class TransferDelete : BasePage
         db.SISINV_GET_ACCESSTYPE_PRC(lCurUser, lControlName, ref strAccessType, ref strRole_Description);
         db.Disconnect();
 
-        if (strAccessType != "F")
+        // Allow: GERENTE DE OPERACION or superuser (TOTAL)
+        bool isAllowedRole = string.Equals(strRole_Description, "GERENTE DE OPERACION", StringComparison.OrdinalIgnoreCase)
+                          || string.Equals(strRole_Description, "TOTAL", StringComparison.OrdinalIgnoreCase);
+
+        if (strAccessType != "F" || !isAllowedRole)
 		{
 		    flagokay = 'N';
-		    string message = "User " + lCurUser + ", with Role " + strRole_Description + " does not have permissions to access this screen.";
+		    string message = !isAllowedRole
+                ? "Access restricted. Only users with role 'GERENTE DE OPERACION' can access this screen. Your role: " + strRole_Description
+                : "User " + lCurUser + " does not have permissions to access this screen.";
 		    string url = string.Format("Default.aspx");
 		    string script = "{ alert('";
 		    script += message;
