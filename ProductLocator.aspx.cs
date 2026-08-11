@@ -84,6 +84,13 @@ public partial class ProductLocator : BasePage
                     {
                         Response.Redirect("Login1.aspx");
                     }
+
+                    string qsItem = Request.QueryString["item"];
+                    if (!string.IsNullOrEmpty(qsItem))
+                    {
+                        rtbItem.Text = qsItem;
+                        rbtnSearch_Click(null, null);
+                    }
                 }
             }
             catch (Exception ex)
