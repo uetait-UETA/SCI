@@ -66,13 +66,14 @@
                                 UniqueName="WhsType"    HeaderStyle-Width="100px" />
                             <tel:GridBoundColumn DataField="Quantity"   HeaderText="APRI Qty"
                                 UniqueName="Quantity"   HeaderStyle-Width="100px"
-                                DataFormatString="{0:N2}" ItemStyle-HorizontalAlign="Right" />
+                                DataFormatString="{0:N0}" ItemStyle-HorizontalAlign="Right" />
                             <tel:GridTemplateColumn HeaderText="Received Qty"
-                                UniqueName="ReceivedQty" HeaderStyle-Width="130px">
+                                UniqueName="ReceivedQty" HeaderStyle-Width="210px">
                                 <ItemTemplate>
                                     <asp:TextBox ID="txtReceivedQty" runat="server"
-                                        Width="90px" CssClass="form-control form-control-sm"
+                                        Width="90px" CssClass="form-control form-control-sm recv-qty"
                                         style="display:inline;" />
+                                    <span class="diff-lbl" style="margin-left:8px;font-weight:bold;font-size:13px;"></span>
                                 </ItemTemplate>
                             </tel:GridTemplateColumn>
                         </Columns>
@@ -118,5 +119,28 @@
                 "Click OK to confirm or Cancel to abort."
             );
         }
+
+        function checkQtyDiff(txt) {
+            var apri = parseFloat(txt.getAttribute('data-apri')) || 0;
+            var recv = parseFloat(txt.value) || 0;
+            var diff = recv - apri;
+            var span = txt.parentElement.querySelector('.diff-lbl');
+            if (!span) return;
+            if (diff === 0) {
+                span.textContent = '✓';
+                span.style.color = 'green';
+            } else if (diff > 0) {
+                span.textContent = '+' + diff.toFixed(2) + ' (over)';
+                span.style.color = 'red';
+            } else {
+                span.textContent = diff.toFixed(2) + ' (short)';
+                span.style.color = 'darkorange';
+            }
+        }
+
+        document.addEventListener('input', function (e) {
+            if (e.target && e.target.classList.contains('recv-qty'))
+                checkQtyDiff(e.target);
+        });
     </script>
 </asp:Content>

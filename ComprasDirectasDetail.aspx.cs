@@ -107,8 +107,12 @@ public partial class ComprasDirectasDetail : BasePage
         {
             object qty = DataBinder.Eval(item.DataItem, "Quantity");
             if (qty != null)
-                txt.Text = Convert.ToDecimal(qty)
+            {
+                string apriStr = Convert.ToDecimal(qty)
                     .ToString("0.######", CultureInfo.InvariantCulture);
+                txt.Text = apriStr;
+                txt.Attributes["data-apri"] = apriStr;
+            }
         }
     }
 
