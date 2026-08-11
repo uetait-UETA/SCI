@@ -31,7 +31,8 @@
                                 <tel:GridEditCommandColumn UniqueName="EditColumn" ButtonType="ImageButton" HeaderStyle-Width="40px" />
                                 <tel:GridBoundColumn SortExpression="id" HeaderText="ID" HeaderButtonType="TextButton" DataField="id" UniqueName="id" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="storenum" HeaderText="Store #" HeaderButtonType="TextButton" DataField="storenum" UniqueName="storenum" HeaderStyle-Width="170px" ReadOnly="true" />
-                                <tel:GridBoundColumn SortExpression="skunum" HeaderText="Item" HeaderButtonType="TextButton" DataField="skunum" UniqueName="skunum" HeaderStyle-Width="70px" ReadOnly="true" />
+                                <tel:GridHyperLinkColumn SortExpression="skunum" HeaderText="Item" HeaderButtonType="TextButton" DataTextField="skunum" UniqueName="skunum" HeaderStyle-Width="70px"
+                                    DataNavigateUrlFields="skunum" DataNavigateUrlFormatString="R_Kardex.aspx?item={0}" Target="_blank" />
                                 <tel:GridBoundColumn SortExpression="OldBarCode" HeaderText="Old Bar Code Item" HeaderButtonType="TextButton" DataField="OldBarCode" UniqueName="OldBarCode" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <tel:GridTemplateColumn HeaderText="New Item" SortExpression="new_sku" UniqueName="new_sku" HeaderStyle-Width="70px" ItemStyle-Wrap="false">
                                     <ItemTemplate>

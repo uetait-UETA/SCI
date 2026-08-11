@@ -28,6 +28,13 @@ public partial class R_Kardex : BasePage
 
                 rcbCorte.SelectedValue = Session["CompanyId"].ToString();
                 rcbCorte_SelectedIndexChanged(null, null);
+
+                string qsItem = Request.QueryString["item"];
+                if (!string.IsNullOrEmpty(qsItem))
+                {
+                    rtbItem.Text = qsItem;
+                    rbtnView_Click(null, null);
+                }
             }
         }
         catch (Exception ex)
