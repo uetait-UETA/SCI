@@ -70,7 +70,7 @@
                         <li>
                             <br />
                             <label class="myLabelXLarge">Item</label>
-                            <a runat="server" id="lnkItem" class="myLabel" target="sci_detail"></a>
+                            <a runat="server" id="lnkItem" class="myLabel"></a>
                         </li>
                         <li>
                             <label class="myLabelXLarge">Description</label>
