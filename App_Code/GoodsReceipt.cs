@@ -647,6 +647,57 @@ WHERE  p.DocEntry = {2}",
         return sb.ToString();
     }
 
+    // ── Build standalone OPDN for quantities received in excess of the APRI ──
+
+    public string BuildExcessGrpo(string cardCode, int bplId, int opchDocNum,
+        DataTable dtLines,
+        System.Collections.Generic.Dictionary<int, decimal> excessQtys,
+        string uType)
+    {
+        string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+
+        sb.Append("{");
+        sb.AppendFormat("\"CardCode\":\"{0}\",",   EscJson(cardCode));
+        sb.AppendFormat("\"BPL_IDAssignedToInvoice\":{0},", bplId);
+        sb.AppendFormat("\"DocDate\":\"{0}\",",    today);
+        sb.AppendFormat("\"TaxDate\":\"{0}\",",    today);
+        sb.AppendFormat("\"DocDueDate\":\"{0}\",", today);
+        sb.AppendFormat("\"NumAtCard\":\"{0}\",",  opchDocNum.ToString(CultureInfo.InvariantCulture));
+        sb.AppendFormat("\"Comments\":\"Over-receipt from AP Reserve Invoice #{0}\",", opchDocNum);
+        sb.AppendFormat("\"U_Type\":\"{0}\",", EscJson(uType));
+
+        sb.Append("\"DocumentLines\":[");
+        bool firstLine = true;
+        foreach (DataRow r in dtLines.Rows)
+        {
+            int lineNum = Convert.ToInt32(r["LineNum"]);
+            if (!excessQtys.ContainsKey(lineNum)) continue;
+            decimal qty = excessQtys[lineNum];
+            if (qty <= 0) continue;
+
+            if (!firstLine) sb.Append(",");
+            firstLine = false;
+
+            string itemCode = r["ItemCode"].ToString();
+            string whsCode  = r["WhsCode"].ToString();
+            string uomCode  = r["UoMCode"].ToString();
+            decimal price   = r["Price"] != DBNull.Value ? Convert.ToDecimal(r["Price"]) : 0;
+
+            sb.Append("{");
+            sb.AppendFormat("\"ItemCode\":\"{0}\",",  EscJson(itemCode));
+            sb.AppendFormat("\"Quantity\":{0},",      qty.ToString("0.######", CultureInfo.InvariantCulture));
+            sb.AppendFormat("\"Price\":{0},",         price.ToString("0.######", CultureInfo.InvariantCulture));
+            sb.AppendFormat("\"WarehouseCode\":\"{0}\"", EscJson(whsCode));
+            if (!string.IsNullOrEmpty(uomCode))
+                sb.AppendFormat(",\"UoMCode\":\"{0}\"", EscJson(uomCode));
+            sb.Append("}");
+        }
+        sb.Append("]}");
+
+        return sb.ToString();
+    }
+
     // ── Audit log overload with explicit origin company ───────────────────────
 
     public string LogReceipt(string originCompany, int originDocEntry, int originDocNum,

@@ -163,13 +163,37 @@ public partial class ComprasDirectasDetail : BasePage
             return;
         }
 
+        // Split received quantities: capped at APRI qty for base doc, excess for standalone OPDN
+        var cappedQtys = new Dictionary<int, decimal>();
+        var excessQtys = new Dictionary<int, decimal>();
+        foreach (DataRow r in dtLines.Rows)
+        {
+            int     lineNum  = Convert.ToInt32(r["LineNum"]);
+            decimal apriQty  = Convert.ToDecimal(r["Quantity"]);
+            decimal received = receivedQtys.ContainsKey(lineNum) ? receivedQtys[lineNum] : 0m;
+            decimal capped   = Math.Min(received, apriQty);
+            decimal excess   = received - capped;
+            cappedQtys[lineNum] = capped;
+            if (excess > 0) excessQtys[lineNum] = excess;
+        }
+
+        // Detect U_Type for the excess document
+        string uType = "Duty Paid";
+        foreach (DataRow r in dtLines.Rows)
+        {
+            string wt = r["WhsType"] != DBNull.Value ? r["WhsType"].ToString() : "";
+            if (!string.IsNullOrEmpty(wt)) { uType = wt; break; }
+        }
+
         string payload = _gr.BuildGrpoFromOpchWithQty(
-            cardCode, bplId, docEntry, opchDocNum, dtLines, receivedQtys);
+            cardCode, bplId, docEntry, opchDocNum, dtLines, cappedQtys);
 
         var sl = new SapServiceLayer();
         try
         {
             sl.Login(sapDb);
+
+            // Main receipt (based on APRI)
             string response = sl.CreateGoodsReceiptPO(payload);
 
             int grpoEntry = 0, grpoDocNum = 0;
@@ -184,11 +208,43 @@ public partial class ComprasDirectasDetail : BasePage
             _gr.LogReceipt(sapDb, docEntry, opchDocNum,
                 grpoEntry, grpoDocNum, cardCode, "", userId, "SUCCESS", "");
 
+            string successMsg = "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.";
+
+            // Excess receipt (standalone, no base doc)
+            if (excessQtys.Count > 0)
+            {
+                string excessPayload = _gr.BuildExcessGrpo(
+                    cardCode, bplId, opchDocNum, dtLines, excessQtys, uType);
+
+                try
+                {
+                    string excessResponse = sl.CreateGoodsReceiptPO(excessPayload);
+                    int exEntry = 0, exDocNum = 0;
+                    try
+                    {
+                        var exResp = JObject.Parse(excessResponse);
+                        if (exResp["DocEntry"] != null) exEntry  = Convert.ToInt32(exResp["DocEntry"]);
+                        if (exResp["DocNum"]   != null) exDocNum = Convert.ToInt32(exResp["DocNum"]);
+                    }
+                    catch { }
+
+                    _gr.LogReceipt(sapDb, docEntry, opchDocNum,
+                        exEntry, exDocNum, cardCode, "", userId, "SUCCESS-EXCESS", "");
+
+                    successMsg += " Over-receipt: Goods Receipt PO #" + exDocNum + " also created.";
+                }
+                catch (WebException wexEx)
+                {
+                    string exErr = SapServiceLayer.GetSlErrorMessage(wexEx);
+                    _gr.LogReceipt(sapDb, docEntry, opchDocNum,
+                        0, 0, cardCode, "", userId, "ERROR-EXCESS", exErr);
+                    successMsg += " Warning: over-receipt document failed — " + exErr;
+                }
+            }
+
             btnConfirm.Enabled = false;
             btnCancel.Text     = "Back to List";
-
-            ShowMessage("Success", "Goods Receipt Created",
-                "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.");
+            ShowMessage("Success", "Goods Receipt Created", successMsg);
         }
         catch (WebException wex)
         {
