@@ -123,16 +123,6 @@
                             <tel:GridBoundColumn Display="false" Visible="false" SortExpression="Balance" HeaderText="Balance Global" HeaderButtonType="TextButton"
                                 DataField="Balance" UniqueName="Balance" HeaderStyle-Width="130px" ItemStyle-Wrap="false" />
                         </Columns>
-                        <GroupByExpressions>
-                            <telerik:GridGroupByExpression>
-                                <GroupByFields>
-                                    <telerik:GridGroupByField FieldName="ItemCode"></telerik:GridGroupByField>
-                                </GroupByFields>
-                                <SelectFields>
-                                    <telerik:GridGroupByField FieldName="ItemCode" HeaderText="Item Code"></telerik:GridGroupByField>
-                                </SelectFields>
-                            </telerik:GridGroupByExpression>
-                        </GroupByExpressions>
                     </MasterTableView>
                     <ClientSettings>
                         <Resizing AllowColumnResize="true" />
