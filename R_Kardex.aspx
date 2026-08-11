@@ -70,7 +70,7 @@
                         <li>
                             <br />
                             <label class="myLabelXLarge">Item</label>
-                            <tel:RadLabel CssClass="myLabel" runat="server" ID="rlblItem" />
+                            <a runat="server" id="lnkItem" class="myLabel" target="_blank"></a>
                         </li>
                         <li>
                             <label class="myLabelXLarge">Description</label>
@@ -110,9 +110,8 @@
                                 DataField="CreatedBy" UniqueName="CreatedBy" HeaderStyle-Width="120px" ItemStyle-Wrap="false" />
                             <tel:GridBoundColumn SortExpression="NomDoc" HeaderText="Nom. Doc." HeaderButtonType="TextButton"
                                 DataField="NomDoc" UniqueName="NomDoc" HeaderStyle-Width="130px" ItemStyle-Wrap="false" />
-                            <tel:GridHyperLinkColumn SortExpression="ItemCode" HeaderText="Item Code" HeaderButtonType="TextButton"
-                                DataTextField="ItemCode" UniqueName="ItemCode" HeaderStyle-Width="130px" ItemStyle-Wrap="false"
-                                DataNavigateUrlFields="ItemCode" DataNavigateUrlFormatString="ProductLocator.aspx?item={0}" Target="_blank" />
+                            <tel:GridBoundColumn SortExpression="ItemCode" HeaderText="Item Code" HeaderButtonType="TextButton"
+                                DataField="ItemCode" UniqueName="ItemCode" HeaderStyle-Width="130px" ItemStyle-Wrap="false" />
                             <tel:GridBoundColumn SortExpression="Warehouse" HeaderText="Warehouse" HeaderButtonType="TextButton"
                                 DataField="Warehouse" UniqueName="Warehouse" HeaderStyle-Width="130px" ItemStyle-Wrap="false" FooterText="Total:" />
                             <tel:GridBoundColumn SortExpression="U_POSCode" HeaderText="POS Code" HeaderButtonType="TextButton"

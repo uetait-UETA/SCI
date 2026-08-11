@@ -247,7 +247,9 @@ public partial class R_Kardex : BasePage
                 {
                     if (dtOrdenes.Rows.Count > 0)
                     {
-                        rlblItem.Text = dtOrdenes.Rows[0]["ItemCode"].ToString();
+                        string itemCode = dtOrdenes.Rows[0]["ItemCode"].ToString();
+                        lnkItem.InnerText = itemCode;
+                        lnkItem.HRef = "ProductLocator.aspx?item=" + itemCode;
                         rlblDesc.Text = dtOrdenes.Rows[0]["Dscription"].ToString();
                         rlblBarCode.Text = dtOrdenes.Rows[0]["BarCode"].ToString();
                         pnlInfo.Visible = true;
