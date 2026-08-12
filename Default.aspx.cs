@@ -231,10 +231,14 @@ public partial class _Default : BasePage
                 || Session["rgHead_NeedDataSource_CiaLabel"].ToString() != sap_db)
             {
                 string sql = Queries.With_SmmTransfersDetails() + @"
-    Select company, transfer, from_loc, [dbo].[InitCap] (from_locName) as from_locName, to_loc, [dbo].[InitCap] (to_locName) as to_locName, TransferDate, [dbo].[InitCap] (case Transfer_Status when 'In_Draft' then 'In Draft' else Transfer_Status end) Transfer_Status, UserDispatch, UserReceive
-    from SmmTransfersDetails
-    where company = '{0}' {1}
-    group by company, transfer, from_loc, from_locName, to_loc, to_locName, TransferDate, Transfer_Status, UserDispatch, UserReceive";
+    Select d.company, d.transfer, d.from_loc, [dbo].[InitCap] (d.from_locName) as from_locName, ISNULL(wf.U_POSCode,'') as from_loc_pos,
+           d.to_loc, [dbo].[InitCap] (d.to_locName) as to_locName, ISNULL(wt.U_POSCode,'') as to_loc_pos,
+           d.TransferDate, [dbo].[InitCap] (case d.Transfer_Status when 'In_Draft' then 'In Draft' else d.Transfer_Status end) Transfer_Status, d.UserDispatch, d.UserReceive
+    from SmmTransfersDetails d
+    LEFT JOIN {0}..OWHS wf WITH(NOLOCK) ON wf.WhsCode = d.from_loc
+    LEFT JOIN {0}..OWHS wt WITH(NOLOCK) ON wt.WhsCode = d.to_loc
+    where d.company = '{0}' {1}
+    group by d.company, d.transfer, d.from_loc, d.from_locName, wf.U_POSCode, d.to_loc, d.to_locName, wt.U_POSCode, d.TransferDate, d.Transfer_Status, d.UserDispatch, d.UserReceive";
 
                 sql = string.Format(sql, sap_db, v_StatusSQL);
 

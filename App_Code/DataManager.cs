@@ -526,7 +526,7 @@ where c.CompanyId = '{0}' and a.OrderId = '{1}' and a.BinId = '{2}'
         }
         return dt;
     }
-    public DataTable GetInventoryKardex(string v_Company, string v_Groupo, string v_Item, string v_FromDate, string v_ToDate)
+    public DataTable GetInventoryKardex(string v_Company, string v_Groupo, string v_Item, string v_FromDate, string v_ToDate, int v_BplId = 0)
     {
         DataTable dt = new DataTable();
 
@@ -587,6 +587,7 @@ where c.CompanyId = '{0}' and a.OrderId = '{1}' and a.BinId = '{2}'
                   AND (@FromDate IS NULL OR T0.DocDate >= @FromDate)
                   AND (@ToDate   IS NULL OR T0.DocDate <= @ToDate)
                   AND (@Grupo    IS NULL OR T1.ItmsGrpCod = @Grupo)
+                  AND (@BplId    = 0     OR T2.BPLId = @BplId)
                 ORDER BY T0.Warehouse, T0.DocDate, T0.TransNum";
 
             sqlDB.cmd.CommandType = CommandType.Text;
@@ -606,6 +607,7 @@ where c.CompanyId = '{0}' and a.OrderId = '{1}' and a.BinId = '{2}'
             DateTime toDate;
             pTo.Value = (!string.IsNullOrEmpty(v_ToDate) && DateTime.TryParse(v_ToDate, out toDate))
                 ? (object)toDate : DBNull.Value;
+            sqlDB.cmd.Parameters.Add(new SqlParameter("@BplId", SqlDbType.Int)).Value = v_BplId;
             dt.Load(sqlDB.cmd.ExecuteReader());
         }
         catch (Exception ex)

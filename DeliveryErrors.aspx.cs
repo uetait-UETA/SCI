@@ -265,13 +265,19 @@ public partial class DeliveryErrors : BasePage
         }
     }
 
+    protected void drpFilter_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        rgHead.Rebind();
+    }
+
     protected void rgHead_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
     {
         try
         {
-            string companyId = (string)Session["CompanyId"] ?? "";
+            string companyId    = (string)Session["CompanyId"] ?? "";
+            bool   onlyProblems = drpFilter.SelectedValue == "PROBLEM";
             Delivery dy = new Delivery();
-            rgHead.DataSource = dy.GetDeliveryErrors(companyId);
+            rgHead.DataSource = dy.GetDeliveryErrors(companyId, onlyProblems);
         }
         catch (Exception ex)
         {

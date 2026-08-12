@@ -32,7 +32,7 @@ public class Delivery
         deeeItemCode = ConfigurationManager.AppSettings.Get("DeeeItemCode") ?? string.Empty;
 	}
 
-    public DataTable GetDeliveryErrors(string companyId)
+    public DataTable GetDeliveryErrors(string companyId, bool onlyProblems = false)
     {
         sap_db = companyId;
         DataTable dt = new DataTable();
@@ -61,6 +61,7 @@ public class Delivery
                     [dbo].[InitCap] (case when d.itemcode is not null then d.itemname else a.pludesc end) description,
 	                a.qty sale_qty,
                       isnull(c.onhand,0)  whs_qty,
+                      a.qty - isnull(c.onhand,0) AS qty_diff,
                     ISNULL(b.WhsCode, tt.WhsCode) whs_code,
 	                a.error_message
                 from
@@ -76,7 +77,9 @@ public class Delivery
                     and a.CompanyId = '" + branchId + @"'
                     and b.CompanyId = '" + branchId + @"'" +
                     (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
-                    and a.skunum <> '" + deeeItemCode + @"'") + @"
+                    and a.skunum <> '" + deeeItemCode + @"'") +
+                    (onlyProblems ? @"
+                    and ISNULL(c.onhand, 0) < a.qty" : "") + @"
                order by CONVERT(smalldatetime,CONVERT(varchar,a.itemdatetime,101)), a.storenum,a.itemnum
                 ";
 

@@ -12,16 +12,18 @@
 
                     <asp:HiddenField ID="hfFromDate" runat="server" />
                     <asp:HiddenField ID="hfToDate" runat="server" />
+                    <asp:HiddenField ID="hfCompanyId" runat="server" />
                     <label class="PanelHeading">Inventory Movement by Items</label>
                     <div class="row">
                         <div class="col-md-12">
                             <ul class="myUL">
                                 <li style="display: inline;">&nbsp;&nbsp;
                                     <label class="myLabelXtraSmall">Company</label>
-                                    <tel:RadComboBox ID="rcbCorte" runat="server" Height="120px" DropDownAutoWidth="Disabled" Width="120px" Enabled="false"
+                                    <tel:RadComboBox ID="rcbCorte" runat="server" Height="120px" DropDownAutoWidth="Enabled" Width="220px"
                                         HighlightTemplatedItems="true"
                                         AppendDataBoundItems="true"
                                         EmptyMessage="Select Company" AutoPostBack="true" OnSelectedIndexChanged="rcbCorte_SelectedIndexChanged"
+                                        OnClientSelectedIndexChanged="rcbCorte_clientChange"
                                         Font-Italic="false">
                                         <ExpandAnimation Type="OutQuart" Duration="500" />
                                         <CollapseAnimation Type="OutQuint" Duration="300" />
@@ -101,6 +103,8 @@
                         CommandItemDisplay="Top" ShowFooter="true" FooterStyle-Font-Bold="true" ShowGroupFooter="true">
                         <CommandItemSettings ShowExportToExcelButton="false" ShowAddNewRecordButton="false" ShowExportToCsvButton="true" />
                         <Columns>
+                            <tel:GridBoundColumn SortExpression="Company" HeaderText="Company" HeaderButtonType="TextButton"
+                                DataField="Company" UniqueName="Company" HeaderStyle-Width="160px" />
                             <tel:GridBoundColumn SortExpression="TransNum" HeaderText="Trans Num" HeaderButtonType="TextButton"
                                 DataField="TransNum" UniqueName="TransNum" HeaderStyle-Width="100px" />
                             <tel:GridBoundColumn SortExpression="DocDate" HeaderText="Doc Date" HeaderButtonType="TextButton"
@@ -134,5 +138,11 @@
             </div>
         </div>
     </div>
+    <script type="text/javascript">
+        function rcbCorte_clientChange(sender, args) {
+            var hf = document.getElementById('<%= hfCompanyId.ClientID %>');
+            if (hf) hf.value = args.get_item().get_value();
+        }
+    </script>
 </asp:Content>
 

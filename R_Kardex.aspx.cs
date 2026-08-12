@@ -25,9 +25,9 @@ public partial class R_Kardex : BasePage
                 Session["RptrtbItem"] = "-";
                 Session["RptrcbCorte"] = "-";
 
-                GetCias();
+                hfCompanyId.Value = Session["CompanyId"].ToString();
+                GetCias(hfCompanyId.Value);
 
-                rcbCorte.SelectedValue = Session["CompanyId"].ToString();
                 rcbCorte_SelectedIndexChanged(null, null);
 
                 string qsItem = Request.QueryString["item"];
@@ -36,6 +36,11 @@ public partial class R_Kardex : BasePage
                     rtbItem.Text = qsItem;
                     rbtnView_Click(null, null);
                 }
+            }
+            else
+            {
+                // hfCompanyId was updated client-side via JS; rebind combo with that selection
+                GetCias(hfCompanyId.Value);
             }
         }
         catch (Exception ex)
@@ -98,16 +103,47 @@ public partial class R_Kardex : BasePage
         }
     }
     
-    private void GetCias()
+    private void GetCias(string selectedValue = null)
     {
         try
         {
             DataTable dtCia = dm.GetCIAs();
 
-            rcbCorte.DataSource = dtCia;
-            rcbCorte.DataValueField = "CiaId";
-            rcbCorte.DataTextField = "CiaName";
-            rcbCorte.DataBind();
+            int allowedCompanyId = Session["AllowedCompanyId"] != null
+                ? Convert.ToInt32(Session["AllowedCompanyId"]) : 0;
+
+            rcbCorte.Items.Clear();
+
+            if (allowedCompanyId == 0)
+            {
+                rcbCorte.DataSource = dtCia;
+                rcbCorte.DataValueField = "CiaId";
+                rcbCorte.DataTextField = "CiaName";
+                rcbCorte.DataBind();
+                rcbCorte.Items.Insert(0, new RadComboBoxItem("All Companies", "ALL"));
+                rcbCorte.Enabled = true;
+            }
+            else
+            {
+                string userCompany = Session["CompanyId"].ToString();
+                DataTable dtFiltered = dtCia.Clone();
+                foreach (DataRow row in dtCia.Rows)
+                {
+                    if (row["CiaId"].ToString() == userCompany)
+                    {
+                        dtFiltered.ImportRow(row);
+                        break;
+                    }
+                }
+                rcbCorte.DataSource = dtFiltered;
+                rcbCorte.DataValueField = "CiaId";
+                rcbCorte.DataTextField = "CiaName";
+                rcbCorte.DataBind();
+                rcbCorte.Enabled = false;
+            }
+
+            if (!string.IsNullOrEmpty(selectedValue))
+                rcbCorte.SelectedValue = selectedValue;
         }
         catch (Exception ex)
         {
@@ -119,8 +155,50 @@ public partial class R_Kardex : BasePage
     {
         try
         {
-            //dt = dm.GetInventoryKardex(rcbCorte.SelectedValue, rcbGrupo.SelectedValue, rtbItem.Text, hfFromDate.Value.ToString(), hfToDate.Value.ToString());
-            dt = dm.GetInventoryKardex(sRcbCorte, sRcbGrupo, sRtbItem, sFromDate, sToDate);
+            int userBplId = BranchId;   // 0 = no branch restriction
+
+            if (sRcbCorte == "ALL")
+            {
+                DataTable dtAll = null;
+                var seen = new System.Collections.Generic.HashSet<string>();
+                DataTable dtCias = dm.GetCIAs();
+                foreach (DataRow ciaRow in dtCias.Rows)
+                {
+                    string ciaId   = ciaRow["CiaId"].ToString();
+                    string ciaName = ciaRow["CiaName"].ToString();
+                    // Pass BplId so each company only returns its own branch warehouses
+                    DataTable dtPart = dm.GetInventoryKardex(ciaId, sRcbGrupo, sRtbItem, sFromDate, sToDate, userBplId);
+                    if (dtPart.Columns.Count == 1 && dtPart.Columns[0].ColumnName == "ErrMsg") continue;
+                    if (!dtPart.Columns.Contains("Company"))
+                        dtPart.Columns.Add("Company", typeof(string));
+
+                    var toRemove = new System.Collections.Generic.List<DataRow>();
+                    foreach (DataRow r in dtPart.Rows)
+                    {
+                        string key = r["TransNum"] + "|" + r["Warehouse"];
+                        if (seen.Contains(key))
+                            toRemove.Add(r);
+                        else
+                        {
+                            seen.Add(key);
+                            r["Company"] = ciaName;
+                        }
+                    }
+                    foreach (var r in toRemove)
+                        dtPart.Rows.Remove(r);
+
+                    if (dtAll == null)
+                        dtAll = dtPart;
+                    else
+                        dtAll.Merge(dtPart);
+                }
+                dt = dtAll ?? new DataTable();
+            }
+            else
+            {
+                // Single company: filter by the user's BPLId to exclude other branch warehouses
+                dt = dm.GetInventoryKardex(sRcbCorte, sRcbGrupo, sRtbItem, sFromDate, sToDate, userBplId);
+            }
         }
         catch (Exception ex)
         {
@@ -173,9 +251,17 @@ public partial class R_Kardex : BasePage
 
     protected void rcbCorte_SelectedIndexChanged(object sender, RadComboBoxSelectedIndexChangedEventArgs e)
     {
-        //Session["dtKardex"] = null;
         rgHead.Visible = false;
         divHeading.Visible = false;
+        // Invalidate cached data so next View Report re-fetches for the new company
+        Session["RptData"]        = null;
+        Session["RptFromDateTxt"] = "-";
+        Session["RpttoDateTxt"]   = "-";
+        Session["RptrtbItem"]     = "-";
+        Session["RptrcbCorte"]    = "-";
+        Session["SearchItemByBarCodesData"]    = null;
+        Session["SearchItemByBarCodesGroup"]   = "-";
+        Session["SearchItemByBarCodesBarCode"] = "-";
     }
 
     //protected void rcbGrupo_SelectedIndexChanged(object sender, RadComboBoxSelectedIndexChangedEventArgs e)
@@ -198,7 +284,7 @@ public partial class R_Kardex : BasePage
                 string sToDate;
                 string sRtbItem = rtbItem.Text;
                 string sRcbGrupo = "";
-                string sRcbCorte = rcbCorte.SelectedValue;
+                string sRcbCorte = hfCompanyId.Value;
                 
                 if (FromDateTxt.SelectedDate == null)
                 {
@@ -435,7 +521,7 @@ public partial class R_Kardex : BasePage
         bool res = false;
         DataTable dt = null;
         DataRow row;
-        string sRcbCorte = rcbCorte.SelectedValue;
+        string sRcbCorte = hfCompanyId.Value;
 
         try
         {

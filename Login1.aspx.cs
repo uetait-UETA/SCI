@@ -165,6 +165,7 @@ public partial class Login1 : BasePage
             divMessage.InnerText = "You do not have access to this company.";
             return;
         }
+        Session["AllowedCompanyId"] = allowedCompanyId;
 
         Label3.Text = "Welcome, " + UserField1.Text + " to " + companyCode;
 
@@ -220,7 +221,8 @@ public partial class Login1 : BasePage
         Session["tienda_db"]      = "";
         Session["BranchId"]       = "";
         Session["BranchName"]     = "";
-        Session["IsSellerBranch"] = "";
+        Session["IsSellerBranch"]   = "";
+        Session["AllowedCompanyId"] = 0;
     }
 
     protected void LogOutBtn1_PreRender(object sender, EventArgs e)

@@ -18,6 +18,15 @@
             <div class="col-md-12">
                 <asp:Panel ID="pnlHeader" runat="server" CssClass="Panel">
                     <label id="labelForm" runat="server" class="PanelHeading">Delivery Errors</label>
+                    <div style="padding:6px 0 4px 4px;">
+                        <label class="myLabel">Show:</label>&nbsp;
+                        <asp:DropDownList ID="drpFilter" runat="server" AutoPostBack="true"
+                            OnSelectedIndexChanged="drpFilter_SelectedIndexChanged" CssClass="form-control"
+                            style="display:inline-block;width:220px;vertical-align:middle;">
+                            <asp:ListItem Value="PROBLEM" Text="Inventory Problem Only" />
+                            <asp:ListItem Value="ALL"     Text="All" />
+                        </asp:DropDownList>
+                    </div>
                     <tel:RadGrid ID="rgHead" runat="server" Width="100%" ShowStatusBar="true" AutoGenerateColumns="False"
                         MasterTableView-NoDetailRecordsText="No delivery errors found"
                         AllowSorting="true" AllowMultiRowSelection="False" AllowPaging="True" PageSize="15"
@@ -53,6 +62,14 @@
                                 <tel:GridBoundColumn SortExpression="itemdatetime" HeaderText="Trans Date" HeaderButtonType="TextButton" DataField="itemdatetime" UniqueName="itemdatetime" DataFormatString="{0:d}" HeaderStyle-Width="80px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="sale_qty" HeaderText="Trans Qty" HeaderButtonType="TextButton" DataField="sale_qty" UniqueName="sale_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
                                 <tel:GridBoundColumn SortExpression="whs_qty" HeaderText="Whs Qty" HeaderButtonType="TextButton" DataField="whs_qty" UniqueName="whs_qty" DataFormatString="{0:N0}" HeaderStyle-Width="60px" ReadOnly="true" />
+                                <tel:GridTemplateColumn HeaderText="Diff" SortExpression="qty_diff" UniqueName="qty_diff" HeaderStyle-Width="60px" ItemStyle-HorizontalAlign="Right" ItemStyle-Wrap="false">
+                                    <ItemTemplate>
+                                        <asp:Label ID="lblDiff" runat="server"
+                                            Text='<%# Convert.ToInt32(Eval("qty_diff")).ToString("N0") %>'
+                                            ForeColor='<%# Convert.ToInt32(Eval("qty_diff")) > 0 ? System.Drawing.Color.Red : System.Drawing.Color.Green %>'
+                                            Font-Bold='<%# Convert.ToInt32(Eval("qty_diff")) > 0 %>' />
+                                    </ItemTemplate>
+                                </tel:GridTemplateColumn>
                                 <tel:GridTemplateColumn HeaderText="Whs Code" SortExpression="whs_code" UniqueName="whs_code" HeaderStyle-Width="100px" ItemStyle-Wrap="false">
                                     <ItemTemplate>
                                         <%# Eval("whs_code") %>
