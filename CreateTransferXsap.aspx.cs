@@ -433,6 +433,36 @@ public partial class CreateTransferXsap : BasePage
 
         int docEntry = Convert.ToInt32(DocEntry.Text);
 
+        // submit_DraftXsap filters NON SELL items when copying to smm_Transdiscrep_drf1.
+        // Insert any missing NON SELL lines now so RunAutoDispatch can create the ITR.
+        try
+        {
+            db.Connect();
+            using (var fixCmd = new SqlCommand(string.Format(
+                @"INSERT INTO smm_Transdiscrep_drf1
+                      (CompanyId,DocEntry,LineNum,DocNum,ToWhsCode,ToWhsName,ItemCode,ItemName,
+                       DraftQuantity,DispatchQuantity,ReceivedQuantity,TmpQuantity,Price,Date_Created,Created_By)
+                  SELECT src.CompanyId,src.DocEntry,src.LineNum,src.DocNum,
+                         src.ToWhsCode,src.ToWhsName,src.ItemCode,src.ItemName,
+                         src.DraftQuantity,src.DraftQuantity,src.DraftQuantity,src.DraftQuantity,
+                         ISNULL(src.Price,0),GETDATE(),NULL
+                  FROM smm_TransXsap_drf1 src WITH(NOLOCK)
+                  LEFT JOIN [{0}]..OITM i WITH(NOLOCK) ON i.ItemCode=src.ItemCode
+                  WHERE src.CompanyId=@cid AND src.DocEntry=@de
+                    AND ISNULL(i.U_Type,'')='NON SELL'
+                    AND NOT EXISTS(
+                        SELECT 1 FROM smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                        WHERE d.CompanyId=src.CompanyId AND d.DocEntry=src.DocEntry AND d.LineNum=src.LineNum)", sap_db),
+                db.Conn))
+            {
+                fixCmd.Parameters.AddWithValue("@cid", sap_db);
+                fixCmd.Parameters.AddWithValue("@de", docEntry);
+                fixCmd.ExecuteNonQuery();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+
         int sapDocNum;
         string sapDocType;
         string dispErr = TransferAutoDispatch.RunAutoDispatch(
@@ -1339,7 +1369,28 @@ public partial class CreateTransferXsap : BasePage
                 var filtered = dtToWhs.AsEnumerable()
                     .Where(x => x.Field<string>("WhsCode") != selectedFromWhs);
 
-                if (!string.IsNullOrEmpty(fromWhsType))
+                // NON SELL items can go to any warehouse — skip U_Type filter when item is NON SELL.
+                bool itemIsNonSell = false;
+                string enteredItem = ItemTextBox.Text.Trim();
+                if (!string.IsNullOrEmpty(enteredItem) && !string.IsNullOrEmpty(fromWhsType))
+                {
+                    try
+                    {
+                        db.Connect();
+                        using (SqlCommand chk = new SqlCommand(
+                            "SELECT ISNULL(U_Type,'') FROM " + sap_db + ".dbo.OITM WHERE ItemCode = @ic", db.Conn))
+                        {
+                            chk.Parameters.AddWithValue("@ic", enteredItem);
+                            object r = chk.ExecuteScalar();
+                            itemIsNonSell = r != null &&
+                                string.Equals(r.ToString(), "NON SELL", StringComparison.OrdinalIgnoreCase);
+                        }
+                    }
+                    catch { }
+                    finally { db.Disconnect(); }
+                }
+
+                if (!string.IsNullOrEmpty(fromWhsType) && !itemIsNonSell)
                     filtered = filtered.Where(x => x.Field<string>("WhsType") == fromWhsType);
 
                 drpToWhsCode.DataSource = filtered.Any() ? filtered.CopyToDataTable() : dtToWhs.Clone();

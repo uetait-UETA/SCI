@@ -279,6 +279,38 @@ public partial class createTransferByExcel : BasePage
 
         int docEntry = Convert.ToInt32(DocEntry.Text);
 
+        // submit_DraftXsap filters NON SELL items (OITM.U_Type='NON SELL') when copying
+        // lines from smm_TransXsap_drf1 to smm_Transdiscrep_drf1 because their U_Type
+        // doesn't match the warehouse U_Type. Insert any missing NON SELL lines now so
+        // RunAutoDispatch can detect the BODEGA→TIENDA pattern and create the ITR.
+        try
+        {
+            db.Connect();
+            using (var fixCmd = new SqlCommand(string.Format(
+                @"INSERT INTO smm_Transdiscrep_drf1
+                      (CompanyId,DocEntry,LineNum,DocNum,ToWhsCode,ToWhsName,ItemCode,ItemName,
+                       DraftQuantity,DispatchQuantity,ReceivedQuantity,TmpQuantity,Price,Date_Created,Created_By)
+                  SELECT src.CompanyId,src.DocEntry,src.LineNum,src.DocNum,
+                         src.ToWhsCode,src.ToWhsName,src.ItemCode,src.ItemName,
+                         src.DraftQuantity,src.DraftQuantity,src.DraftQuantity,src.DraftQuantity,
+                         ISNULL(src.Price,0),GETDATE(),NULL
+                  FROM smm_TransXsap_drf1 src WITH(NOLOCK)
+                  LEFT JOIN [{0}]..OITM i WITH(NOLOCK) ON i.ItemCode=src.ItemCode
+                  WHERE src.CompanyId=@cid AND src.DocEntry=@de
+                    AND ISNULL(i.U_Type,'')='NON SELL'
+                    AND NOT EXISTS(
+                        SELECT 1 FROM smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                        WHERE d.CompanyId=src.CompanyId AND d.DocEntry=src.DocEntry AND d.LineNum=src.LineNum)", sap_db),
+                db.Conn))
+            {
+                fixCmd.Parameters.AddWithValue("@cid", sap_db);
+                fixCmd.Parameters.AddWithValue("@de", docEntry);
+                fixCmd.ExecuteNonQuery();
+            }
+        }
+        catch { }
+        finally { db.Disconnect(); }
+
         int sapDocNum;
         string sapDocType;
         string dispErr = TransferAutoDispatch.RunAutoDispatch(
@@ -1120,7 +1152,8 @@ public partial class createTransferByExcel : BasePage
             if (itemCode == "&nbsp;" || string.IsNullOrEmpty(itemCode)) continue;
 
             string itemType = itemTypes.ContainsKey(itemCode) ? itemTypes[itemCode] : "";
-            if (!itemType.Equals(whsUType, StringComparison.OrdinalIgnoreCase))
+            bool isNonSell = string.Equals(itemType, "NON SELL", StringComparison.OrdinalIgnoreCase);
+            if (!isNonSell && !itemType.Equals(whsUType, StringComparison.OrdinalIgnoreCase))
             {
                 GridView2.Rows[i].BackColor = Color.LightCoral;
                 wrongTypeQty = 1;
