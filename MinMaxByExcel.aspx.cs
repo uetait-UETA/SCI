@@ -559,7 +559,8 @@ public partial class MinMaxByExcel : BasePage
             if (itemCode == "&nbsp;" || string.IsNullOrEmpty(itemCode)) continue;
 
             string itemType = itemTypes.ContainsKey(itemCode) ? itemTypes[itemCode] : "";
-            if (!itemType.Equals(whsUType, StringComparison.OrdinalIgnoreCase))
+            bool isNonSell = string.Equals(itemType, "NON SELL", StringComparison.OrdinalIgnoreCase);
+            if (!isNonSell && !itemType.Equals(whsUType, StringComparison.OrdinalIgnoreCase))
             {
                 GridView2.Rows[i].BackColor = Color.LightCoral;
                 wrongTypeQty = 1;

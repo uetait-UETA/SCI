@@ -114,6 +114,116 @@ public static class TransferAutoDispatch
     }
 
     /// <summary>
+    /// Variant of RunAutoDispatch for Excel-based drafts (CreateTransferByExcel / CreateTransferXsap).
+    /// submit_DraftXsap already populated smm_Transdiscrep_odrf/drf1, so the
+    /// smm_populate_discrep_odrf SP is skipped — calling it would either be a no-op
+    /// or, if it uses DELETE+INSERT, destroy the lines submit_DraftXsap added.
+    /// Additionally handles NON SELL items (OITM.U_Type='NON SELL') that submit_DraftXsap
+    /// may have excluded because their U_Type doesn't match OWHS.U_Type.
+    /// </summary>
+    public static string RunAutoDispatchFromExcel(
+        int docEntry, string companyId, string sapDb, string userApp, out int sapDocNum, out string sapDocType)
+    {
+        sapDocNum  = 0;
+        sapDocType = "";
+        var db = new SqlDb();
+        db.Connect();
+        try
+        {
+            // Step 1b: ensure NON SELL lines are present in smm_Transdiscrep_drf1.
+            // Two cases:
+            //   a) submit_DraftXsap omitted them entirely → INSERT from smm_TransXsap_drf1
+            //   b) submit_DraftXsap inserted them with DraftQuantity=0 → UPDATE to real qty
+            // Falls back to smm_Transdiscrep_odrf.ToWhsCode when the line-level ToWhsCode is NULL.
+            string updateNonSellSql = string.Format(
+                @"UPDATE d
+                  SET d.DraftQuantity    = src.DraftQuantity,
+                      d.DispatchQuantity = src.DraftQuantity,
+                      d.ReceivedQuantity = src.DraftQuantity,
+                      d.TmpQuantity      = src.DraftQuantity
+                  FROM smm_Transdiscrep_drf1 d
+                  JOIN smm_TransXsap_drf1 src WITH(NOLOCK)
+                      ON src.CompanyId=d.CompanyId AND src.DocEntry=d.DocEntry AND src.LineNum=d.LineNum
+                  LEFT JOIN [{0}]..OITM i WITH(NOLOCK) ON i.ItemCode=src.ItemCode
+                  WHERE d.CompanyId=@cid AND d.DocEntry=@de
+                    AND ISNULL(i.U_Type,'')='NON SELL'
+                    AND d.DraftQuantity = 0 AND src.DraftQuantity > 0", sapDb);
+
+            string insertNonSellSql = string.Format(
+                @"INSERT INTO smm_Transdiscrep_drf1
+                      (CompanyId,DocEntry,LineNum,DocNum,ToWhsCode,ToWhsName,ItemCode,ItemName,
+                       DraftQuantity,DispatchQuantity,ReceivedQuantity,TmpQuantity,Price,Date_Created,Created_By)
+                  SELECT src.CompanyId,src.DocEntry,src.LineNum,src.DocNum,
+                         ISNULL(NULLIF(src.ToWhsCode,''), h.ToWhsCode),
+                         ISNULL(NULLIF(src.ToWhsName,''), h.ToWhsName),
+                         src.ItemCode,src.ItemName,
+                         src.DraftQuantity,src.DraftQuantity,src.DraftQuantity,src.DraftQuantity,
+                         ISNULL(src.Price,0),GETDATE(),NULL
+                  FROM smm_TransXsap_drf1 src WITH(NOLOCK)
+                  INNER JOIN smm_TransXsap_odrf h WITH(NOLOCK)
+                      ON h.DocEntry=src.DocEntry AND h.CompanyId=src.CompanyId
+                  LEFT JOIN [{0}]..OITM i WITH(NOLOCK) ON i.ItemCode=src.ItemCode
+                  WHERE src.CompanyId=@cid AND src.DocEntry=@de
+                    AND ISNULL(i.U_Type,'')='NON SELL'
+                    AND src.DraftQuantity > 0
+                    AND NOT EXISTS(
+                        SELECT 1 FROM smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                        WHERE d.CompanyId=src.CompanyId AND d.DocEntry=src.DocEntry AND d.LineNum=src.LineNum)", sapDb);
+
+            try
+            {
+                using (var cmd = new SqlCommand(updateNonSellSql, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", companyId);
+                    cmd.Parameters.AddWithValue("@de",  docEntry);
+                    cmd.ExecuteNonQuery();
+                }
+                using (var cmd = new SqlCommand(insertNonSellSql, db.Conn))
+                {
+                    cmd.Parameters.AddWithValue("@cid", companyId);
+                    cmd.Parameters.AddWithValue("@de",  docEntry);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+            catch { /* smm_TransXsap_drf1 may be absent for non-Excel flows; safe to ignore */ }
+
+            // Step 2: set TmpQuantity = DraftQuantity for all lines (full auto-dispatch)
+            using (var cmd = new SqlCommand(
+                "UPDATE smm_Transdiscrep_drf1 SET TmpQuantity = DraftQuantity " +
+                "WHERE CompanyId = @cid AND DocEntry = @de", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@cid", companyId);
+                cmd.Parameters.AddWithValue("@de",  docEntry);
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch (Exception ex)
+        {
+            db.Disconnect();
+            return "Error preparando auto-dispatch: " + ex.Message;
+        }
+
+        // Step 3: create OWTQ for any warehouse pair.
+        // Unlike RunAutoDispatch (which only dispatches BODEGA→TIENDA), Excel drafts
+        // always need an OWTQ — the user explicitly triggered dispatch and TransferDiscreOrdf
+        // would also create OWTQ for any non-BODEGA→TIENDA transfer on manual dispatch.
+        // CreateSapOwtqAutoDispatch returns null with sapDocNum=0 when there are no lines
+        // with TmpQuantity > 0 (safe no-op in that case).
+        sapDocType = "OWTQ";
+        string sapError = CreateSapOwtqAutoDispatch(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
+
+        if (sapError != null)
+        {
+            try { CleanupDraft(db.Conn, companyId, docEntry); } catch { }
+            db.Disconnect();
+            return sapError;
+        }
+
+        db.Disconnect();
+        return null;
+    }
+
+    /// <summary>
     /// Validates auto-dispatch prerequisites using fromWhs/toWhs directly,
     /// before any draft is created. Returns null if the transfer can proceed,
     /// or an error message if a required configuration is missing.
