@@ -364,7 +364,7 @@ from (
 ) T1
 where item = '{1}'
 AND loc IN (SELECT WhsCode FROM {0}..OWHS " + Queries.WITH_NOLOCK + @" WHERE BPLId IN (" + bplIds + @"))
-AND (item_type = '' OR item_type = whs_type)
+AND (item_type IN ('', 'NON SELL') OR item_type = whs_type)
 order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
 
             sql = string.Format(sql, v_CompanyID, v_Item);
