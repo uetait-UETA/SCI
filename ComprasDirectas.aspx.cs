@@ -265,6 +265,11 @@ public partial class ComprasDirectas : BasePage
                     string whsType  = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsType"].ToString() : "";
                     string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, allQtys,
                         receiveUser: userId, whsType: whsType, sourceDocNum: opchDocNum);
+                    if (owtrPayload == null)
+                    {
+                        successMsg += " (No typed items to transfer to " + toWhsCode + ".)";
+                    }
+                    else
                     try
                     {
                         string owtrResp = sl.CreateInventoryTransfer(owtrPayload);

@@ -768,12 +768,15 @@ WHERE  p.DocEntry = {2}",
         sb.AppendFormat("\"Comments\":\"{0}\",",      EscJson(comments));
         sb.Append("\"StockTransferLines\":[");
 
+        // Only transfer items whose WhsType matches the warehouse type (skip empty/NON SELL)
         bool first = true;
         foreach (DataRow r in dtLines.Rows)
         {
-            int     lineNum  = Convert.ToInt32(r["LineNum"]);
-            decimal qty      = quantities.ContainsKey(lineNum) ? quantities[lineNum] : 0m;
+            int     lineNum      = Convert.ToInt32(r["LineNum"]);
+            decimal qty          = quantities.ContainsKey(lineNum) ? quantities[lineNum] : 0m;
+            string  itemWhsType  = r["WhsType"] != DBNull.Value ? r["WhsType"].ToString() : "";
             if (qty <= 0) continue;
+            if (!string.IsNullOrEmpty(whsType) && string.IsNullOrEmpty(itemWhsType)) continue;
 
             if (!first) sb.Append(",");
             first = false;
@@ -786,6 +789,7 @@ WHERE  p.DocEntry = {2}",
             sb.Append("}");
         }
 
+        if (first) return null; // no eligible lines → skip OWTR
         sb.Append("]}");
         return sb.ToString();
     }
