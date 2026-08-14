@@ -60,17 +60,18 @@ public partial class ComprasDirectasDetail : BasePage
 
         _allowReceive = (accessType == "F");
 
-        // For OPOR: validate U_ToWhsCode is configured
+        // For OPOR: validate U_ToWhsCode exists and belongs to the session branch
         if (CdDocType == "OPOR" && _allowReceive)
         {
             var hdrCheck = _gr.GetApReserveInvoiceHeader((string)Session["CompanyId"], docEntry, CdDocType);
-            if (hdrCheck == null || string.IsNullOrEmpty(hdrCheck["ToWhsCode"].ToString()))
+            string toWhsCheck = hdrCheck != null ? hdrCheck["ToWhsCode"].ToString() : "";
+            string whsErr;
+            if (!_gr.IsWhsValidForBranch((string)Session["CompanyId"], toWhsCheck, BranchId, out whsErr))
             {
                 _allowReceive      = false;
                 btnConfirm.Enabled = false;
-                btnConfirm.Text    = "No Destination Whs";
-                ShowMessage("Error", "Missing Configuration",
-                    "Purchase Order does not have a destination warehouse (U_ToWhsCode) configured.");
+                btnConfirm.Text    = "Invalid Destination";
+                ShowMessage("Error", "Invalid Destination Warehouse", whsErr);
             }
         }
 

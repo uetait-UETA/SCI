@@ -189,14 +189,17 @@ public partial class ComprasDirectas : BasePage
         int bplId = (hdr != null && hdr["BPLId"] != DBNull.Value)
             ? Convert.ToInt32(hdr["BPLId"]) : BranchId;
 
-        // For OPOR: validate that U_ToWhsCode is configured
+        // For OPOR: validate that U_ToWhsCode exists and belongs to the session branch
         string toWhsCode = hdr != null ? hdr["ToWhsCode"].ToString() : "";
-        if (CdDocType == "OPOR" && string.IsNullOrEmpty(toWhsCode))
+        if (CdDocType == "OPOR")
         {
-            ShowMessage("Error", "Missing Configuration",
-                "Purchase Order does not have a destination warehouse (U_ToWhsCode) configured.");
-            rgInvoices.Rebind();
-            return;
+            string whsErr;
+            if (!_gr.IsWhsValidForBranch(sapDb, toWhsCode, BranchId, out whsErr))
+            {
+                ShowMessage("Error", "Invalid Destination Warehouse", whsErr);
+                rgInvoices.Rebind();
+                return;
+            }
         }
 
         // Duty Paid items present → detail page for quantity entry

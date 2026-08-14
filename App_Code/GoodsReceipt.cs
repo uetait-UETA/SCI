@@ -706,6 +706,45 @@ WHERE  p.DocEntry = {2}",
         return sb.ToString();
     }
 
+    // ── Validate that a warehouse exists and belongs to the session branch ────
+
+    public bool IsWhsValidForBranch(string sapDb, string whsCode, int branchId, out string errorMsg)
+    {
+        errorMsg = null;
+        if (string.IsNullOrEmpty(whsCode))
+        {
+            errorMsg = "Destination warehouse (U_ToWhsCode) is not configured on this Purchase Order.";
+            return false;
+        }
+        try
+        {
+            _db.Connect();
+            string sql = string.Format(
+                "SELECT BPLId FROM {0}..OWHS {1} WHERE WhsCode = @whs",
+                sapDb, Queries.WITH_NOLOCK);
+            _db.cmd.CommandText = sql;
+            _db.cmd.CommandType = CommandType.Text;
+            _db.cmd.Parameters.Clear();
+            _db.cmd.Parameters.AddWithValue("@whs", whsCode);
+            object result = _db.cmd.ExecuteScalar();
+            if (result == null || result == DBNull.Value)
+            {
+                errorMsg = "Destination warehouse '" + whsCode + "' does not exist in SAP.";
+                return false;
+            }
+            int whsBplId = Convert.ToInt32(result);
+            if (whsBplId != branchId)
+            {
+                errorMsg = "Destination warehouse '" + whsCode + "' belongs to branch " + whsBplId +
+                           " but your active session is branch " + branchId + ".";
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex) { errorMsg = ex.Message; return false; }
+        finally { _db.Disconnect(); }
+    }
+
     // ── Build OWTR (Inventory Transfer) payload after GRPO receipt ───────────
 
     public string BuildOwtrPayload(int bplId, string fromWhs, string toWhs,
