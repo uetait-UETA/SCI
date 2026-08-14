@@ -823,6 +823,10 @@ VALUES
             string hdrTable    = isOpor ? "OPOR" : "OPCH";
             string linesTable  = isOpor ? "POR1" : "PCH1";
             string indFilter   = isOpor ? "" : "AND  p.Indicator = 'CD'";
+            // OPOR orders are created under BPLId=1 (buying office); include it alongside session branch
+            string bplClause   = isOpor
+                ? "IN (" + bplId + ", 1)"
+                : "= " + bplId;
 
             string safeDb = sapDb.Replace("'", "''");
             string vendorFilter = string.IsNullOrEmpty(toWhsCode)
@@ -853,7 +857,7 @@ SELECT
 FROM   {0}..{5} p {1}
 WHERE  p.DocStatus = 'O'
   {7}
-  AND  p.BPLId     = {2}
+  AND  p.BPLId     {9}
   AND  p.DocDate  >= '{3}'
   AND  p.DocDate  <= '{4}'
   AND  (@docNum = 0 OR p.DocNum = @docNum)
@@ -870,7 +874,7 @@ WHERE  p.DocStatus = 'O'
        )
 ORDER  BY p.DocDate DESC, p.DocNum DESC",
                     sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo,
-                    hdrTable, linesTable, indFilter, vendorFilter);
+                    hdrTable, linesTable, indFilter, vendorFilter, bplClause);
             }
             else
             {
@@ -897,7 +901,7 @@ INNER JOIN dbo.GrpoReceiptLog r {1}
     ON  r.OriginCompany  = '{0}'
     AND r.OriginDocEntry = p.DocEntry
     AND r.Status         = 'SUCCESS'
-WHERE  p.BPLId     = {2}
+WHERE  p.BPLId     {9}
   {7}
   AND  p.DocDate  >= '{3}'
   AND  p.DocDate  <= '{4}'
@@ -909,7 +913,7 @@ WHERE  p.BPLId     = {2}
   {8}
 ORDER  BY r.ReceivedAt DESC",
                     sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo,
-                    hdrTable, linesTable, indFilter, vendorFilter);
+                    hdrTable, linesTable, indFilter, vendorFilter, bplClause);
             }
 
             _db.cmd.CommandText = sql;
