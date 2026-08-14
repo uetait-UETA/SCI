@@ -11,6 +11,12 @@ public partial class ComprasDirectas : BasePage
     private readonly GoodsReceipt _gr = new GoodsReceipt();
     private bool _allowReceive = false;
 
+    private static string CdDocType
+    {
+        get { return System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH"; }
+    }
+    private static int CdBaseType { get { return CdDocType == "OPOR" ? 22 : 18; } }
+
     protected void Page_Load(object sender, EventArgs e)
     {
         if (string.IsNullOrEmpty((string)Session["UserId"]) ||
@@ -112,7 +118,7 @@ public partial class ComprasDirectas : BasePage
 
         DataTable dt = _gr.GetPendingDirectPurchaseInvoices(
             sapDb, bplId, rdpFromDate.SelectedDate, rdpToDate.SelectedDate,
-            docNum, toWhsCode, showReceived);
+            docNum, toWhsCode, showReceived, CdDocType);
 
         if (_gr.LastError != null)
             ShowMessage("Error", "Query Error", _gr.LastError);
@@ -180,27 +186,40 @@ public partial class ComprasDirectas : BasePage
         string userId     = (string)Session["UserId"];
 
         // Duty Paid items present → detail page for quantity entry
-        if (_gr.HasDutyPaidLines(sapDb, docEntry))
+        if (_gr.HasDutyPaidLines(sapDb, docEntry, CdDocType))
         {
             Response.Redirect("ComprasDirectasDetail.aspx?docEntry=" + docEntry, false);
             Context.ApplicationInstance.CompleteRequest();
             return;
         }
 
-        // All Duty Free → receive with full OPCH quantities
+        // All Duty Free → receive with full document quantities
         try
         {
-            DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry);
+            DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry, CdDocType);
             if (_gr.LastError != null || dtLines.Rows.Count == 0)
             {
                 ShowMessage("Error", "No Lines Found",
-                    _gr.LastError ?? "No lines found for this AP Reserve Invoice.");
+                    _gr.LastError ?? "No lines found for this document.");
                 rgInvoices.Rebind();
                 return;
             }
 
-            string payload = _gr.BuildGrpoFromOpch(cardCode, bplId,
-                docEntry, opchDocNum, dtLines);
+            string payload;
+            if (CdDocType == "OPOR")
+            {
+                // For Purchase Orders: create GRPO referencing OPOR (BaseType=22)
+                var allQtys = new System.Collections.Generic.Dictionary<int, decimal>();
+                foreach (System.Data.DataRow r in dtLines.Rows)
+                    allQtys[Convert.ToInt32(r["LineNum"])] = Convert.ToDecimal(r["Quantity"]);
+                payload = _gr.BuildGrpoFromOpchWithQty(cardCode, bplId,
+                    docEntry, opchDocNum, dtLines, allQtys, baseType: CdBaseType);
+            }
+            else
+            {
+                payload = _gr.BuildGrpoFromOpch(cardCode, bplId,
+                    docEntry, opchDocNum, dtLines);
+            }
 
             var sl = new SapServiceLayer();
             try

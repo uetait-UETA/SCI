@@ -445,12 +445,13 @@ ORDER  BY p.DocDate DESC, p.DocNum DESC",
         return dt;
     }
 
-    // ── Lines of an AP Reserve Invoice with warehouse type ────────────────────
+    // ── Lines of an AP Reserve Invoice or Purchase Order with warehouse type ──
 
-    public DataTable GetApReserveInvoiceLines(string sapDb, int docEntry)
+    public DataTable GetApReserveInvoiceLines(string sapDb, int docEntry, string docType = "OPCH")
     {
         LastError = null;
         var dt = new DataTable();
+        string linesTable = docType == "OPOR" ? "POR1" : "PCH1";
         try
         {
             _db.Connect();
@@ -464,11 +465,11 @@ SELECT
     l.WhsCode,
     ISNULL(l.unitMsr, '')  AS UoMCode,
     ISNULL(w.U_Type,  '')  AS WhsType
-FROM   {0}..PCH1 l {1}
+FROM   {0}..{3} l {1}
 LEFT   JOIN {0}..OWHS w {1} ON w.WhsCode = l.WhsCode
 WHERE  l.DocEntry = {2}
 ORDER  BY l.LineNum",
-                sapDb, Queries.WITH_NOLOCK, docEntry);
+                sapDb, Queries.WITH_NOLOCK, docEntry, linesTable);
             _db.cmd.CommandText = sql;
             _db.cmd.CommandType = CommandType.Text;
             dt.Load(_db.cmd.ExecuteReader());
@@ -481,20 +482,21 @@ ORDER  BY l.LineNum",
         return dt;
     }
 
-    // ── Returns true if any OPCH line belongs to a Duty Paid warehouse ────────
+    // ── Returns true if any document line belongs to a Duty Paid warehouse ────
 
-    public bool HasDutyPaidLines(string sapDb, int docEntry)
+    public bool HasDutyPaidLines(string sapDb, int docEntry, string docType = "OPCH")
     {
+        string linesTable = docType == "OPOR" ? "POR1" : "PCH1";
         try
         {
             _db.Connect();
             string sql = string.Format(@"
 SELECT COUNT(1)
-FROM   {0}..PCH1 l {1}
+FROM   {0}..{3} l {1}
 LEFT   JOIN {0}..OWHS w {1} ON w.WhsCode = l.WhsCode
 WHERE  l.DocEntry = {2}
   AND  w.U_Type   = 'Duty Paid'",
-                sapDb, Queries.WITH_NOLOCK, docEntry);
+                sapDb, Queries.WITH_NOLOCK, docEntry, linesTable);
             _db.cmd.CommandText = sql;
             _db.cmd.CommandType = CommandType.Text;
             return Convert.ToInt32(_db.cmd.ExecuteScalar()) > 0;
@@ -506,11 +508,12 @@ WHERE  l.DocEntry = {2}
         finally { _db.Disconnect(); }
     }
 
-    // ── Header row of a single AP Reserve Invoice ────────────────────────────
+    // ── Header row of a single AP Reserve Invoice or Purchase Order ──────────
 
-    public DataRow GetApReserveInvoiceHeader(string sapDb, int docEntry)
+    public DataRow GetApReserveInvoiceHeader(string sapDb, int docEntry, string docType = "OPCH")
     {
         LastError = null;
+        string hdrTable = docType == "OPOR" ? "OPOR" : "OPCH";
         try
         {
             _db.Connect();
@@ -525,9 +528,9 @@ SELECT
     p.DocTotal,
     p.DocCur,
     p.BPLId
-FROM   {0}..OPCH p {1}
+FROM   {0}..{3} p {1}
 WHERE  p.DocEntry = {2}",
-                sapDb, Queries.WITH_NOLOCK, docEntry);
+                sapDb, Queries.WITH_NOLOCK, docEntry, hdrTable);
             _db.cmd.CommandText = sql;
             _db.cmd.CommandType = CommandType.Text;
             var dt = new DataTable();
@@ -589,7 +592,7 @@ WHERE  p.DocEntry = {2}",
     public string BuildGrpoFromOpchWithQty(string cardCode, int bplId,
         int opchDocEntry, int opchDocNum, DataTable dtLines,
         System.Collections.Generic.Dictionary<int, decimal> receivedQtys,
-        int sciDocNum = 0, int docNumITR = 0)
+        int sciDocNum = 0, int docNumITR = 0, int baseType = 18)
     {
         string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var sb = new StringBuilder();
@@ -637,7 +640,7 @@ WHERE  p.DocEntry = {2}",
             firstLine = false;
 
             sb.Append("{");
-            sb.AppendFormat("\"BaseType\":{0},",  18);
+            sb.AppendFormat("\"BaseType\":{0},",  baseType);
             sb.AppendFormat("\"BaseEntry\":{0},", opchDocEntry);
             sb.AppendFormat("\"BaseLine\":{0},",  lineNum);
             sb.AppendFormat("\"Quantity\":{0}",   qty.ToString("0.######", CultureInfo.InvariantCulture));
@@ -790,11 +793,11 @@ VALUES
         return sb.ToString();
     }
 
-    // ── Pending Direct Purchase AP Reserve Invoices (Indicator = 'CD') ──────
+    // ── Pending Direct Purchase documents (OPCH Indicator='CD' or OPOR) ──────
 
     public DataTable GetPendingDirectPurchaseInvoices(string sapDb, int bplId,
         DateTime? fromDate, DateTime? toDate, int docNum, string toWhsCode,
-        bool showReceived = false)
+        bool showReceived = false, string docType = "OPCH")
     {
         LastError = null;
         var dt = new DataTable();
@@ -815,6 +818,11 @@ VALUES
             string dateTo = toDate.HasValue
                 ? toDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 : DateTime.Today.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            bool   isOpor      = docType == "OPOR";
+            string hdrTable    = isOpor ? "OPOR" : "OPCH";
+            string linesTable  = isOpor ? "POR1" : "PCH1";
+            string indFilter   = isOpor ? "" : "AND  p.Indicator = 'CD'";
 
             string safeDb = sapDb.Replace("'", "''");
             string vendorFilter = string.IsNullOrEmpty(toWhsCode)
@@ -839,28 +847,30 @@ SELECT
     ''                              AS ReceivedBy,
     CAST(NULL AS datetime)          AS ReceivedAt,
     ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
-                  FROM {0}..PCH1 l {1}
+                  FROM {0}..{6} l {1}
                   WHERE l.DocEntry = p.DocEntry
                   FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes
-FROM   {0}..OPCH p {1}
+FROM   {0}..{5} p {1}
 WHERE  p.DocStatus = 'O'
-  AND  p.Indicator = 'CD'
+  {7}
   AND  p.BPLId     = {2}
   AND  p.DocDate  >= '{3}'
   AND  p.DocDate  <= '{4}'
   AND  (@docNum = 0 OR p.DocNum = @docNum)
   AND  (@toWhs = '' OR EXISTS (
-           SELECT 1 FROM {0}..PCH1 l {1}
+           SELECT 1 FROM {0}..{6} l {1}
            WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
        ))
-  {5}
+  {8}
   AND  NOT EXISTS (
            SELECT 1 FROM dbo.GrpoReceiptLog r {1}
            WHERE  r.OriginCompany  = '{0}'
              AND  r.OriginDocEntry = p.DocEntry
              AND  r.Status         = 'SUCCESS'
        )
-ORDER  BY p.DocDate DESC, p.DocNum DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo, vendorFilter);
+ORDER  BY p.DocDate DESC, p.DocNum DESC",
+                    sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo,
+                    hdrTable, linesTable, indFilter, vendorFilter);
             }
             else
             {
@@ -879,25 +889,27 @@ SELECT
     ISNULL(r.ReceivedBy, '')        AS ReceivedBy,
     r.ReceivedAt,
     ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
-                  FROM {0}..PCH1 l {1}
+                  FROM {0}..{6} l {1}
                   WHERE l.DocEntry = p.DocEntry
                   FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes
-FROM   {0}..OPCH p {1}
+FROM   {0}..{5} p {1}
 INNER JOIN dbo.GrpoReceiptLog r {1}
     ON  r.OriginCompany  = '{0}'
     AND r.OriginDocEntry = p.DocEntry
     AND r.Status         = 'SUCCESS'
-WHERE  p.Indicator = 'CD'
-  AND  p.BPLId     = {2}
+WHERE  p.BPLId     = {2}
+  {7}
   AND  p.DocDate  >= '{3}'
   AND  p.DocDate  <= '{4}'
   AND  (@docNum = 0 OR p.DocNum = @docNum)
   AND  (@toWhs = '' OR EXISTS (
-           SELECT 1 FROM {0}..PCH1 l {1}
+           SELECT 1 FROM {0}..{6} l {1}
            WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
        ))
-  {5}
-ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo, vendorFilter);
+  {8}
+ORDER  BY r.ReceivedAt DESC",
+                    sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo,
+                    hdrTable, linesTable, indFilter, vendorFilter);
             }
 
             _db.cmd.CommandText = sql;
@@ -915,8 +927,8 @@ ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateT
         return dt;
     }
 
-    // Returns actual received qty per OPCH line (BaseLine → Qty) from the OPDN created
-    public Dictionary<int, decimal> GetReceivedQtyByLine(string sapDb, int opchDocEntry)
+    // Returns actual received qty per source line (BaseLine → Qty) from the OPDN created
+    public Dictionary<int, decimal> GetReceivedQtyByLine(string sapDb, int opchDocEntry, int baseType = 18)
     {
         var result = new Dictionary<int, decimal>();
         try
@@ -926,12 +938,12 @@ ORDER  BY r.ReceivedAt DESC", sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateT
             string sql = string.Format(@"
 SELECT BaseLine, SUM(Quantity) AS Qty
 FROM (
-    SELECT BaseLine, Quantity FROM {0}..PDN1 WITH(NOLOCK) WHERE BaseType=18 AND BaseEntry=@de
+    SELECT BaseLine, Quantity FROM {0}..PDN1 WITH(NOLOCK) WHERE BaseType={1} AND BaseEntry=@de
     UNION ALL
-    SELECT BaseLine, Quantity FROM {0}..IGN1 WITH(NOLOCK) WHERE BaseType=18 AND BaseEntry=@de
+    SELECT BaseLine, Quantity FROM {0}..IGN1 WITH(NOLOCK) WHERE BaseType={1} AND BaseEntry=@de
 ) x
 WHERE BaseLine IS NOT NULL
-GROUP BY BaseLine", sapDb);
+GROUP BY BaseLine", sapDb, baseType);
             using (var cmd = new SqlCommand(sql, _db.Conn))
             {
                 cmd.Parameters.AddWithValue("@de", opchDocEntry);

@@ -14,6 +14,12 @@ public partial class ComprasDirectasDetail : BasePage
     private bool _allowReceive = false;
     private Dictionary<int, decimal> _receivedQtyByLine = null;
 
+    private static string CdDocType
+    {
+        get { return System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH"; }
+    }
+    private static int CdBaseType { get { return CdDocType == "OPOR" ? 22 : 18; } }
+
     private int DocEntry
     {
         get
@@ -60,7 +66,7 @@ public partial class ComprasDirectasDetail : BasePage
             _allowReceive      = false;
             btnConfirm.Enabled = false;
             btnConfirm.Text    = "Already Received";
-            _receivedQtyByLine = _gr.GetReceivedQtyByLine((string)Session["CompanyId"], docEntry);
+            _receivedQtyByLine = _gr.GetReceivedQtyByLine((string)Session["CompanyId"], docEntry, CdBaseType);
         }
         else
         {
@@ -73,7 +79,7 @@ public partial class ComprasDirectasDetail : BasePage
 
     private void LoadHeader(string sapDb, int docEntry)
     {
-        DataRow row = _gr.GetApReserveInvoiceHeader(sapDb, docEntry);
+        DataRow row = _gr.GetApReserveInvoiceHeader(sapDb, docEntry, CdDocType);
         if (row == null)
         {
             ShowMessage("Error", "Not Found", "AP Reserve Invoice not found.");
@@ -90,7 +96,7 @@ public partial class ComprasDirectasDetail : BasePage
     protected void rgLines_NeedDataSource(object sender, GridNeedDataSourceEventArgs e)
     {
         string sapDb = (string)Session["CompanyId"];
-        rgLines.DataSource = _gr.GetApReserveInvoiceLines(sapDb, DocEntry);
+        rgLines.DataSource = _gr.GetApReserveInvoiceLines(sapDb, DocEntry, CdDocType);
     }
 
     protected void rgLines_ItemDataBound(object sender, GridItemEventArgs e)
@@ -174,7 +180,7 @@ public partial class ComprasDirectasDetail : BasePage
             return;
         }
 
-        DataRow header = _gr.GetApReserveInvoiceHeader(sapDb, docEntry);
+        DataRow header = _gr.GetApReserveInvoiceHeader(sapDb, docEntry, CdDocType);
         if (header == null)
         {
             ShowMessage("Error", "Error",
@@ -184,11 +190,11 @@ public partial class ComprasDirectasDetail : BasePage
         string cardCode   = header["CardCode"].ToString();
         int    opchDocNum = Convert.ToInt32(header["DocNum"]);
 
-        DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry);
+        DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry, CdDocType);
         if (_gr.LastError != null || dtLines.Rows.Count == 0)
         {
             ShowMessage("Error", "No Lines",
-                _gr.LastError ?? "No lines found for this AP Reserve Invoice.");
+                _gr.LastError ?? "No lines found for this document.");
             return;
         }
 
@@ -215,7 +221,7 @@ public partial class ComprasDirectasDetail : BasePage
         }
 
         string payload = _gr.BuildGrpoFromOpchWithQty(
-            cardCode, bplId, docEntry, opchDocNum, dtLines, cappedQtys);
+            cardCode, bplId, docEntry, opchDocNum, dtLines, cappedQtys, baseType: CdBaseType);
 
         var sl = new SapServiceLayer();
         try
