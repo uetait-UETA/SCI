@@ -261,8 +261,10 @@ public partial class ComprasDirectas : BasePage
                 // For OPOR: create OWTR from receipt warehouse to U_ToWhsCode
                 if (CdDocType == "OPOR" && allQtys != null && !string.IsNullOrEmpty(toWhsCode))
                 {
-                    string fromWhs = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
-                    string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, allQtys);
+                    string fromWhs  = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
+                    string whsType  = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsType"].ToString() : "";
+                    string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, allQtys,
+                        receiveUser: userId, whsType: whsType, sourceDocNum: opchDocNum);
                     try
                     {
                         string owtrResp = sl.CreateInventoryTransfer(owtrPayload);

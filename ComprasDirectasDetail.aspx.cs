@@ -298,7 +298,9 @@ public partial class ComprasDirectasDetail : BasePage
             {
                 string toWhsCode = header["ToWhsCode"].ToString();
                 string fromWhs   = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
-                string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, cappedQtys);
+                string whsType   = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsType"].ToString() : "";
+                string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, cappedQtys,
+                    receiveUser: userId, whsType: whsType, sourceDocNum: opchDocNum);
                 try
                 {
                     string owtrResp = sl.CreateInventoryTransfer(owtrPayload);
