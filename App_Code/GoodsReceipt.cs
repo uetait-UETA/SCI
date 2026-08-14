@@ -754,7 +754,6 @@ WHERE  p.DocEntry = {2}",
         var sb = new StringBuilder();
 
         sb.Append("{");
-        sb.AppendFormat("\"BPL_IDAssignedToInvoice\":{0},", bplId);
         sb.AppendFormat("\"DocDate\":\"{0}\",",    today);
         sb.AppendFormat("\"TaxDate\":\"{0}\",",    today);
         sb.AppendFormat("\"DocDueDate\":\"{0}\",", today);
