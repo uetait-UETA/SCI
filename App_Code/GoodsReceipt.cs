@@ -513,7 +513,10 @@ WHERE  l.DocEntry = {2}
     public DataRow GetApReserveInvoiceHeader(string sapDb, int docEntry, string docType = "OPCH")
     {
         LastError = null;
-        string hdrTable = docType == "OPOR" ? "OPOR" : "OPCH";
+        string hdrTable    = docType == "OPOR" ? "OPOR" : "OPCH";
+        string toWhsField  = docType == "OPOR"
+            ? "ISNULL(p.U_ToWhsCode, '') AS ToWhsCode"
+            : "''                        AS ToWhsCode";
         try
         {
             _db.Connect();
@@ -527,10 +530,11 @@ SELECT
     ISNULL(p.NumAtCard, '')        AS NumAtCard,
     p.DocTotal,
     p.DocCur,
-    p.BPLId
+    p.BPLId,
+    {4}
 FROM   {0}..{3} p {1}
 WHERE  p.DocEntry = {2}",
-                sapDb, Queries.WITH_NOLOCK, docEntry, hdrTable);
+                sapDb, Queries.WITH_NOLOCK, docEntry, hdrTable, toWhsField);
             _db.cmd.CommandText = sql;
             _db.cmd.CommandType = CommandType.Text;
             var dt = new DataTable();
@@ -699,6 +703,45 @@ WHERE  p.DocEntry = {2}",
         }
         sb.Append("]}");
 
+        return sb.ToString();
+    }
+
+    // ── Build OWTR (Inventory Transfer) payload after GRPO receipt ───────────
+
+    public string BuildOwtrPayload(int bplId, string fromWhs, string toWhs,
+        DataTable dtLines, System.Collections.Generic.Dictionary<int, decimal> quantities)
+    {
+        string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var sb = new StringBuilder();
+
+        sb.Append("{");
+        sb.AppendFormat("\"BPL_IDAssignedToInvoice\":{0},", bplId);
+        sb.AppendFormat("\"DocDate\":\"{0}\",",    today);
+        sb.AppendFormat("\"TaxDate\":\"{0}\",",    today);
+        sb.AppendFormat("\"DocDueDate\":\"{0}\",", today);
+        sb.AppendFormat("\"FromWarehouse\":\"{0}\",", EscJson(fromWhs));
+        sb.AppendFormat("\"ToWarehouse\":\"{0}\",",   EscJson(toWhs));
+        sb.Append("\"StockTransferLines\":[");
+
+        bool first = true;
+        foreach (DataRow r in dtLines.Rows)
+        {
+            int     lineNum  = Convert.ToInt32(r["LineNum"]);
+            decimal qty      = quantities.ContainsKey(lineNum) ? quantities[lineNum] : 0m;
+            if (qty <= 0) continue;
+
+            if (!first) sb.Append(",");
+            first = false;
+
+            sb.Append("{");
+            sb.AppendFormat("\"ItemCode\":\"{0}\",",          EscJson(r["ItemCode"].ToString()));
+            sb.AppendFormat("\"Quantity\":{0},",              qty.ToString("0.######", CultureInfo.InvariantCulture));
+            sb.AppendFormat("\"FromWarehouseCode\":\"{0}\",", EscJson(r["WhsCode"].ToString()));
+            sb.AppendFormat("\"WarehouseCode\":\"{0}\"",      EscJson(toWhs));
+            sb.Append("}");
+        }
+
+        sb.Append("]}");
         return sb.ToString();
     }
 

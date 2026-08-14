@@ -60,6 +60,20 @@ public partial class ComprasDirectasDetail : BasePage
 
         _allowReceive = (accessType == "F");
 
+        // For OPOR: validate U_ToWhsCode is configured
+        if (CdDocType == "OPOR" && _allowReceive)
+        {
+            var hdrCheck = _gr.GetApReserveInvoiceHeader((string)Session["CompanyId"], docEntry, CdDocType);
+            if (hdrCheck == null || string.IsNullOrEmpty(hdrCheck["ToWhsCode"].ToString()))
+            {
+                _allowReceive      = false;
+                btnConfirm.Enabled = false;
+                btnConfirm.Text    = "No Destination Whs";
+                ShowMessage("Error", "Missing Configuration",
+                    "Purchase Order does not have a destination warehouse (U_ToWhsCode) configured.");
+            }
+        }
+
         // Disable Confirm if invoice already received
         if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry))
         {
@@ -68,7 +82,7 @@ public partial class ComprasDirectasDetail : BasePage
             btnConfirm.Text    = "Already Received";
             _receivedQtyByLine = _gr.GetReceivedQtyByLine((string)Session["CompanyId"], docEntry, CdBaseType);
         }
-        else
+        else if (btnConfirm.Enabled)
         {
             btnConfirm.Enabled = _allowReceive;
         }
@@ -275,6 +289,25 @@ public partial class ComprasDirectasDetail : BasePage
                     _gr.LogReceipt(sapDb, docEntry, opchDocNum,
                         0, 0, cardCode, "", userId, "ERROR-EXCESS", exErr);
                     successMsg += " Warning: over-receipt document failed — " + exErr;
+                }
+            }
+
+            // For OPOR: create OWTR from receipt warehouse to U_ToWhsCode
+            if (CdDocType == "OPOR")
+            {
+                string toWhsCode = header["ToWhsCode"].ToString();
+                string fromWhs   = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
+                string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, cappedQtys);
+                try
+                {
+                    string owtrResp = sl.CreateInventoryTransfer(owtrPayload);
+                    int owtrDocNum = 0;
+                    try { var ow = JObject.Parse(owtrResp); if (ow["DocNum"] != null) owtrDocNum = Convert.ToInt32(ow["DocNum"]); } catch { }
+                    successMsg += " Transfer #" + owtrDocNum + " → " + toWhsCode + " created.";
+                }
+                catch (WebException wexOw)
+                {
+                    successMsg += " Warning: Transfer failed — " + SapServiceLayer.GetSlErrorMessage(wexOw);
                 }
             }
 

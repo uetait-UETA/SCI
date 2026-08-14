@@ -184,6 +184,21 @@ public partial class ComprasDirectas : BasePage
         string sapDb      = (string)Session["CompanyId"];
         string userId     = (string)Session["UserId"];
 
+        // Read header early — needed for BPLId and ToWhsCode validation
+        System.Data.DataRow hdr = _gr.GetApReserveInvoiceHeader(sapDb, docEntry, CdDocType);
+        int bplId = (hdr != null && hdr["BPLId"] != DBNull.Value)
+            ? Convert.ToInt32(hdr["BPLId"]) : BranchId;
+
+        // For OPOR: validate that U_ToWhsCode is configured
+        string toWhsCode = hdr != null ? hdr["ToWhsCode"].ToString() : "";
+        if (CdDocType == "OPOR" && string.IsNullOrEmpty(toWhsCode))
+        {
+            ShowMessage("Error", "Missing Configuration",
+                "Purchase Order does not have a destination warehouse (U_ToWhsCode) configured.");
+            rgInvoices.Rebind();
+            return;
+        }
+
         // Duty Paid items present → detail page for quantity entry
         if (_gr.HasDutyPaidLines(sapDb, docEntry, CdDocType))
         {
@@ -195,12 +210,6 @@ public partial class ComprasDirectas : BasePage
         // All Duty Free → receive with full document quantities
         try
         {
-            // Use the document's own BPLId so the GRPO branch matches the vendor assignment
-            System.Data.DataRow hdr = _gr.GetApReserveInvoiceHeader(sapDb, docEntry, CdDocType);
-            int bplId = (hdr != null && hdr["BPLId"] != DBNull.Value)
-                ? Convert.ToInt32(hdr["BPLId"])
-                : BranchId;
-
             DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry, CdDocType);
             if (_gr.LastError != null || dtLines.Rows.Count == 0)
             {
@@ -210,11 +219,11 @@ public partial class ComprasDirectas : BasePage
                 return;
             }
 
+            System.Collections.Generic.Dictionary<int, decimal> allQtys = null;
             string payload;
             if (CdDocType == "OPOR")
             {
-                // For Purchase Orders: create GRPO referencing OPOR (BaseType=22)
-                var allQtys = new System.Collections.Generic.Dictionary<int, decimal>();
+                allQtys = new System.Collections.Generic.Dictionary<int, decimal>();
                 foreach (System.Data.DataRow r in dtLines.Rows)
                     allQtys[Convert.ToInt32(r["LineNum"])] = Convert.ToDecimal(r["Quantity"]);
                 payload = _gr.BuildGrpoFromOpchWithQty(cardCode, bplId,
@@ -244,8 +253,27 @@ public partial class ComprasDirectas : BasePage
                 _gr.LogReceipt(sapDb, docEntry, opchDocNum,
                     grpoEntry, grpoDocNum, cardCode, "", userId, "SUCCESS", "");
 
-                ShowMessage("Success", "Goods Receipt Created",
-                    "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.");
+                string successMsg = "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.";
+
+                // For OPOR: create OWTR from receipt warehouse to U_ToWhsCode
+                if (CdDocType == "OPOR" && allQtys != null && !string.IsNullOrEmpty(toWhsCode))
+                {
+                    string fromWhs = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
+                    string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, allQtys);
+                    try
+                    {
+                        string owtrResp = sl.CreateInventoryTransfer(owtrPayload);
+                        int owtrDocNum = 0;
+                        try { var ow = JObject.Parse(owtrResp); if (ow["DocNum"] != null) owtrDocNum = Convert.ToInt32(ow["DocNum"]); } catch { }
+                        successMsg += " Transfer #" + owtrDocNum + " → " + toWhsCode + " created.";
+                    }
+                    catch (WebException wexOw)
+                    {
+                        successMsg += " Warning: Transfer failed — " + SapServiceLayer.GetSlErrorMessage(wexOw);
+                    }
+                }
+
+                ShowMessage("Success", "Goods Receipt Created", successMsg);
             }
             catch (WebException wex)
             {
