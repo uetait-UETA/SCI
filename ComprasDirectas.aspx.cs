@@ -71,7 +71,7 @@ public partial class ComprasDirectas : BasePage
                        ON  R.WhsCode   = O.WhsCode
                        AND R.Control   = 'VIEWTRA'
                        AND R.CompanyId = '{0}'
-                WHERE  O.BPLId = {3}
+                WHERE  O.BPLId IN ({3}, 1)
                   AND  EXISTS (
                     SELECT 1 FROM {2}.dbo.VendorStoreMapping vm
                     WHERE  vm.WhsCode   = O.WhsCode
