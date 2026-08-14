@@ -751,7 +751,6 @@ WHERE  p.DocEntry = {2}",
         DataTable dtLines, System.Collections.Generic.Dictionary<int, decimal> quantities,
         string receiveUser = "", string whsType = "", int sourceDocNum = 0)
     {
-        string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var sb = new StringBuilder();
 
         string comments = sourceDocNum > 0
@@ -761,9 +760,6 @@ WHERE  p.DocEntry = {2}",
         sb.Append("{");
         sb.AppendFormat("\"FromWarehouse\":\"{0}\",", EscJson(fromWhs));
         sb.AppendFormat("\"ToWarehouse\":\"{0}\",",   EscJson(toWhs));
-        sb.AppendFormat("\"DocDate\":\"{0}\",",       today);
-        sb.AppendFormat("\"TaxDate\":\"{0}\",",       today);
-        sb.AppendFormat("\"DocDueDate\":\"{0}\",",    today);
         if (!string.IsNullOrEmpty(whsType))
             sb.AppendFormat("\"U_Type\":\"{0}\",",    EscJson(whsType));
         if (!string.IsNullOrEmpty(receiveUser))
