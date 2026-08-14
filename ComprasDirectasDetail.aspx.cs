@@ -152,7 +152,6 @@ public partial class ComprasDirectasDetail : BasePage
         if (!_allowReceive) return;
 
         string sapDb    = (string)Session["CompanyId"];
-        int    bplId    = BranchId;
         string userId   = (string)Session["UserId"];
         int    docEntry = DocEntry;
 
@@ -189,6 +188,8 @@ public partial class ComprasDirectasDetail : BasePage
         }
         string cardCode   = header["CardCode"].ToString();
         int    opchDocNum = Convert.ToInt32(header["DocNum"]);
+        // Use the document's own BPLId so the GRPO branch matches the vendor assignment
+        int bplId = header["BPLId"] != DBNull.Value ? Convert.ToInt32(header["BPLId"]) : BranchId;
 
         DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry, CdDocType);
         if (_gr.LastError != null || dtLines.Rows.Count == 0)

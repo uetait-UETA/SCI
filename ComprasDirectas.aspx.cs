@@ -182,7 +182,6 @@ public partial class ComprasDirectas : BasePage
         string cardCode   = keys["CardCode"].ToString();
         int    opchDocNum = Convert.ToInt32(keys["DocNum"]);
         string sapDb      = (string)Session["CompanyId"];
-        int    bplId      = BranchId;
         string userId     = (string)Session["UserId"];
 
         // Duty Paid items present → detail page for quantity entry
@@ -196,6 +195,12 @@ public partial class ComprasDirectas : BasePage
         // All Duty Free → receive with full document quantities
         try
         {
+            // Use the document's own BPLId so the GRPO branch matches the vendor assignment
+            System.Data.DataRow hdr = _gr.GetApReserveInvoiceHeader(sapDb, docEntry, CdDocType);
+            int bplId = (hdr != null && hdr["BPLId"] != DBNull.Value)
+                ? Convert.ToInt32(hdr["BPLId"])
+                : BranchId;
+
             DataTable dtLines = _gr.GetApReserveInvoiceLines(sapDb, docEntry, CdDocType);
             if (_gr.LastError != null || dtLines.Rows.Count == 0)
             {
