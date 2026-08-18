@@ -239,12 +239,12 @@ public partial class ComprasDirectas : BasePage
             }
 
             var sl = new SapServiceLayer();
+            int grpoEntry = 0, grpoDocNum = 0;
             try
             {
                 sl.Login(sapDb);
                 string response = sl.CreateGoodsReceiptPO(payload);
 
-                int grpoEntry = 0, grpoDocNum = 0;
                 try
                 {
                     var resp = JObject.Parse(response);
@@ -257,14 +257,15 @@ public partial class ComprasDirectas : BasePage
                     grpoEntry, grpoDocNum, cardCode, "", userId, "SUCCESS", "");
 
                 string successMsg = "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.";
+                bool   owtrFailed = false;
 
                 // For OPOR: create OWTR from receipt warehouse to U_ToWhsCode
                 if (CdDocType == "OPOR" && allQtys != null && !string.IsNullOrEmpty(toWhsCode))
                 {
-                    string fromWhs  = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
-                    string whsType  = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsType"].ToString() : "";
+                    string fromWhs     = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
+                    string destWhsType = _gr.GetWhsUType(sapDb, toWhsCode);
                     string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, allQtys,
-                        receiveUser: userId, whsType: whsType, sourceDocNum: opchDocNum);
+                        receiveUser: userId, destWhsType: destWhsType, sourceDocNum: opchDocNum);
                     if (owtrPayload == null)
                     {
                         successMsg += " (No typed items to transfer to " + toWhsCode + ".)";
@@ -272,18 +273,26 @@ public partial class ComprasDirectas : BasePage
                     else
                     try
                     {
-                        string owtrResp = sl.CreateInventoryTransfer(owtrPayload);
-                        int owtrDocNum = 0;
+                        string owtrResp  = sl.CreateInventoryTransfer(owtrPayload);
+                        int    owtrDocNum = 0;
                         try { var ow = JObject.Parse(owtrResp); if (ow["DocNum"] != null) owtrDocNum = Convert.ToInt32(ow["DocNum"]); } catch { }
                         successMsg += " Transfer #" + owtrDocNum + " → " + toWhsCode + " created.";
                     }
                     catch (WebException wexOw)
                     {
-                        successMsg += " Warning: Transfer failed — " + SapServiceLayer.GetSlErrorMessage(wexOw);
+                        // OWTR failed — cancel the GRPO to keep both documents in sync
+                        string owtrErr = SapServiceLayer.GetSlErrorMessage(wexOw);
+                        try { sl.CancelGoodsReceiptPO(grpoEntry); } catch { }
+                        _gr.DeleteReceiptLog(sapDb, docEntry);
+                        owtrFailed = true;
+                        ShowMessage("Error", "Transfer Failed — Receipt Cancelled",
+                            "Could not create Transfer to " + toWhsCode + ": " + owtrErr +
+                            " Goods Receipt PO #" + grpoDocNum + " was automatically cancelled.");
                     }
                 }
 
-                ShowMessage("Success", "Goods Receipt Created", successMsg);
+                if (!owtrFailed)
+                    ShowMessage("Success", "Goods Receipt Created", successMsg);
             }
             catch (WebException wex)
             {

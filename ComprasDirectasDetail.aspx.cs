@@ -240,6 +240,8 @@ public partial class ComprasDirectasDetail : BasePage
             cardCode, bplId, docEntry, opchDocNum, dtLines, cappedQtys, baseType: CdBaseType);
 
         var sl = new SapServiceLayer();
+        int grpoEntry = 0, grpoDocNum = 0;
+        int exEntry   = 0, exDocNum   = 0;
         try
         {
             sl.Login(sapDb);
@@ -247,7 +249,6 @@ public partial class ComprasDirectasDetail : BasePage
             // Main receipt (based on APRI)
             string response = sl.CreateGoodsReceiptPO(payload);
 
-            int grpoEntry = 0, grpoDocNum = 0;
             try
             {
                 var resp = JObject.Parse(response);
@@ -260,6 +261,12 @@ public partial class ComprasDirectasDetail : BasePage
                 grpoEntry, grpoDocNum, cardCode, "", userId, "SUCCESS", "");
 
             string successMsg = "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.";
+            bool   owtrFailed = false;
+
+            // Resolve transfer fields once (used for both main and excess OWTRs)
+            string toWhsCode   = CdDocType == "OPOR" ? header["ToWhsCode"].ToString() : "";
+            string fromWhs     = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
+            string destWhsType = CdDocType == "OPOR" ? _gr.GetWhsUType(sapDb, toWhsCode) : "";
 
             // Excess receipt (standalone, no base doc)
             if (excessQtys.Count > 0)
@@ -270,7 +277,6 @@ public partial class ComprasDirectasDetail : BasePage
                 try
                 {
                     string excessResponse = sl.CreateGoodsReceiptPO(excessPayload);
-                    int exEntry = 0, exDocNum = 0;
                     try
                     {
                         var exResp = JObject.Parse(excessResponse);
@@ -283,6 +289,37 @@ public partial class ComprasDirectasDetail : BasePage
                         exEntry, exDocNum, cardCode, "", userId, "SUCCESS-EXCESS", "");
 
                     successMsg += " Over-receipt: Goods Receipt PO #" + exDocNum + " also created.";
+
+                    // For OPOR: create OWTR for the excess quantities as well
+                    if (CdDocType == "OPOR" && !string.IsNullOrEmpty(toWhsCode))
+                    {
+                        string exOwtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode,
+                            dtLines, excessQtys,
+                            receiveUser: userId, destWhsType: destWhsType, sourceDocNum: opchDocNum);
+                        if (exOwtrPayload == null)
+                        {
+                            successMsg += " (No typed items in over-receipt to transfer.)";
+                        }
+                        else
+                        try
+                        {
+                            string exOwtrResp   = sl.CreateInventoryTransfer(exOwtrPayload);
+                            int    exOwtrDocNum = 0;
+                            try { var ow = JObject.Parse(exOwtrResp); if (ow["DocNum"] != null) exOwtrDocNum = Convert.ToInt32(ow["DocNum"]); } catch { }
+                            successMsg += " Over-receipt Transfer #" + exOwtrDocNum + " → " + toWhsCode + " created.";
+                        }
+                        catch (WebException wexExOw)
+                        {
+                            // Excess OWTR failed — cancel only the excess GRPO, keep main GRPO log
+                            string exOwtrErr = SapServiceLayer.GetSlErrorMessage(wexExOw);
+                            try { sl.CancelGoodsReceiptPO(exEntry); } catch { }
+                            _gr.DeleteReceiptLog(sapDb, docEntry, "SUCCESS-EXCESS");
+                            successMsg += " Warning: over-receipt Transfer failed (" + exOwtrErr +
+                                          ") — Over-receipt Goods Receipt PO #" + exDocNum + " was cancelled.";
+                            exEntry  = 0;
+                            exDocNum = 0;
+                        }
+                    }
                 }
                 catch (WebException wexEx)
                 {
@@ -293,14 +330,11 @@ public partial class ComprasDirectasDetail : BasePage
                 }
             }
 
-            // For OPOR: create OWTR from receipt warehouse to U_ToWhsCode
-            if (CdDocType == "OPOR")
+            // For OPOR: create OWTR for the main (capped) quantities
+            if (CdDocType == "OPOR" && !string.IsNullOrEmpty(toWhsCode))
             {
-                string toWhsCode = header["ToWhsCode"].ToString();
-                string fromWhs   = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
-                string whsType   = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsType"].ToString() : "";
                 string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, cappedQtys,
-                    receiveUser: userId, whsType: whsType, sourceDocNum: opchDocNum);
+                    receiveUser: userId, destWhsType: destWhsType, sourceDocNum: opchDocNum);
                 if (owtrPayload == null)
                 {
                     successMsg += " (No typed items to transfer to " + toWhsCode + ".)";
@@ -308,20 +342,34 @@ public partial class ComprasDirectasDetail : BasePage
                 else
                 try
                 {
-                    string owtrResp = sl.CreateInventoryTransfer(owtrPayload);
-                    int owtrDocNum = 0;
+                    string owtrResp   = sl.CreateInventoryTransfer(owtrPayload);
+                    int    owtrDocNum = 0;
                     try { var ow = JObject.Parse(owtrResp); if (ow["DocNum"] != null) owtrDocNum = Convert.ToInt32(ow["DocNum"]); } catch { }
                     successMsg += " Transfer #" + owtrDocNum + " → " + toWhsCode + " created.";
                 }
                 catch (WebException wexOw)
                 {
-                    successMsg += " Warning: Transfer failed — " + SapServiceLayer.GetSlErrorMessage(wexOw);
+                    // Main OWTR failed — cancel main GRPO and any excess GRPO
+                    string owtrErr = SapServiceLayer.GetSlErrorMessage(wexOw);
+                    if (grpoEntry > 0) try { sl.CancelGoodsReceiptPO(grpoEntry); } catch { }
+                    if (exEntry   > 0) try { sl.CancelGoodsReceiptPO(exEntry);   } catch { }
+                    _gr.DeleteReceiptLog(sapDb, docEntry);
+                    owtrFailed = true;
+
+                    string cancelled = "Goods Receipt PO #" + grpoDocNum;
+                    if (exDocNum > 0) cancelled += " and over-receipt #" + exDocNum;
+                    ShowMessage("Error", "Transfer Failed — Receipt Cancelled",
+                        "Could not create Transfer to " + toWhsCode + ": " + owtrErr +
+                        " " + cancelled + " were automatically cancelled.");
                 }
             }
 
-            btnConfirm.Enabled = false;
-            btnCancel.Text     = "Back to List";
-            ShowMessage("Success", "Goods Receipt Created", successMsg);
+            if (!owtrFailed)
+            {
+                btnConfirm.Enabled = false;
+                btnCancel.Text     = "Back to List";
+                ShowMessage("Success", "Goods Receipt Created", successMsg);
+            }
         }
         catch (WebException wex)
         {

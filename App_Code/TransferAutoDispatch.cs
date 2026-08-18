@@ -203,12 +203,14 @@ public static class TransferAutoDispatch
             return "Error preparando auto-dispatch: " + ex.Message;
         }
 
-        // Step 3: create OWTQ for any warehouse pair.
-        // Unlike RunAutoDispatch (which only dispatches BODEGA→TIENDA), Excel drafts
-        // always need an OWTQ — the user explicitly triggered dispatch and TransferDiscreOrdf
-        // would also create OWTQ for any non-BODEGA→TIENDA transfer on manual dispatch.
-        // CreateSapOwtqAutoDispatch returns null with sapDocNum=0 when there are no lines
-        // with TmpQuantity > 0 (safe no-op in that case).
+        // Step 3: create OWTQ — but skip for same-branch transfers (FROM and TO share the same BPLId).
+        // Same-branch transfers are dispatched and received manually without WMS mediation.
+        if (AreSameBranch(db.Conn, docEntry, companyId, sapDb))
+        {
+            db.Disconnect();
+            return null;
+        }
+
         sapDocType = "OWTQ";
         string sapError = CreateSapOwtqAutoDispatch(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
 
@@ -575,6 +577,41 @@ public static class TransferAutoDispatch
     }
 
     // Deletes all local records for docEntry to revert a failed auto-dispatch.
+    // Returns true when FROM warehouse and TO warehouse (from the first draft line) share the same BPLId.
+    // Used to skip OWTQ creation for intra-branch transfers.
+    private static bool AreSameBranch(SqlConnection conn, int docEntry, string companyId, string sapDb)
+    {
+        string sql = string.Format(
+            @"SELECT TOP 1
+                  ISNULL(wf.BPLId, 0) AS FromBPLId,
+                  ISNULL(wt.BPLId, 0) AS ToBPLId
+              FROM smm_Transdiscrep_odrf h WITH(NOLOCK)
+              LEFT JOIN [{0}]..OWHS wf WITH(NOLOCK) ON wf.WhsCode = h.FromWhsCode
+              LEFT JOIN smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                  ON d.DocEntry = h.DocEntry AND d.CompanyId = h.CompanyId
+              LEFT JOIN [{0}]..OWHS wt WITH(NOLOCK) ON wt.WhsCode = d.ToWhsCode
+              WHERE h.CompanyId = @cid AND h.DocEntry = @de", sapDb);
+        try
+        {
+            using (var cmd = new SqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@cid", companyId);
+                cmd.Parameters.AddWithValue("@de",  docEntry);
+                using (var rdr = cmd.ExecuteReader())
+                {
+                    if (rdr.Read())
+                    {
+                        int fromBPL = rdr.IsDBNull(0) ? 0 : rdr.GetInt32(0);
+                        int toBPL   = rdr.IsDBNull(1) ? 0 : rdr.GetInt32(1);
+                        return fromBPL > 0 && fromBPL == toBPL;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
     private static void CleanupDraft(SqlConnection conn, string companyId, int docEntry)
     {
         string[] tables = {

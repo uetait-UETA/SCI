@@ -369,8 +369,9 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     LabelMsg.Text = "Message: Dispatch completed successfully. Receiving in R2 is not allowed.";
                 }
 
-                bool isFromBodega = string.Equals(GetFromWhsSmType(), "BODEGA", StringComparison.OrdinalIgnoreCase);
-                if (GloVarDocEntryITR > 0 && isFromBodega && string.IsNullOrWhiteSpace(gtkVal))
+                bool isFromBodega  = string.Equals(GetFromWhsSmType(), "BODEGA", StringComparison.OrdinalIgnoreCase);
+                bool isSameBranch  = IsSameBranchTransfer();
+                if (GloVarDocEntryITR > 0 && isFromBodega && !isSameBranch && string.IsNullOrWhiteSpace(gtkVal))
                 {
                     Button2.Enabled = false;
                     LabelMsg.Text = "Message: Awaiting GTK Confirmation to receive this transfer.";
@@ -548,6 +549,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
                 if (GloVarDocEntryITR > 0
                     && string.Equals(GetFromWhsSmType(), "BODEGA", StringComparison.OrdinalIgnoreCase)
+                    && !IsSameBranchTransfer()
                     && string.IsNullOrWhiteSpace(GetLocalGtkConfirmation()))
                 {
                     Button1.Enabled = false;
@@ -1526,6 +1528,47 @@ select docstatus from SmmDraftHeader where docentry = {1}";
         return whsType;
     }
 
+    // Returns true when FROM and TO warehouses of this transfer belong to the same SAP branch (BPLId).
+    // Used to skip the GTK confirmation requirement and OWTQ creation for intra-branch transfers.
+    // Overload that uses an already-open connection (no Connect/Disconnect — safe to call from within SyncFromSapItr).
+    private bool IsSameBranchTransfer(SqlConnection conn)
+    {
+        try
+        {
+            string sql = string.Format(
+                "SELECT ISNULL(wf.BPLId, 0), ISNULL(wt.BPLId, 0) " +
+                "FROM smm_Transdiscrep_odrf h WITH(NOLOCK) " +
+                "LEFT JOIN [{0}]..OWHS wf WITH(NOLOCK) ON wf.WhsCode = h.FromWhsCode " +
+                "LEFT JOIN [{0}]..OWHS wt WITH(NOLOCK) ON wt.WhsCode = h.ToWhsCode " +
+                "WHERE h.CompanyId = @Company AND h.DocEntry = @Entry", sap_db);
+            using (SqlCommand cmd = new SqlCommand(sql, conn))
+            {
+                cmd.Parameters.AddWithValue("@Company", sap_db);
+                cmd.Parameters.AddWithValue("@Entry",   GloVarDocEntry);
+                using (SqlDataReader rdr = cmd.ExecuteReader())
+                {
+                    if (rdr.Read())
+                    {
+                        int fromBPL = rdr.IsDBNull(0) ? 0 : rdr.GetInt32(0);
+                        int toBPL   = rdr.IsDBNull(1) ? 0 : rdr.GetInt32(1);
+                        return fromBPL > 0 && fromBPL == toBPL;
+                    }
+                }
+            }
+        }
+        catch { }
+        return false;
+    }
+
+    // Overload that opens its own connection (safe to call from outside an active db transaction).
+    private bool IsSameBranchTransfer()
+    {
+        db.Connect();
+        try   { return IsSameBranchTransfer(db.Conn); }
+        catch { return false; }
+        finally { db.Disconnect(); }
+    }
+
     // Returns the research warehouse code from OWHS for the given block type:
     // 'D' for dispatch operations, 'R' for receive operations.
     // BPLId is determined dynamically from the transfer's FROM warehouse (not hardcoded).
@@ -1657,7 +1700,7 @@ select docstatus from SmmDraftHeader where docentry = {1}";
                     cmd.ExecuteNonQuery();
                 }
 
-                if (string.IsNullOrWhiteSpace(gtk)) return; // GTK not yet confirmed — nothing more to do
+                if (string.IsNullOrWhiteSpace(gtk) && !IsSameBranchTransfer(db.Conn)) return; // GTK not yet confirmed — nothing more to do
 
                 // GTK confirmed: complete local dispatch so TransferDiscreOrdf shows the Receive button.
                 // Use U_DESPATCH from the OWTQ so userdispatch matches what's in the ITR.

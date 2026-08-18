@@ -67,6 +67,13 @@ public class SapServiceLayer
         return Post("/" + endpoint, jsonPayload);
     }
 
+    public string CancelGoodsReceiptPO(int docEntry)
+    {
+        string endpoint = System.Configuration.ConfigurationManager.AppSettings["SL_GrpoEndpoint"]
+                          ?? "GoodsReceiptsPO";
+        return Post("/" + endpoint + "(" + docEntry + ")/Cancel", "{}");
+    }
+
     public string CreateInventoryTransferRequest(string jsonPayload)
     {
         return Post("/InventoryTransferRequests", jsonPayload);

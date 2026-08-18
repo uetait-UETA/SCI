@@ -77,8 +77,11 @@
                                 DataFormatString="{0:MM/dd/yyyy}" />
                             <tel:GridBoundColumn SortExpression="CardName"  HeaderText="Vendor"
                                 DataField="CardName"  UniqueName="CardName"  HeaderStyle-Width="220px" />
-                            <tel:GridBoundColumn SortExpression="WhsCodes"  HeaderText="Warehouse"
-                                DataField="WhsCodes"  UniqueName="WhsCodes"  HeaderStyle-Width="120px" />
+                            <tel:GridBoundColumn SortExpression="WhsCodes"     HeaderText="Warehouse"
+                                DataField="WhsCodes"     UniqueName="WhsCodes"     HeaderStyle-Width="120px" />
+                            <tel:GridBoundColumn SortExpression="ToWhsPosCode" HeaderText="POS Code"
+                                DataField="ToWhsPosCode" UniqueName="ToWhsPosCode" HeaderStyle-Width="80px"
+                                ItemStyle-HorizontalAlign="Center" />
                             <tel:GridBoundColumn SortExpression="NumAtCard" HeaderText="Ref #"
                                 DataField="NumAtCard" UniqueName="NumAtCard" HeaderStyle-Width="100px" />
                             <tel:GridBoundColumn SortExpression="DocTotal"  HeaderText="Total"

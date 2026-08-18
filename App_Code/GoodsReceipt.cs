@@ -747,9 +747,28 @@ WHERE  p.DocEntry = {2}",
 
     // ── Build OWTR (Inventory Transfer) payload after GRPO receipt ───────────
 
+    public string GetWhsUType(string sapDb, string whsCode)
+    {
+        if (string.IsNullOrEmpty(whsCode)) return "";
+        try
+        {
+            _db.Connect();
+            using (var cmd = new SqlCommand(
+                string.Format("SELECT ISNULL(U_Type,'') FROM {0}..OWHS WHERE WhsCode=@whs", sapDb),
+                _db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@whs", whsCode);
+                object val = cmd.ExecuteScalar();
+                return val != null ? val.ToString() : "";
+            }
+        }
+        catch { return ""; }
+        finally { _db.Disconnect(); }
+    }
+
     public string BuildOwtrPayload(int bplId, string fromWhs, string toWhs,
         DataTable dtLines, System.Collections.Generic.Dictionary<int, decimal> quantities,
-        string receiveUser = "", string whsType = "", int sourceDocNum = 0)
+        string receiveUser = "", string destWhsType = "", int sourceDocNum = 0)
     {
         var sb = new StringBuilder();
 
@@ -760,23 +779,24 @@ WHERE  p.DocEntry = {2}",
         sb.Append("{");
         sb.AppendFormat("\"FromWarehouse\":\"{0}\",", EscJson(fromWhs));
         sb.AppendFormat("\"ToWarehouse\":\"{0}\",",   EscJson(toWhs));
-        if (!string.IsNullOrEmpty(whsType))
-            sb.AppendFormat("\"U_Type\":\"{0}\",",    EscJson(whsType));
+        if (!string.IsNullOrEmpty(destWhsType))
+            sb.AppendFormat("\"U_Type\":\"{0}\",",    EscJson(destWhsType));
         if (!string.IsNullOrEmpty(receiveUser))
             sb.AppendFormat("\"U_RECEIVE\":\"{0}\",", EscJson(receiveUser));
         sb.AppendFormat("\"U_ORITOWHS\":\"{0}\",",   EscJson(fromWhs));
         sb.AppendFormat("\"Comments\":\"{0}\",",      EscJson(comments));
         sb.Append("\"StockTransferLines\":[");
 
-        // Only transfer items whose WhsType matches the warehouse type (skip empty/NON SELL)
+        // Only include lines whose source warehouse type matches the destination type.
+        // When destWhsType is set, lines with a different (or empty) type are skipped.
         bool first = true;
         foreach (DataRow r in dtLines.Rows)
         {
-            int     lineNum      = Convert.ToInt32(r["LineNum"]);
-            decimal qty          = quantities.ContainsKey(lineNum) ? quantities[lineNum] : 0m;
-            string  itemWhsType  = r["WhsType"] != DBNull.Value ? r["WhsType"].ToString() : "";
+            int     lineNum     = Convert.ToInt32(r["LineNum"]);
+            decimal qty         = quantities.ContainsKey(lineNum) ? quantities[lineNum] : 0m;
+            string  itemWhsType = r["WhsType"] != DBNull.Value ? r["WhsType"].ToString() : "";
             if (qty <= 0) continue;
-            if (!string.IsNullOrEmpty(whsType) && string.IsNullOrEmpty(itemWhsType)) continue;
+            if (!string.IsNullOrEmpty(destWhsType) && itemWhsType != destWhsType) continue;
 
             if (!first) sb.Append(",");
             first = false;
@@ -915,10 +935,34 @@ VALUES
             string hdrTable    = isOpor ? "OPOR" : "OPCH";
             string linesTable  = isOpor ? "POR1" : "PCH1";
             string indFilter   = isOpor ? "" : "AND  p.Indicator = 'CD'";
-            // OPOR orders are created under BPLId=1 (buying office); include it alongside session branch
+            // OPOR orders may be created under BPLId=1 (buying office); include it alongside session branch
             string bplClause   = isOpor
                 ? "IN (" + bplId + ", 1)"
                 : "= " + bplId;
+            // For OPOR: only show orders whose U_ToWhsCode belongs to the session branch
+            string destBranchFilter = isOpor
+                ? string.Format(
+                    @"AND EXISTS (
+           SELECT 1 FROM {0}..OWHS w {1}
+           WHERE  w.WhsCode = ISNULL(p.U_ToWhsCode, '')
+             AND  w.BPLId   = {2}
+       )", sapDb, Queries.WITH_NOLOCK, bplId)
+                : "";
+            // For OPOR: show U_POSCode of the destination warehouse
+            string toWhsPosCode = isOpor
+                ? string.Format(
+                    @"ISNULL((SELECT CONVERT(nvarchar(30), w.U_POSCode)
+                   FROM {0}..OWHS w {1}
+                   WHERE w.WhsCode = ISNULL(p.U_ToWhsCode, '')), '') AS ToWhsPosCode",
+                    sapDb, Queries.WITH_NOLOCK)
+                : "'' AS ToWhsPosCode";
+
+            // For OPOR: filter by U_ToWhsCode (destination); for OPCH: filter by lines warehouse
+            string toWhsFilter = isOpor
+                ? "AND (@toWhs = '' OR p.U_ToWhsCode = @toWhs)"
+                : string.Format(
+                    "AND (@toWhs = '' OR EXISTS (SELECT 1 FROM {0}..{1} l {2} WHERE l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs))",
+                    sapDb, linesTable, Queries.WITH_NOLOCK);
 
             string safeDb = sapDb.Replace("'", "''");
             string vendorFilter = string.IsNullOrEmpty(toWhsCode)
@@ -945,7 +989,8 @@ SELECT
     ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
                   FROM {0}..{6} l {1}
                   WHERE l.DocEntry = p.DocEntry
-                  FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes
+                  FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes,
+    {11}
 FROM   {0}..{5} p {1}
 WHERE  p.DocStatus = 'O'
   {7}
@@ -953,11 +998,9 @@ WHERE  p.DocStatus = 'O'
   AND  p.DocDate  >= '{3}'
   AND  p.DocDate  <= '{4}'
   AND  (@docNum = 0 OR p.DocNum = @docNum)
-  AND  (@toWhs = '' OR EXISTS (
-           SELECT 1 FROM {0}..{6} l {1}
-           WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
-       ))
+  {12}
   {8}
+  {10}
   AND  NOT EXISTS (
            SELECT 1 FROM dbo.GrpoReceiptLog r {1}
            WHERE  r.OriginCompany  = '{0}'
@@ -966,7 +1009,8 @@ WHERE  p.DocStatus = 'O'
        )
 ORDER  BY p.DocDate DESC, p.DocNum DESC",
                     sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo,
-                    hdrTable, linesTable, indFilter, vendorFilter, bplClause);
+                    hdrTable, linesTable, indFilter, vendorFilter, bplClause,
+                    destBranchFilter, toWhsPosCode, toWhsFilter);
             }
             else
             {
@@ -987,7 +1031,8 @@ SELECT
     ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
                   FROM {0}..{6} l {1}
                   WHERE l.DocEntry = p.DocEntry
-                  FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes
+                  FOR XML PATH('')), 1, 2, ''), '') AS WhsCodes,
+    {11}
 FROM   {0}..{5} p {1}
 INNER JOIN dbo.GrpoReceiptLog r {1}
     ON  r.OriginCompany  = '{0}'
@@ -998,14 +1043,13 @@ WHERE  p.BPLId     {9}
   AND  p.DocDate  >= '{3}'
   AND  p.DocDate  <= '{4}'
   AND  (@docNum = 0 OR p.DocNum = @docNum)
-  AND  (@toWhs = '' OR EXISTS (
-           SELECT 1 FROM {0}..{6} l {1}
-           WHERE  l.DocEntry = p.DocEntry AND l.WhsCode = @toWhs
-       ))
+  {12}
   {8}
+  {10}
 ORDER  BY r.ReceivedAt DESC",
                     sapDb, Queries.WITH_NOLOCK, bplId, dateFrom, dateTo,
-                    hdrTable, linesTable, indFilter, vendorFilter, bplClause);
+                    hdrTable, linesTable, indFilter, vendorFilter, bplClause,
+                    destBranchFilter, toWhsPosCode, toWhsFilter);
             }
 
             _db.cmd.CommandText = sql;
@@ -1074,6 +1118,27 @@ GROUP BY BaseLine", sapDb, baseType);
             }
         }
         catch { return false; }
+        finally { _db.Disconnect(); }
+    }
+
+    public void DeleteReceiptLog(string originCompany, int originDocEntry, string status = null)
+    {
+        try
+        {
+            _db.Connect();
+            string sql = string.IsNullOrEmpty(status)
+                ? "DELETE FROM dbo.GrpoReceiptLog WHERE OriginCompany=@cid AND OriginDocEntry=@de"
+                : "DELETE FROM dbo.GrpoReceiptLog WHERE OriginCompany=@cid AND OriginDocEntry=@de AND Status=@st";
+            using (var cmd = new SqlCommand(sql, _db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@cid", originCompany);
+                cmd.Parameters.AddWithValue("@de",  originDocEntry);
+                if (!string.IsNullOrEmpty(status))
+                    cmd.Parameters.AddWithValue("@st", status);
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch { }
         finally { _db.Disconnect(); }
     }
 
