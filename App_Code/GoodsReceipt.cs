@@ -984,6 +984,7 @@ SELECT
     p.DocTotal,
     p.DocCur,
     0                               AS GrpoDocNum,
+    0                               AS ExcessGrpoDocNum,
     ''                              AS ReceivedBy,
     CAST(NULL AS datetime)          AS ReceivedAt,
     ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
@@ -1025,7 +1026,8 @@ SELECT
     ISNULL(p.Comments,   '')        AS Comments,
     p.DocTotal,
     p.DocCur,
-    ISNULL(r.DestDocNum, 0)         AS GrpoDocNum,
+    ISNULL(r.DestDocNum,  0)        AS GrpoDocNum,
+    ISNULL(rx.DestDocNum, 0)        AS ExcessGrpoDocNum,
     ISNULL(r.ReceivedBy, '')        AS ReceivedBy,
     r.ReceivedAt,
     ISNULL(STUFF((SELECT DISTINCT ', ' + l.WhsCode
@@ -1038,6 +1040,10 @@ INNER JOIN dbo.GrpoReceiptLog r {1}
     ON  r.OriginCompany  = '{0}'
     AND r.OriginDocEntry = p.DocEntry
     AND r.Status         = 'SUCCESS'
+LEFT JOIN dbo.GrpoReceiptLog rx {1}
+    ON  rx.OriginCompany  = '{0}'
+    AND rx.OriginDocEntry = p.DocEntry
+    AND rx.Status         = 'SUCCESS-EXCESS'
 WHERE  p.BPLId     {9}
   {7}
   AND  p.DocDate  >= '{3}'
@@ -1074,7 +1080,7 @@ ORDER  BY r.ReceivedAt DESC",
         try
         {
             _db.Connect();
-            // PDN1 = PurchaseDeliveryNotes lines; IGN1 = GoodsReceiptsPO lines — query both
+            // PDN1 = Goods Receipt PO lines (OPDN); IGN1 = standalone Goods Receipt — query both as safety net
             string sql = string.Format(@"
 SELECT BaseLine, SUM(Quantity) AS Qty
 FROM (
@@ -1103,22 +1109,92 @@ GROUP BY BaseLine", sapDb, baseType);
         return result;
     }
 
-    public bool IsAlreadyReceived(string sapDb, int docEntry)
+    public bool IsAlreadyReceived(string sapDb, int docEntry, int baseType = 18)
     {
         try
         {
             _db.Connect();
+            // Primary: check local receipt log
             using (var cmd = new SqlCommand(
                 "SELECT COUNT(1) FROM dbo.GrpoReceiptLog WHERE OriginCompany=@cid AND OriginDocEntry=@de AND Status='SUCCESS'",
                 _db.Conn))
             {
                 cmd.Parameters.AddWithValue("@cid", sapDb);
                 cmd.Parameters.AddWithValue("@de",  docEntry);
-                return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+                if (Convert.ToInt32(cmd.ExecuteScalar()) > 0)
+                    return true;
+            }
+            // Fallback: check SAP B1 directly — GRPO may exist even if not in local log
+            string ign1Sql = string.Format(
+                "SELECT COUNT(1) FROM [{0}]..PDN1 WITH(NOLOCK) WHERE BaseType={1} AND BaseEntry=@de",
+                sapDb, baseType);
+            using (var cmd2 = new SqlCommand(ign1Sql, _db.Conn))
+            {
+                cmd2.Parameters.AddWithValue("@de", docEntry);
+                return Convert.ToInt32(cmd2.ExecuteScalar()) > 0;
             }
         }
         catch { return false; }
         finally { _db.Disconnect(); }
+    }
+
+    public Dictionary<string, decimal> GetExcessQtyByItemCode(string sapDb, int opchDocEntry, int baseType = 18)
+    {
+        var result = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            _db.Connect();
+
+            // Primary: via local receipt log (covers GRPOs created through SCI on this server)
+            string sql1 = string.Format(@"
+SELECT i.ItemCode, SUM(i.Quantity) AS Qty
+FROM   dbo.GrpoReceiptLog g WITH(NOLOCK)
+JOIN   [{0}]..PDN1 i WITH(NOLOCK) ON i.DocEntry = g.DestDocEntry
+WHERE  g.OriginCompany = @cid AND g.OriginDocEntry = @de AND g.Status = 'SUCCESS-EXCESS'
+GROUP  BY i.ItemCode", sapDb);
+            using (var cmd = new SqlCommand(sql1, _db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@cid", sapDb);
+                cmd.Parameters.AddWithValue("@de",  opchDocEntry);
+                using (var rdr = cmd.ExecuteReader())
+                    while (rdr.Read())
+                    {
+                        string ic = rdr["ItemCode"].ToString();
+                        decimal q = Convert.ToDecimal(rdr["Qty"]);
+                        if (result.ContainsKey(ic)) result[ic] += q; else result[ic] = q;
+                    }
+            }
+
+            // Fallback: query SAP B1 OIGN directly — covers GRPOs created on other SCI instances.
+            // SCI sets NumAtCard = DocNum and Comments = "Over-receipt from AP Reserve Invoice #<DocNum>".
+            // We match by CardCode + NumAtCard + Comments prefix to avoid false positives.
+            if (result.Count == 0)
+            {
+                string hdrTable = baseType == 22 ? "OPOR" : "OPCH";
+                string sql2 = string.Format(@"
+SELECT i.ItemCode, SUM(i.Quantity) AS Qty
+FROM   [{0}]..OPDN h WITH(NOLOCK)
+JOIN   [{0}]..PDN1 i WITH(NOLOCK) ON i.DocEntry = h.DocEntry
+WHERE  h.CardCode  = (SELECT CardCode FROM [{0}]..{1} WITH(NOLOCK) WHERE DocEntry=@de)
+  AND  h.NumAtCard = CONVERT(nvarchar(20),(SELECT DocNum FROM [{0}]..{1} WITH(NOLOCK) WHERE DocEntry=@de))
+  AND  h.Comments LIKE 'Over-receipt from AP Reserve Invoice #%'
+GROUP  BY i.ItemCode", sapDb, hdrTable);
+                using (var cmd2 = new SqlCommand(sql2, _db.Conn))
+                {
+                    cmd2.Parameters.AddWithValue("@de", opchDocEntry);
+                    using (var rdr2 = cmd2.ExecuteReader())
+                        while (rdr2.Read())
+                        {
+                            string ic = rdr2["ItemCode"].ToString();
+                            decimal q = Convert.ToDecimal(rdr2["Qty"]);
+                            if (result.ContainsKey(ic)) result[ic] += q; else result[ic] = q;
+                        }
+                }
+            }
+        }
+        catch { }
+        finally { _db.Disconnect(); }
+        return result;
     }
 
     public void DeleteReceiptLog(string originCompany, int originDocEntry, string status = null)

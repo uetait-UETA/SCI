@@ -12,7 +12,8 @@ public partial class ComprasDirectasDetail : BasePage
 {
     private readonly GoodsReceipt _gr = new GoodsReceipt();
     private bool _allowReceive = false;
-    private Dictionary<int, decimal> _receivedQtyByLine = null;
+    private Dictionary<int, decimal>  _receivedQtyByLine    = null;
+    private Dictionary<string, decimal> _excessQtyByItemCode = null;
 
     private static string CdDocType
     {
@@ -76,12 +77,13 @@ public partial class ComprasDirectasDetail : BasePage
         }
 
         // Disable Confirm if invoice already received
-        if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry))
+        if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry, CdBaseType))
         {
-            _allowReceive      = false;
-            btnConfirm.Enabled = false;
-            btnConfirm.Text    = "Already Received";
-            _receivedQtyByLine = _gr.GetReceivedQtyByLine((string)Session["CompanyId"], docEntry, CdBaseType);
+            _allowReceive        = false;
+            btnConfirm.Enabled   = false;
+            btnConfirm.Text      = "Already Received";
+            _receivedQtyByLine   = _gr.GetReceivedQtyByLine((string)Session["CompanyId"], docEntry, CdBaseType);
+            _excessQtyByItemCode = _gr.GetExcessQtyByItemCode((string)Session["CompanyId"], docEntry, CdBaseType);
         }
         else if (btnConfirm.Enabled)
         {
@@ -146,7 +148,20 @@ public partial class ComprasDirectasDetail : BasePage
                     int lineNum = lineObj != null ? Convert.ToInt32(lineObj) : -1;
                     decimal recvQty = (_receivedQtyByLine != null && _receivedQtyByLine.ContainsKey(lineNum))
                         ? _receivedQtyByLine[lineNum]
-                        : apriQty;
+                        : 0m; // line not included in the GRPO — show 0, not APRI qty
+
+                    // Add excess qty (standalone over-receipt GRPO), matched by ItemCode
+                    if (_excessQtyByItemCode != null)
+                    {
+                        object itemObj = DataBinder.Eval(item.DataItem, "ItemCode");
+                        if (itemObj != null)
+                        {
+                            string itemCode = itemObj.ToString();
+                            decimal excessQty;
+                            if (_excessQtyByItemCode.TryGetValue(itemCode, out excessQty))
+                                recvQty += excessQty;
+                        }
+                    }
 
                     txt.Text = recvQty.ToString("0.######", CultureInfo.InvariantCulture);
                     txt.Attributes["data-apri"] = apriStr; // keep so JS diff shows

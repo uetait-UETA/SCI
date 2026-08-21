@@ -142,18 +142,32 @@ public partial class ComprasDirectas : BasePage
         if (grpoObj != null && grpoObj != DBNull.Value)
             grpoDocNum = Convert.ToInt32(grpoObj);
 
-        Button btnReceive = item.FindControl("btnReceive") as Button;
-        Label  lblGrpo    = item.FindControl("lblGrpo")    as Label;
+        int excessGrpoDocNum = 0;
+        object excessObj = DataBinder.Eval(item.DataItem, "ExcessGrpoDocNum");
+        if (excessObj != null && excessObj != DBNull.Value)
+            excessGrpoDocNum = Convert.ToInt32(excessObj);
+
+        Button btnReceive    = item.FindControl("btnReceive")    as Button;
+        Label  lblGrpo       = item.FindControl("lblGrpo")       as Label;
+        Label  lblExcessGrpo = item.FindControl("lblExcessGrpo") as Label;
 
         if (grpoDocNum > 0)
         {
             if (btnReceive != null) btnReceive.Visible = false;
             if (lblGrpo    != null) { lblGrpo.Text = "GRPO #" + grpoDocNum; lblGrpo.Visible = true; }
+            if (lblExcessGrpo != null)
+            {
+                if (excessGrpoDocNum > 0)
+                { lblExcessGrpo.Text = "Over: GRPO #" + excessGrpoDocNum; lblExcessGrpo.Visible = true; }
+                else
+                    lblExcessGrpo.Visible = false;
+            }
         }
         else
         {
-            if (btnReceive != null) btnReceive.Enabled = _allowReceive;
-            if (lblGrpo    != null) lblGrpo.Visible = false;
+            if (btnReceive    != null) btnReceive.Enabled = _allowReceive;
+            if (lblGrpo       != null) lblGrpo.Visible = false;
+            if (lblExcessGrpo != null) lblExcessGrpo.Visible = false;
         }
     }
 

@@ -97,7 +97,7 @@
                                 DataField="ReceivedBy" UniqueName="ReceivedBy"
                                 HeaderStyle-Width="100px" Visible="false" />
                             <tel:GridTemplateColumn HeaderText="Action" UniqueName="ActionReceive"
-                                HeaderStyle-Width="120px" AllowSorting="false"
+                                HeaderStyle-Width="140px" AllowSorting="false"
                                 ItemStyle-HorizontalAlign="Center">
                                 <ItemTemplate>
                                     <asp:Button ID="btnReceive" runat="server"
@@ -107,6 +107,9 @@
                                         OnClientClick="return confirmReceive();" />
                                     <asp:Label ID="lblGrpo" runat="server" Visible="false"
                                         ForeColor="#2e7d32" Font-Bold="true" />
+                                    <asp:Label ID="lblExcessGrpo" runat="server" Visible="false"
+                                        ForeColor="#c62828" Font-Bold="true"
+                                        style="display:block; font-size:11px;" />
                                 </ItemTemplate>
                             </tel:GridTemplateColumn>
                         </Columns>

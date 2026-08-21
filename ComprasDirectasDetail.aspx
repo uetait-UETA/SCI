@@ -1,4 +1,4 @@
-<%@ Page Title="" Language="C#" MasterPageFile="~/SiteMaster.master" AutoEventWireup="true" CodeFile="ComprasDirectasDetail.aspx.cs" Inherits="ComprasDirectasDetail" %>
+﻿<%@ Page Title="" Language="C#" MasterPageFile="~/SiteMaster.master" AutoEventWireup="true" CodeFile="ComprasDirectasDetail.aspx.cs" Inherits="ComprasDirectasDetail" %>
 
 <%@ Register Assembly="Telerik.Web.UI" Namespace="Telerik.Web.UI" TagPrefix="tel" %>
 
@@ -127,7 +127,7 @@
             var span = txt.parentElement.querySelector('.diff-lbl');
             if (!span) return;
             if (diff === 0) {
-                span.textContent = '✓';
+                span.textContent = '\u2713';
                 span.style.color = 'green';
             } else if (diff > 0) {
                 span.textContent = '+' + diff.toFixed(2) + ' (over)';
@@ -143,9 +143,9 @@
                 checkQtyDiff(e.target);
         });
 
-        // Show diff on page load for already-received rows
+        // Show diff on page load for all rows (active and already-received)
         window.addEventListener('load', function () {
-            document.querySelectorAll('.recv-qty[data-loaded="1"]').forEach(function (txt) {
+            document.querySelectorAll('.recv-qty').forEach(function (txt) {
                 checkQtyDiff(txt);
             });
         });
