@@ -99,6 +99,16 @@ public class SapServiceLayer
         return Post("/Invoices", jsonPayload);
     }
 
+    public string CreateInventoryGenEntry(string jsonPayload)
+    {
+        return Post("/InventoryGenEntries", jsonPayload);
+    }
+
+    public string CreateInventoryGenExit(string jsonPayload)
+    {
+        return Post("/InventoryGenExits", jsonPayload);
+    }
+
     public string GetInventoryTransferRequest(int docEntry)
     {
         return Get("/InventoryTransferRequests(" + docEntry + ")?$select=DocEntry,U_GTK_CONFIRMATION,StockTransferLines");

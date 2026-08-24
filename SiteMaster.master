@@ -79,6 +79,7 @@
                                                     <tel:RadMenuItem Text="Delivery Errors" Value="DeliveryErrores" NavigateUrl="DeliveryErrors.aspx" />
                                                     <%--<tel:RadMenuItem Text="Delivery Errors by Items" Value="DeliveryErroresItems" NavigateUrl="DeliveryErrorsItems.aspx" />--%>
                                                     <tel:RadMenuItem Text="Transfer Errors" Value="ErroresdeTransferencia" NavigateUrl="TransferErrors.aspx" />
+                                                    <tel:RadMenuItem Text="Inventory Adjustment" Value="InventoryAdjustByExcel" NavigateUrl="InventoryAdjustByExcel.aspx" />
                                                 </Items>
                                             </tel:RadMenuItem>
                                              <tel:RadMenuItem Text="Receiving" Value="Receiving">
