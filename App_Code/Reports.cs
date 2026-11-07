@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Data;
 using System.Data.SqlClient;
 
@@ -30,8 +30,8 @@ public class Reports
         {
             sql =
                @"select 
-                ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo, 
-                oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, oitm.U_BRAND Marca, oitm.U_CLASS Clase
+                ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, ISNULL(oitm.U_CSKU_ID,'') as Csku_ID, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo, 
+                oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, LEFT(oitm.U_BRAND, CHARINDEX(' - ', oitm.U_BRAND + ' - ') - 1) Marca, ISNULL((SELECT TOP 1 dcs.U_PRDCT_CLSS_NM FROM " + sap_db + @"..[@DCS_HIERARCHY] dcs WHERE dcs.CODE = oitm.U_Hierarchy),'') as Clase,ISNULL(oitm.U_VendorRefNum,'') as Nombre_Estilo, ISNULL(oitm.U_VendorColorDesc,'') as Color_Desc, ISNULL(oitm.U_VendorSizeDesc,'') as Size_Desc, ISNULL(LEFT(oitm.U_Hierarchy, CHARINDEX(' - ', oitm.U_Hierarchy + ' - ') - 1),'') as Subclase, ISNULL(oitm.U_HSCODE,'') as HsCode, ISNULL((SELECT TOP 1 org.Name FROM " + sap_db + @"..[@ORIGIN] org WHERE org.Code = oitm.U_Origin),'') as OriginName
                  from " + sap_db + @"..oitw as oitw, " + sap_db + @"..oitm as oitm, " + sap_db + @"..oitb as oitb, " + sap_db + @"..owhs as owhs
                 where oitw.Onhand > 0 and oitw.itemcode = oitm.itemcode
                 and oitb.itmsgrpcod = oitm.itmsgrpcod
@@ -47,8 +47,8 @@ public class Reports
                 {
                     sql =
                        @"select 
-                        ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo, 
-                        oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, oitm.U_BRAND Marca, oitm.U_CLASS Clase
+                        ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, ISNULL(oitm.U_CSKU_ID,'') as Csku_ID, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo, 
+                        oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, LEFT(oitm.U_BRAND, CHARINDEX(' - ', oitm.U_BRAND + ' - ') - 1) Marca, ISNULL((SELECT TOP 1 dcs.U_PRDCT_CLSS_NM FROM " + sap_db + @"..[@DCS_HIERARCHY] dcs WHERE dcs.CODE = oitm.U_Hierarchy),'') as Clase,ISNULL(oitm.U_VendorRefNum,'') as Nombre_Estilo, ISNULL(oitm.U_VendorColorDesc,'') as Color_Desc, ISNULL(oitm.U_VendorSizeDesc,'') as Size_Desc, ISNULL(LEFT(oitm.U_Hierarchy, CHARINDEX(' - ', oitm.U_Hierarchy + ' - ') - 1),'') as Subclase, ISNULL(oitm.U_HSCODE,'') as HsCode, ISNULL((SELECT TOP 1 org.Name FROM " + sap_db + @"..[@ORIGIN] org WHERE org.Code = oitm.U_Origin),'') as OriginName
                          from " + sap_db + @"..oitw as oitw, " + sap_db + @"..oitm as oitm, " + sap_db + @"..oitb as oitb, " + sap_db + @"..owhs as owhs
                         where oitw.Onhand > 0 and oitw.itemcode = oitm.itemcode
                         and oitb.itmsgrpcod = oitm.itmsgrpcod
@@ -60,8 +60,8 @@ public class Reports
                 {
                     sql =
                        @"select
-                        ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo,
-                        oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, oitm.U_BRAND Marca, oitm.U_CLASS Clase
+                        ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, ISNULL(oitm.U_CSKU_ID,'') as Csku_ID, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo,
+                        oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, LEFT(oitm.U_BRAND, CHARINDEX(' - ', oitm.U_BRAND + ' - ') - 1) Marca, ISNULL((SELECT TOP 1 dcs.U_PRDCT_CLSS_NM FROM " + sap_db + @"..[@DCS_HIERARCHY] dcs WHERE dcs.CODE = oitm.U_Hierarchy),'') as Clase,ISNULL(oitm.U_VendorRefNum,'') as Nombre_Estilo, ISNULL(oitm.U_VendorColorDesc,'') as Color_Desc, ISNULL(oitm.U_VendorSizeDesc,'') as Size_Desc, ISNULL(LEFT(oitm.U_Hierarchy, CHARINDEX(' - ', oitm.U_Hierarchy + ' - ') - 1),'') as Subclase, ISNULL(oitm.U_HSCODE,'') as HsCode, ISNULL((SELECT TOP 1 org.Name FROM " + sap_db + @"..[@ORIGIN] org WHERE org.Code = oitm.U_Origin),'') as OriginName
                          from " + sap_db + @"..oitw as oitw, " + sap_db + @"..oitm as oitm, " + sap_db + @"..oitb as oitb, " + sap_db + @"..owhs as owhs
                         where oitw.Onhand > 0 and oitw.itemcode = oitm.itemcode
                         and oitb.itmsgrpcod = oitm.itmsgrpcod
@@ -80,8 +80,8 @@ public class Reports
                     if (brand.Contains("All Brands"))
                     {
                         sql = @"select
-                                ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo,
-                                oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, oitm.U_BRAND Marca, oitm.U_CLASS Clase
+                                ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, ISNULL(oitm.U_CSKU_ID,'') as Csku_ID, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo,
+                                oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, LEFT(oitm.U_BRAND, CHARINDEX(' - ', oitm.U_BRAND + ' - ') - 1) Marca, ISNULL((SELECT TOP 1 dcs.U_PRDCT_CLSS_NM FROM " + sap_db + @"..[@DCS_HIERARCHY] dcs WHERE dcs.CODE = oitm.U_Hierarchy),'') as Clase,ISNULL(oitm.U_VendorRefNum,'') as Nombre_Estilo, ISNULL(oitm.U_VendorColorDesc,'') as Color_Desc, ISNULL(oitm.U_VendorSizeDesc,'') as Size_Desc, ISNULL(LEFT(oitm.U_Hierarchy, CHARINDEX(' - ', oitm.U_Hierarchy + ' - ') - 1),'') as Subclase, ISNULL(oitm.U_HSCODE,'') as HsCode, ISNULL((SELECT TOP 1 org.Name FROM " + sap_db + @"..[@ORIGIN] org WHERE org.Code = oitm.U_Origin),'') as OriginName
                                  from " + sap_db + @"..oitw as oitw, " + sap_db + @"..oitm as oitm, " + sap_db + @"..oitb as oitb, " + sap_db + @"..owhs as owhs
                                 where oitw.Onhand > 0 and oitw.itemcode = oitm.itemcode
                                 and oitb.itmsgrpcod = oitm.itmsgrpcod
@@ -92,8 +92,8 @@ public class Reports
                     else
                     {
                         sql = @"select 
-                                ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo, 
-                                oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, oitm.U_BRAND Marca, oitm.U_CLASS Clase
+                                ISNULL(owhs.U_POSCode, '') as U_POSCode, oitw.whscode as Ubicacion, cast(oitw.itemCode as varchar) as Codigo_Articulo, ISNULL(oitm.U_CSKU_ID,'') as Csku_ID, /*[dbo].[FIVEBCODEPRODS] (cast(oitw.itemCode as varchar))*/ STUFF((SELECT ' - ' + BcdCode FROM " + sap_db + @".dbo.OBCD a1 " + Queries.WITH_NOLOCK + @" WHERE a1.ItemCode=cast(oitw.itemCode as varchar) FOR XML PATH ('')), 1, 3, '') as BarCode, oitm.itemname as Nombre_Articulo, 
+                                oitm.ItmsGrpCod as Categoria, oitb.itmsgrpnam as Nombre_Categoria, cast(oitw.Onhand as int) as Existencia, LEFT(oitm.U_BRAND, CHARINDEX(' - ', oitm.U_BRAND + ' - ') - 1) Marca, ISNULL((SELECT TOP 1 dcs.U_PRDCT_CLSS_NM FROM " + sap_db + @"..[@DCS_HIERARCHY] dcs WHERE dcs.CODE = oitm.U_Hierarchy),'') as Clase,ISNULL(oitm.U_VendorRefNum,'') as Nombre_Estilo, ISNULL(oitm.U_VendorColorDesc,'') as Color_Desc, ISNULL(oitm.U_VendorSizeDesc,'') as Size_Desc, ISNULL(LEFT(oitm.U_Hierarchy, CHARINDEX(' - ', oitm.U_Hierarchy + ' - ') - 1),'') as Subclase, ISNULL(oitm.U_HSCODE,'') as HsCode, ISNULL((SELECT TOP 1 org.Name FROM " + sap_db + @"..[@ORIGIN] org WHERE org.Code = oitm.U_Origin),'') as OriginName
                                  from " + sap_db + @"..oitw as oitw, " + sap_db + @"..oitm as oitm, " + sap_db + @"..oitb as oitb, " + sap_db + @"..owhs as owhs
                                 where oitw.Onhand > 0 and oitw.itemcode = oitm.itemcode
                                 and oitb.itmsgrpcod = oitm.itmsgrpcod
@@ -746,6 +746,23 @@ public class Reports
             whses = whses.Substring(1);
         }
 
+        // "Unplanned products with available inventory in Warehouses": only items with
+        // stock in a grid warehouse of the same U_Type (Duty Free / Duty Paid) as the store.
+        string whsList = "";
+        foreach (DataRow item in whs.Rows)
+        {
+            whsList += ",'" + (string)item["WhsCode"] + "'";
+        }
+
+        string unplannedStockFilter = "";
+        if (!string.IsNullOrEmpty(whsList))
+        {
+            unplannedStockFilter = @" AND EXISTS (SELECT 1 FROM " + sap_db + @".dbo.OITW w " + Queries.WITH_NOLOCK + @"
+                    INNER JOIN " + sap_db + @".dbo.OWHS h " + Queries.WITH_NOLOCK + @" ON h.WhsCode = w.WhsCode
+                    WHERE w.ItemCode = a.ItemCode AND w.OnHand > 0 AND w.WhsCode IN (" + whsList.Substring(1) + @")
+                    AND (ISNULL(c.U_Type,'') = '' OR ISNULL(h.U_Type,'') = c.U_Type)) ";
+        }
+
         if (NoInSap == "true")
         {
             sql =
@@ -766,6 +783,8 @@ public class Reports
 		'E' ORDER_MULTIPLE,
 		1 case_pack
 	    ,'' AS marca  
+	    ,'' AS U_CSKU_ID
+	    ,NULL AS UnitsPerCase
         from    
 		" + sap_db + @".DBO.OWHS a inner join
 		rss_store_item_min_max e 
@@ -808,7 +827,9 @@ public class Reports
 				mult.ORDER_MULTIPLE," +
                     //case when isnull(mult.ORDER_MULTIPLE, 'E') = 'E' then 1 else isnull(b.u_bot,1) end case_pack" + (string.IsNullOrEmpty(torWhsesA) ? "" : "," + torWhsesA) + @"
                     @"1 case_pack" + (string.IsNullOrEmpty(whses) ? "" : "," + whses) + @"					
-			    ,replace(b.u_brand, '''','_') AS marca
+			    ,replace(LEFT(b.u_brand, CHARINDEX(' - ', b.u_brand + ' - ') - 1), '''','_') AS marca
+			    ,b.U_CSKU_ID
+			    ,b.U_Bot AS UnitsPerCase
                 from    
 				" + sap_db + @".DBO.OITW a     
 				inner join 
@@ -849,13 +870,14 @@ public class Reports
 						e.comment,
 						mult.ORDER_MULTIPLE,
 						1 as case_pack" + (string.IsNullOrEmpty(whses) ? "" : "," + whses) + @"
-					    ,replace(b.u_brand, '''','_') AS marca
+					    ,replace(LEFT(b.u_brand, CHARINDEX(' - ', b.u_brand + ' - ') - 1), '''','_') AS marca
+					    ,b.U_CSKU_ID
+					    ,b.U_Bot AS UnitsPerCase
                         from    
 						" + sap_db + @".DBO.OITW a     
 						inner join 
                         " + sap_db + @".DBO.OITM b on a.ItemCode = b.ItemCode and a.WhsCode IN (" + store + ")" +
-                        @"inner join
-						    inner join 
+                        @"inner join 
 						" + sap_db + @".DBO.OWHS c on a.WhsCode = c.WhsCode 
 						    inner join  
 						" + sap_db + @".DBO.oitb d on b.itmsgrpcod = d.itmsgrpcod 
@@ -863,13 +885,15 @@ public class Reports
 						rss_loc_dept_multiple mult on b.itmsgrpcod = mult.dept and mult.LOC =a.whscode and mult.companyId = '" + sap_db + @"' 
 					left outer join
 					rss_store_item_min_max e on e.item = a.itemcode
-					and e.loc = a.WhsCode and mult.companyId = '" + sap_db + @"'
-                 where a.WhsCode IN (" + store + @")  and a.ItemCode = '" + lItem + "' order by item ";
+					and e.loc = a.WhsCode and e.companyId = '" + sap_db + @"'
+                 where a.WhsCode IN (" + store + @")  and a.ItemCode = '" + lItem + "' AND (ISNULL(c.U_Type,'') = '' OR ISNULL(b.U_Type,'') = c.U_Type)" + unplannedStockFilter + @" order by item ";
                 }
                 else
                 {
 
+                    sql += @" AND (ISNULL(c.U_Type,'') = '' OR ISNULL(b.U_Type,'') = c.U_Type) ";
                     sql += @" and b.itmsgrpcod in (" + depts + @") ";
+                    sql += unplannedStockFilter;
 
                     if (displayAll != "true")
                         sql += @" and e.hold = 1 ";
@@ -906,7 +930,9 @@ public class Reports
 				e.comment,
 				mult.ORDER_MULTIPLE,
 				1 as case_pack" + (string.IsNullOrEmpty(whses) ? "" : "," + whses) + @"
-				,replace(b.u_brand, '''','_') AS marca
+				,replace(LEFT(b.u_brand, CHARINDEX(' - ', b.u_brand + ' - ') - 1), '''','_') AS marca
+				,b.U_CSKU_ID
+				,b.U_Bot AS UnitsPerCase
                 from    
 				" + sap_db + @".DBO.OITW a     
 				inner join   
@@ -944,7 +970,9 @@ public class Reports
 								e.comment,
 								mult.ORDER_MULTIPLE,
 								1 as case_pack" + (string.IsNullOrEmpty(whses) ? "" : "," + whses) + @"
-							    ,replace(b.u_brand, '''','_') AS marca
+							    ,replace(LEFT(b.u_brand, CHARINDEX(' - ', b.u_brand + ' - ') - 1), '''','_') AS marca
+						    ,b.U_CSKU_ID
+						    ,b.U_Bot AS UnitsPerCase
                                 from    
 								" + sap_db + @".DBO.OITW a     
 								inner join  
@@ -960,10 +988,11 @@ public class Reports
 						rss_store_item_min_max e on e.item = a.itemcode
 
 						and e.loc = a.WhsCode and e.companyId = '" + sap_db + @"'
-                where a.WhsCode IN (" + store + @")  and a.ItemCode = '" + lItem + "' order by item ";
+                where a.WhsCode IN (" + store + @")  and a.ItemCode = '" + lItem + "' AND (ISNULL(c.U_Type,'') = '' OR ISNULL(b.U_Type,'') = c.U_Type) order by item ";
                 }
                 else
                 {
+                    sql += @" AND (ISNULL(c.U_Type,'') = '' OR ISNULL(b.U_Type,'') = c.U_Type) ";
                     sql += @" and b.itmsgrpcod in (" + depts + @") ";
 
 

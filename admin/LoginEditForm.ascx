@@ -34,7 +34,8 @@
                     <td class="tdLabelBold">Login ID
                     </td>
                     <td class="tdValue">
-                        <asp:TextBox ID="txtLoginID" runat="server" Text='<%# DataBinder.Eval(Container, "DataItem.LoginID") %>' TabIndex="1" Width="280px">
+                        <asp:TextBox ID="txtLoginID" runat="server" Text='<%# DataBinder.Eval(Container, "DataItem.LoginID") %>' TabIndex="1" Width="280px"
+                            autocomplete="off">
                         </asp:TextBox>
                     </td>
                 </tr>
@@ -42,8 +43,21 @@
                     <td class="tdLabelBold">Password
                     </td>
                     <td class="tdValue">
-                        <asp:TextBox ID="txtPassWd" runat="server" Text='<%# DataBinder.Eval(Container, "DataItem.PassWd") %>' TabIndex="2" Width="280px">
-                        </asp:TextBox>
+                        <%-- Campo de tipo contrasena y SIN enlace a datos: la contrasena
+                             no se envia al navegador, por lo que no se ve en pantalla ni
+                             en el codigo fuente de la pagina.
+                             Al editar aparece vacio a proposito; dejarlo vacio conserva
+                             la actual (ver gridLogins_UpdateCommand en LoginEdit.aspx.cs). --%>
+                        <%-- autocomplete="new-password" impide que el navegador
+                             rellene aqui la contrasena guardada del propio
+                             administrador y, de paso, que meta su usuario en el
+                             primer campo de texto que encuentre en la pagina. --%>
+                        <asp:TextBox ID="txtPassWd" runat="server" TextMode="Password" TabIndex="2" Width="280px"
+                            autocomplete="new-password" />
+                        <br />
+                        <span style="font:10px Arial,sans-serif; color:#777;">
+                            Dejar vacio para conservar la contrasena actual
+                        </span>
                     </td>
                 </tr>
                 <tr>

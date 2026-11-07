@@ -26,9 +26,10 @@ public class SapServiceLayer
 
         // Allow self-signed internal certificates
         ServicePointManager.ServerCertificateValidationCallback = (s, c, ch, e) => true;
-        // Enable TLS 1.0 / 1.1 / 1.2 for .NET 4.0 compatibility
+        // Enable TLS 1.0 / 1.1 / 1.2 for .NET 4.0 compatibility. No SSL3 (48): SAP SL uses TLS 1.2
+        // and .NET 8 (FacturacionSAPConsole, which compiles this file) throws on SSL3.
         ServicePointManager.SecurityProtocol =
-            (SecurityProtocolType)(48 | 192 | 768 | 3072);
+            (SecurityProtocolType)(192 | 768 | 3072);
         // .NET agrega Expect:100-continue por defecto en POST; SAP SL no lo maneja bien
         ServicePointManager.Expect100Continue = false;
     }
@@ -79,6 +80,11 @@ public class SapServiceLayer
         return Post("/InventoryTransferRequests", jsonPayload);
     }
 
+    public string CloseInventoryTransferRequest(int docEntry)
+    {
+        return Post("/InventoryTransferRequests(" + docEntry + ")/Close", "{}");
+    }
+
     public string CreateInventoryTransfer(string jsonPayload)
     {
         return Post("/StockTransfers", jsonPayload);
@@ -112,6 +118,68 @@ public class SapServiceLayer
     public string GetInventoryTransferRequest(int docEntry)
     {
         return Get("/InventoryTransferRequests(" + docEntry + ")?$select=DocEntry,U_GTK_CONFIRMATION,StockTransferLines");
+    }
+
+    // ── Methods used by InvoiceUploader (FacturacionSAP.aspx) ────────────────────
+
+    public string GetDocumentForInvoice(string entity, int docEntry)
+    {
+        return Get("/" + entity + "(" + docEntry + ")?$select=DocEntry,DocumentLines,DocumentAdditionalExpenses");
+    }
+
+    public string CreateInvoice(string jsonPayload)
+    {
+        return Post("/Invoices", jsonPayload);
+    }
+
+    public string CreateCreditNote(string jsonPayload)
+    {
+        return Post("/CreditNotes", jsonPayload);
+    }
+
+    public string CreateIncomingPayment(string jsonPayload)
+    {
+        return Post("/IncomingPayments", jsonPayload);
+    }
+
+    public string CreateOutgoingPayment(string jsonPayload)
+    {
+        return Post("/VendorPayments", jsonPayload);
+    }
+
+    public string GetCreditCards()
+    {
+        return Get("/CreditCards?$select=CreditCardCode,GLAccount");
+    }
+
+    public string GetDocBalance(string entity, int docEntry)
+    {
+        return Get("/" + entity + "(" + docEntry + ")?$select=DocTotal,PaidToDate,TransNum");
+    }
+
+    public string GetJournalEntry(int transId)
+    {
+        return Get("/JournalEntries(" + transId + ")?$select=JournalEntryLines");
+    }
+
+    // Closes a delivery (DeliveryNotes) or return (Returns): status only, no journal entry and no
+    // inventory movement (tested in TEST_PRO_DFSC 2026-11-07, ODLN 978).
+    public string CloseDocument(string entity, int docEntry)
+    {
+        return Post("/" + entity + "(" + docEntry + ")/Close", "{}");
+    }
+
+    // Journal entry of a payment (the Payments entity does not expose it). outgoing = VendorPayments.
+    // The first one is the payment itself (a cancellation adds a second one).
+    public string GetPaymentJournalEntries(bool outgoing, int docEntry)
+    {
+        return Get("/JournalEntries?$filter=OriginalJournal%20eq%20'" + (outgoing ? "ttVendorPayment" : "ttReceipt")
+            + "'%20and%20Original%20eq%20" + docEntry + "&$select=JdtNum&$orderby=JdtNum");
+    }
+
+    public string CreateInternalReconciliation(string jsonPayload)
+    {
+        return Post("/InternalReconciliations", jsonPayload);
     }
 
     /// <summary>
@@ -154,12 +222,17 @@ public class SapServiceLayer
         }
     }
 
+    // SAP takes ~2.7 min to create a C3001 daily invoice (~4,000 lines, tested 2026-11-01 in
+    // TEST_PRO_DFSC); a shorter timeout gives up while SAP still creates the document.
+    private const int RequestTimeoutMs = 15 * 60 * 1000;
+
     private string Get(string endpoint)
     {
         var req = (HttpWebRequest)WebRequest.Create(_baseUrl + endpoint);
         req.Method  = "GET";
         req.Accept  = "application/json";
-        req.Timeout = 60000;
+        req.Timeout = RequestTimeoutMs;
+        req.ReadWriteTimeout = RequestTimeoutMs;
 
         if (!string.IsNullOrEmpty(_sessionId))
             req.Headers["Cookie"] = "B1SESSION=" + _sessionId;
@@ -175,7 +248,8 @@ public class SapServiceLayer
         req.Method      = "POST";
         req.ContentType = "application/json";
         req.Accept      = "application/json";
-        req.Timeout     = 60000;
+        req.Timeout     = RequestTimeoutMs;
+        req.ReadWriteTimeout = RequestTimeoutMs;
 
         // CookieContainer has a known .NET bug with IP-based URLs (domain matching fails).
         // Instead, capture B1SESSION from the Login Set-Cookie header and send it explicitly.

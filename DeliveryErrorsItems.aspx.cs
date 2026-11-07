@@ -20,9 +20,6 @@ public partial class DeliveryErrorsItems : BasePage
     protected string lCurUser; 
     protected void Page_Load(object sender, EventArgs e)
     {
-        Response.Redirect("DeliveryErrors.aspx");
-        return;
-
         ///////////////Begin New  Control de acceso por Roles
         if ((string)this.Session["UserId"] == "" || (string)this.Session["UserId"] == null)
         {
@@ -96,6 +93,25 @@ public partial class DeliveryErrorsItems : BasePage
             return;
         }
     }
+    protected void drpFilter_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        rgHead.CurrentPageIndex = 0;
+        rgHead.Rebind();
+    }
+
+    protected void btnItemFilter_Click(object sender, EventArgs e)
+    {
+        rgHead.CurrentPageIndex = 0;
+        rgHead.Rebind();
+    }
+
+    protected void btnClearItemFilter_Click(object sender, EventArgs e)
+    {
+        txtItemFilter.Text = "";
+        rgHead.CurrentPageIndex = 0;
+        rgHead.Rebind();
+    }
+
     private void ShowMasterPageMessage(string v_Message_Type, string v_Message_Title, string v_Message)
     {
         try
@@ -103,42 +119,77 @@ public partial class DeliveryErrorsItems : BasePage
             SiteMaster sm = (SiteMaster)this.Master;
             sm.ShowDivMessage(v_Message_Type, v_Message_Title, v_Message);
         }
-        catch (Exception ex)
+        catch
         {
-            ShowMasterPageMessage("Error", "Failed in ShowMasterPageMessage", ex.Message.ToString());
-            return;
+            // this.Master as SiteMaster can return null on some pages (known, pre-existing
+            // issue elsewhere in this app). Swallow rather than recurse into this same
+            // method again — that would loop forever and crash the whole app pool.
         }
     }
 
     protected void rgHead_UpdateCommand(object sender, Telerik.Web.UI.GridCommandEventArgs e)
     {
-        
         try
         {
-            string v_Message = string.Empty;
+            // Re-check access at save time — Page_Load only relabels the header for Read-Only,
+            // it doesn't stop the save. Mirrors DeliveryErrors.aspx's own update handler.
+            lCurUser = (string)this.Session["UserId"];
+            string strAccessType = "";
+            string strRole_Description = "";
+
+            db.Connect();
+            db.SISINV_GET_ACCESSTYPE_PRC(lCurUser, "DeliveryErrorsItems.aspx", ref strAccessType, ref strRole_Description);
+            db.Disconnect();
+
+            if (strAccessType == "R")
+            {
+                string message = "User " + lCurUser + " does not have permissions to update in this screen.";
+                string script = "{ alert('" + message + "'); window.location = 'DeliveryErrorsItems.aspx'; }";
+                ScriptManager.RegisterStartupScript(this.Page, Page.GetType(), "alert", script, true);
+                e.Canceled = true;
+                return;
+            }
+
             GridEditableItem item = e.Item as GridEditableItem;
-            Hashtable values = new Hashtable();
-            item.ExtractValues(values);
-
             string v_ID = item.GetDataKeyValue("skunum").ToString();
-            //string v_NewItem = values["new_sku"].ToString();
-            //string v_wh = (Label)item["whs_code"].FindControl("whs_code");
-            //v_wh = (String)values["whs_code"]; 
             string v_wh = ((TextBox)item.FindControl("STORENUM")).Text.Trim();
-            //Telerik.Web.UI.GridDataItem item2 = (Telerik.Web.UI.GridDataItem)e.Item;
-            //string v_wh = item2["sknum"].Text;
-            //v_wh = "ACC209";
+            string newSku = hfNewSku.Value.Trim();
 
-            //ShowMasterPageMessage("Error", v_wh, "3444");
+            if (string.IsNullOrEmpty(newSku))
+            {
+                ShowMasterPageMessage("Error", "No Item Selected", "Please select a new item before updating.");
+                e.Canceled = true;
+                return;
+            }
 
+            // Validate the new item code exists in SAP before saving.
+            db.Connect();
+            using (SqlCommand cmd = new SqlCommand(
+                "SELECT COUNT(1) FROM " + CompanyIdLabel.Text + ".dbo.OITM WHERE ItemCode = @ItemCode", db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@ItemCode", newSku);
+                int cnt = (int)cmd.ExecuteScalar();
+                db.Disconnect();
+                if (cnt == 0)
+                {
+                    ShowMasterPageMessage("Error", "Invalid Item", "Item '" + newSku + "' does not exist.");
+                    e.Canceled = true;
+                    return;
+                }
+            }
+
+            // The stored procedure's "@sap_db"/"@whs_code" names are misleading — it actually
+            // filters la_delivery_errors/la_store_sales by BranchId and store number, not the
+            // real SAP company DB name. Matches DeliveryErrors.aspx's own working call.
             Delivery dy = new Delivery();
-            //dy.UpdateDeliveryItemNumber(v_ID, v_NewItem);
-            dy.UpdateDeliveryItemCode(v_ID, hfNewSku.Value, v_wh, CompanyIdLabel.Text);
+            dy.UpdateDeliveryItemCode(v_ID, newSku, v_wh, (string)Session["BranchId"]);
+            hfNewSku.Value = "";
+            ShowMasterPageMessage("Success", "Updated", "Item '" + v_ID + "' was corrected to '" + newSku + "'.");
         }
         catch (Exception ex)
         {
-            ShowMasterPageMessage("Error", "Faled to update data ", ex.Message.ToString());
-            //ShowMasterPageMessage("Error", vwh, ex.Message.ToString());
+            ShowMasterPageMessage("Error", "Failed to update data", ex.Message.ToString());
+            e.Canceled = true;
             return;
         }
     }
@@ -167,7 +218,7 @@ public partial class DeliveryErrorsItems : BasePage
         string query = searchBox.Text;
         //string sq3 = "SELECT TOP 1000 ItemCode FROM " + (string)this.Session["CompanyId"] + ".dbo.OITM " + Queries.WITH_NOLOCK + @"  WHERE ItemCode LIKE '%" + searchBox.Text + "%' UNION SELECT TOP 1000 ItemCode FROM " + (string)this.Session["CompanyId"] + ".dbo.OBCD " + Queries.WITH_NOLOCK + @"  WHERE BcdCode LIKE '%" + searchBox.Text + "%'";
         //string sq3 = "SELECT TOP 1000 ItemCode, ItemCode + ' - ' + ItemName ItemName FROM " + (string)this.Session["CompanyId"] + ".dbo.OITM " + Queries.WITH_NOLOCK + @"  WHERE ItemCode LIKE '%" + searchBox.Text + "%' UNION SELECT TOP 1000 a.ItemCode, a.ItemCode + ' - ' + b.ItemName ItemName FROM " + (string)this.Session["CompanyId"] + ".dbo.OBCD a " + Queries.WITH_NOLOCK + @"  INNER JOIN dfatocumen.dbo.OITM b " + Queries.WITH_NOLOCK + @"  ON a.ItemCode = b.ItemCode WHERE BcdCode LIKE '%" + searchBox.Text + "%'";
-        string sq3 = "SELECT TOP 1000 ItemCode, ItemCode + ' - ' + ItemName ItemName FROM " + (string)this.Session["CompanyId"] + ".dbo.OITM " + Queries.WITH_NOLOCK + @"  WHERE ItemCode LIKE '%" + searchBox.Text + "%' UNION SELECT TOP 1000 a.ItemCode, a.ItemCode + ' - ' + b.ItemName ItemName FROM " + (string)this.Session["CompanyId"] + ".dbo.OBCD a " + Queries.WITH_NOLOCK + @"  INNER JOIN  " + (string)this.Session["CompanyId"] + ".dbo.OITM b " + Queries.WITH_NOLOCK + @"  ON a.ItemCode = b.ItemCode WHERE BcdCode LIKE '%" + searchBox.Text + "%' UNION SELECT '" +  searchBox.Text + "','Select here for free text, maximum 18 characters.'";
+        string sq3 = "SELECT TOP 1000 ItemCode COLLATE DATABASE_DEFAULT AS ItemCode, (ItemCode + ' - ' + ItemName) COLLATE DATABASE_DEFAULT AS ItemName FROM " + (string)this.Session["CompanyId"] + ".dbo.OITM " + Queries.WITH_NOLOCK + @"  WHERE ItemCode LIKE '%" + searchBox.Text + "%' UNION SELECT TOP 1000 a.ItemCode COLLATE DATABASE_DEFAULT, (a.ItemCode + ' - ' + b.ItemName) COLLATE DATABASE_DEFAULT FROM " + (string)this.Session["CompanyId"] + ".dbo.OBCD a " + Queries.WITH_NOLOCK + @"  INNER JOIN  " + (string)this.Session["CompanyId"] + ".dbo.OITM b " + Queries.WITH_NOLOCK + @"  ON a.ItemCode = b.ItemCode WHERE BcdCode LIKE '%" + searchBox.Text + "%' UNION SELECT '" +  searchBox.Text + "','Select here for free text, maximum 18 characters.'";
         ds.SelectCommand = sq3;
     }
 

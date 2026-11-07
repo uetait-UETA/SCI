@@ -77,9 +77,13 @@
                                                 <GroupSettings />
                                                 <Items>
                                                     <tel:RadMenuItem Text="Delivery Errors" Value="DeliveryErrores" NavigateUrl="DeliveryErrors.aspx" />
-                                                    <%--<tel:RadMenuItem Text="Delivery Errors by Items" Value="DeliveryErroresItems" NavigateUrl="DeliveryErrorsItems.aspx" />--%>
+                                                    <tel:RadMenuItem Text="Delivery Errors by Items" Value="DeliveryErroresItems" NavigateUrl="DeliveryErrorsItems.aspx" />
                                                     <tel:RadMenuItem Text="Transfer Errors" Value="ErroresdeTransferencia" NavigateUrl="TransferErrors.aspx" />
-                                                    <tel:RadMenuItem Text="Inventory Adjustment" Value="InventoryAdjustByExcel" NavigateUrl="InventoryAdjustByExcel.aspx" />
+                                                    <tel:RadMenuItem Text="PO Errors" Value="POErrors" NavigateUrl="POErrors.aspx" />
+                                                    <tel:RadMenuItem Text="SAP Invoicing" Value="FacturacionSAP" NavigateUrl="FacturacionSAP.aspx" />
+                                                    <tel:RadMenuItem Text="Inventory Adjustment by Excel" Value="InventoryAdjustByExcel" NavigateUrl="InventoryAdjustByExcel.aspx" />
+                                                    <tel:RadMenuItem Text="Inventory Adjustment by Category" Value="InventoryAdjustByCategory" NavigateUrl="InventoryAdjustByCategory.aspx" Visible="False" />
+                                                    <tel:RadMenuItem Text="Inventory Adjustment by Items" Value="InventoryAdjustByItems" NavigateUrl="InventoryAdjustByItems.aspx" />
                                                 </Items>
                                             </tel:RadMenuItem>
                                              <tel:RadMenuItem Text="Receiving" Value="Receiving">
@@ -121,6 +125,8 @@
                                                 <Items>
                                                     <tel:RadMenuItem Text="Bins" Value="Bins" NavigateUrl="WhsItemBin.aspx" />
                                                     <tel:RadMenuItem Text="Bins Excel" Value="BinsExcel" NavigateUrl="BinByExcel.aspx" />
+                                                    <tel:RadMenuItem IsSeparator="true" />
+                                                    <tel:RadMenuItem Text="Print Price Label" Value="PrintPriceLabel" NavigateUrl="PrintPriceLabel.aspx" />
                                                 </Items>
                                             </tel:RadMenuItem>
                                             <tel:RadMenuItem IsSeparator="true" />
@@ -166,7 +172,8 @@
 					    							<Items>
 					    								<tel:RadMenuItem Text="Users" Value="Usuarios" NavigateUrl="/admin/UserEdit.aspx"></tel:RadMenuItem>
 					    								<tel:RadMenuItem Text="Credentials" Value="Credenciales" NavigateUrl="/admin/LoginEdit.aspx"></tel:RadMenuItem>
-					    								<tel:RadMenuItem Text="Bodega-Tienda" Value="BodegaTienda" NavigateUrl="/admin/BodegaTiendaEdit.aspx" Enabled="false"></tel:RadMenuItem>
+					    								<tel:RadMenuItem Text="Roles" Value="Roles" NavigateUrl="/admin/RoleEdit.aspx"></tel:RadMenuItem>
+					    								<tel:RadMenuItem Text="Scheduler Min-Max" Value="BodegaTienda" NavigateUrl="/admin/BodegaTiendaEdit.aspx"></tel:RadMenuItem>
 					    							</Items>
 					    						</tel:RadMenuItem>
                                             <tel:RadMenuItem IsSeparator="true" />

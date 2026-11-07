@@ -73,6 +73,10 @@ public partial class InventoryAdjustByExcel : BasePage
             db.Disconnect();
             Session.Remove(SESSION_DATA);
         }
+        else
+        {
+            ApplyWhsUTypeAttributes();
+        }
 
         // Auto-validate triggered by file selection (JS sets hdnAction = "validate")
         if (IsPostBack && hdnAction.Value == "validate")
@@ -92,6 +96,7 @@ public partial class InventoryAdjustByExcel : BasePage
 
         string sql = string.Format(
             @"SELECT O.WhsCode,
+                     ISNULL(O.U_Type,'') AS U_Type,
                      CONVERT(nvarchar(30), ISNULL(O.U_POSCode,'')) + ' - ' + O.WhsCode + ' - ' + O.WhsName AS WHS
               FROM   [{0}].dbo.OWHS O WITH(NOLOCK)
               JOIN   RSS_OWHS_CONTROL R WITH(NOLOCK)
@@ -111,6 +116,23 @@ public partial class InventoryAdjustByExcel : BasePage
         drpWhsCode.DataValueField = "WhsCode";
         drpWhsCode.DataBind();
         drpWhsCode.Items.Insert(0, new ListItem("Select a warehouse", "0"));
+
+        var map = new System.Collections.Hashtable();
+        foreach (DataRow r in dt.Rows)
+            map[r["WhsCode"].ToString()] = r["U_Type"].ToString();
+        ViewState["WhsUTypeMap"] = map;
+        ApplyWhsUTypeAttributes();
+    }
+
+    private void ApplyWhsUTypeAttributes()
+    {
+        var map = ViewState["WhsUTypeMap"] as System.Collections.Hashtable;
+        if (map == null) return;
+        foreach (System.Collections.DictionaryEntry kvp in map)
+        {
+            var item = drpWhsCode.Items.FindByValue(kvp.Key.ToString());
+            if (item != null) item.Attributes.Add("data-utype", kvp.Value.ToString());
+        }
     }
 
     // ── Step 1: Auto-validate on file select ─────────────────────────────────
@@ -176,7 +198,28 @@ public partial class InventoryAdjustByExcel : BasePage
         gvData.DataSource = excelData;
         gvData.DataBind();
 
-        CreateInSap(drpWhsCode.SelectedValue, excelData);
+        // GTK validation for Duty Free warehouses
+        string whsUType  = (hfWhsUType.Value ?? "").Trim();
+        string gtkHeader = (tbGTKHeader.Text ?? "").Trim();
+        if (string.Equals(whsUType, "Duty Free", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(gtkHeader))
+            {
+                SetMessage("This warehouse is Duty Free — GTK confirmation number is required.", Color.DarkRed);
+                pnlConfirm.Visible = true;
+                return;
+            }
+            string configGtk = System.Configuration.ConfigurationManager.AppSettings["GTKConfirmationCode"] ?? "";
+            if (!string.IsNullOrEmpty(configGtk) &&
+                !string.Equals(gtkHeader, configGtk, StringComparison.OrdinalIgnoreCase))
+            {
+                SetMessage("GTK confirmation number is not valid.", Color.DarkRed);
+                pnlConfirm.Visible = true;
+                return;
+            }
+        }
+
+        CreateInSap(drpWhsCode.SelectedValue, excelData, gtkHeader);
         Session.Remove(SESSION_DATA);
         pnlConfirm.Visible = false;
     }
@@ -455,7 +498,7 @@ public partial class InventoryAdjustByExcel : BasePage
 
     // ── SAP Service Layer ─────────────────────────────────────────────────────
 
-    private void CreateInSap(string whsCode, DataTable excelData)
+    private void CreateInSap(string whsCode, DataTable excelData, string gtk = "")
     {
         var lines = new JArray();
         foreach (DataRow row in excelData.Rows)
@@ -477,6 +520,8 @@ public partial class InventoryAdjustByExcel : BasePage
             new JProperty("Comments", "Adjustment by " + lCurUser + " via SCI"),
             new JProperty("DocumentLines", lines)
         );
+        if (!string.IsNullOrEmpty(gtk))
+            payload.Add(new JProperty("U_GTK_CONFIRMATION", gtk));
 
         var sl = new SapServiceLayer();
         try

@@ -12,6 +12,18 @@
                 <asp:Panel ID="pnlFilters" runat="server" CssClass="Panel">
                     <label id="labelForm" runat="server" class="PanelHeading">Direct Purchase Receiving</label>
                     <div class="row">
+                        <div class="col-md-6">
+                            <label class="myLabelMedium">Document Type</label>&nbsp;&nbsp;
+                            <asp:RadioButtonList ID="rblDocType" runat="server" RepeatDirection="Horizontal"
+                                AutoPostBack="True" OnSelectedIndexChanged="rblDocType_SelectedIndexChanged"
+                                style="display:inline-block; vertical-align:middle;">
+                                <asp:ListItem Text="AP Reserve Invoice (APRI)" Value="OPCH" Selected="True" />
+                                <asp:ListItem Text="&nbsp;&nbsp;Purchase Order (PO)" Value="OPOR" />
+                            </asp:RadioButtonList>
+                        </div>
+                    </div>
+                    <div class="row">&nbsp;</div>
+                    <div class="row">
                         <div class="col-md-2" style="text-align:center;">
                             <label class="myLabelMedium">From Date</label><br />
                             <tel:RadDatePicker ID="rdpFromDate" runat="server" Width="140px">
@@ -24,7 +36,7 @@
                             </tel:RadDatePicker>
                         </div>
                         <div class="col-md-1">
-                            <label class="myLabelMedium">APRI #</label><br />
+                            <label class="myLabelMedium">Doc #</label><br />
                             <asp:TextBox ID="txtDocNum" runat="server" Width="70px" style="height:26px; padding:2px 4px; border:1px solid #ccc; border-radius:3px;" />
                         </div>
                         <div class="col-md-3" style="text-align:center;">
@@ -67,11 +79,13 @@
                         AllowNaturalSort="false"
                         CommandItemDisplay="None">
                         <Columns>
-                            <tel:GridHyperLinkColumn SortExpression="DocNum" HeaderText="APRI #"
-                                DataTextField="DocNum" DataNavigateUrlFields="DocEntry"
-                                DataNavigateUrlFormatString="ComprasDirectasDetail.aspx?docEntry={0}"
-                                UniqueName="DocNum" HeaderStyle-Width="80px"
-                                ItemStyle-ForeColor="#0066CC" />
+                            <tel:GridTemplateColumn SortExpression="DocNum" HeaderText="Doc #"
+                                UniqueName="DocNum" HeaderStyle-Width="80px">
+                                <ItemTemplate>
+                                    <a href='<%# "ComprasDirectasDetail.aspx?docEntry=" + Eval("DocEntry") + "&docType=" + (Session["CdDocType"] ?? "OPCH") %>'
+                                       style="color:#0066CC;"><%# Eval("DocNum") %></a>
+                                </ItemTemplate>
+                            </tel:GridTemplateColumn>
                             <tel:GridBoundColumn SortExpression="DocDate"   HeaderText="Date"
                                 DataField="DocDate"   UniqueName="DocDate"   HeaderStyle-Width="90px"
                                 DataFormatString="{0:MM/dd/yyyy}" />
@@ -128,7 +142,7 @@
         function confirmReceive() {
             return confirm(
                 "WARNING!!\n\n" +
-                "Are you sure you want to receive this Direct Purchase Invoice?\n\n" +
+                "Are you sure you want to receive this document?\n\n" +
                 "This will create a Goods Receipt PO in SAP B1.\n\n" +
                 "Click OK to confirm or Cancel to abort."
             );

@@ -447,12 +447,19 @@ public partial class sapInventory : BasePage
                 dt.Columns.Add("POS Code", typeof(string));
                 dt.Columns.Add("Location", typeof(string));
                 dt.Columns.Add("Item Code", typeof(string));
+                dt.Columns.Add("CSKU ID", typeof(string));
                 dt.Columns.Add("Bar Code", typeof(string));
                 dt.Columns.Add("Item Name", typeof(string));
+                dt.Columns.Add("Style", typeof(string));
+                dt.Columns.Add("Color", typeof(string));
+                dt.Columns.Add("Size", typeof(string));
                 dt.Columns.Add("Category", typeof(string));
                 dt.Columns.Add("Category Name", typeof(string));
                 dt.Columns.Add("Brand", typeof(string));
                 dt.Columns.Add("Class", typeof(string));
+                dt.Columns.Add("Subclass", typeof(string));
+                dt.Columns.Add("HS Code", typeof(string));
+                dt.Columns.Add("Origin", typeof(string));
                 dt.Columns.Add("Stock", typeof(string));
 
                 foreach (GridViewRow row in GridView1.Rows)
@@ -463,13 +470,20 @@ public partial class sapInventory : BasePage
                         dr["POS Code"] = row.Cells[0].Text;
                         dr["Location"] = row.Cells[1].Text;
                         dr["Item Code"] = row.Cells[2].Text;
-                        dr["Bar Code"] = row.Cells[3].Text;
-                        dr["Item Name"] = row.Cells[4].Text;
-                        dr["Category"] = row.Cells[5].Text;
-                        dr["Category Name"] = row.Cells[6].Text;
-                        dr["Brand"] = row.Cells[7].Text;
-                        dr["Class"] = row.Cells[8].Text;
-                        dr["Stock"] = row.Cells[9].Text;
+                        dr["CSKU ID"] = row.Cells[3].Text;
+                        dr["Bar Code"] = row.Cells[4].Text;
+                        dr["Item Name"] = row.Cells[5].Text;
+                        dr["Style"] = row.Cells[6].Text;
+                        dr["Color"] = row.Cells[7].Text;
+                        dr["Size"] = row.Cells[8].Text;
+                        dr["Category"] = row.Cells[9].Text;
+                        dr["Category Name"] = row.Cells[10].Text;
+                        dr["Brand"] = row.Cells[11].Text;
+                        dr["Class"] = row.Cells[12].Text;
+                        dr["Subclass"] = row.Cells[13].Text;
+                        dr["HS Code"] = row.Cells[14].Text;
+                        dr["Origin"] = row.Cells[15].Text;
+                        dr["Stock"] = row.Cells[16].Text;
 
                         dt.Rows.Add(dr);
                     }

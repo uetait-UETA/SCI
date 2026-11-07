@@ -513,10 +513,8 @@ WHERE  l.DocEntry = {2}
     public DataRow GetApReserveInvoiceHeader(string sapDb, int docEntry, string docType = "OPCH")
     {
         LastError = null;
-        string hdrTable    = docType == "OPOR" ? "OPOR" : "OPCH";
-        string toWhsField  = docType == "OPOR"
-            ? "ISNULL(p.U_ToWhsCode, '') AS ToWhsCode"
-            : "''                        AS ToWhsCode";
+        string hdrTable   = docType == "OPOR" ? "OPOR" : "OPCH";
+        string toWhsField = "ISNULL(p.U_ToWhsCode, '') AS ToWhsCode";
         try
         {
             _db.Connect();
@@ -934,28 +932,22 @@ VALUES
             bool   isOpor      = docType == "OPOR";
             string hdrTable    = isOpor ? "OPOR" : "OPCH";
             string linesTable  = isOpor ? "POR1" : "PCH1";
-            string indFilter   = isOpor ? "" : "AND  p.Indicator = 'CD'";
-            // OPOR orders may be created under BPLId=1 (buying office); include it alongside session branch
-            string bplClause   = isOpor
-                ? "IN (" + bplId + ", 1)"
-                : "= " + bplId;
-            // For OPOR: only show orders whose U_ToWhsCode belongs to the session branch
-            string destBranchFilter = isOpor
-                ? string.Format(
-                    @"AND EXISTS (
+            string indFilter   = isOpor ? "" : "AND  p.isIns = 'Y'";
+            // Both OPOR and OPCH may be created under BPLId=1 (buying office); include it alongside session branch
+            string bplClause   = "IN (" + bplId + ", 1)";
+            // Only show documents whose U_ToWhsCode belongs to the session branch
+            string destBranchFilter = string.Format(
+                @"AND EXISTS (
            SELECT 1 FROM {0}..OWHS w {1}
            WHERE  w.WhsCode = ISNULL(p.U_ToWhsCode, '')
              AND  w.BPLId   = {2}
-       )", sapDb, Queries.WITH_NOLOCK, bplId)
-                : "";
-            // For OPOR: show U_POSCode of the destination warehouse
-            string toWhsPosCode = isOpor
-                ? string.Format(
-                    @"ISNULL((SELECT CONVERT(nvarchar(30), w.U_POSCode)
+       )", sapDb, Queries.WITH_NOLOCK, bplId);
+            // POS Code from the destination warehouse (U_ToWhsCode) — same logic for OPOR and OPCH
+            string toWhsPosCode = string.Format(
+                @"ISNULL((SELECT CONVERT(nvarchar(30), w.U_POSCode)
                    FROM {0}..OWHS w {1}
                    WHERE w.WhsCode = ISNULL(p.U_ToWhsCode, '')), '') AS ToWhsPosCode",
-                    sapDb, Queries.WITH_NOLOCK)
-                : "'' AS ToWhsPosCode";
+                sapDb, Queries.WITH_NOLOCK);
 
             // For OPOR: filter by U_ToWhsCode (destination); for OPCH: filter by lines warehouse
             string toWhsFilter = isOpor

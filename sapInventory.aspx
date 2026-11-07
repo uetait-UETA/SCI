@@ -152,12 +152,19 @@
                         <asp:BoundField DataField="U_POSCode" HeaderText="POS Code" HeaderStyle-Width="100px" />
                         <asp:BoundField DataField="Ubicacion" HeaderText="Location" HeaderStyle-Width="100px" />
                         <asp:BoundField DataField="Codigo_Articulo" HeaderText="Item Code" HeaderStyle-Width="100px" />
+                        <asp:BoundField DataField="Csku_ID" HeaderText="CSKU ID" HeaderStyle-Width="100px" />
                         <asp:BoundField DataField="BarCode" HeaderText="Bar Code" HeaderStyle-Width="100px" />
                         <asp:BoundField DataField="Nombre_Articulo" HeaderText="Item Name" HeaderStyle-Width="380px" />
+                        <asp:BoundField DataField="Nombre_Estilo" HeaderText="Style" HeaderStyle-Width="160px" />
+                        <asp:BoundField DataField="Color_Desc" HeaderText="Color" HeaderStyle-Width="130px" />
+                        <asp:BoundField DataField="Size_Desc" HeaderText="Size" HeaderStyle-Width="100px" />
                         <asp:BoundField DataField="Categoria" HeaderText="Category" HeaderStyle-Width="80px" />
                         <asp:BoundField DataField="Nombre_Categoria" HeaderText="Category Name" HeaderStyle-Width="150px" />
                         <asp:BoundField DataField="Marca" HeaderText="Brand" HeaderStyle-Width="100px" />
                         <asp:BoundField DataField="Clase" HeaderText="Class" HeaderStyle-Width="100px" />
+                        <asp:BoundField DataField="Subclase" HeaderText="Subclass" HeaderStyle-Width="100px" />
+                        <asp:BoundField DataField="HsCode" HeaderText="HS Code" HeaderStyle-Width="100px" />
+                        <asp:BoundField DataField="OriginName" HeaderText="Origin" HeaderStyle-Width="130px" />
                         <asp:BoundField DataField="Existencia" HeaderText="Stock" HeaderStyle-Width="100px" />
                     </Columns>
                 </asp:GridView>

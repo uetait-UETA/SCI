@@ -203,15 +203,23 @@ public static class TransferAutoDispatch
             return "Error preparando auto-dispatch: " + ex.Message;
         }
 
-        // Step 3: create OWTQ — but skip for same-branch transfers (FROM and TO share the same BPLId).
-        // Same-branch transfers are dispatched and received manually without WMS mediation.
+        // Step 3: create OWTQ — only when FROM=BODEGA (BPLId=1) and TO=TIENDA.
+        // All other combinations (same-branch, TIENDA→BODEGA, TIENDA→TIENDA) are
+        // dispatched manually from TransferDiscreOrdf.aspx.
         if (AreSameBranch(db.Conn, docEntry, companyId, sapDb))
         {
             db.Disconnect();
             return null;
         }
 
-        sapDocType = "OWTQ";
+        string docType = GetBodegaToTiendaDocType(db.Conn, docEntry, companyId, sapDb);
+        if (docType == null)
+        {
+            db.Disconnect();
+            return null;
+        }
+
+        sapDocType = docType;
         string sapError = CreateSapOwtqAutoDispatch(db.Conn, docEntry, companyId, sapDb, userApp, out sapDocNum);
 
         if (sapError != null)

@@ -337,6 +337,20 @@ public partial class CreateTransfer : BasePage
             return;
         }
 
+        // Class filter is optional: nothing selected behaves like "All Class".
+        string classes = "";
+        foreach (ListItem li in lstClasses.Items)
+        {
+            if (li.Selected && li.Value != "All Class")
+            {
+                classes += "'" + li.Value.Replace("'", "''") + "',";
+            }
+        }
+        if (classes.Length > 0)
+        {
+            classes = classes.Substring(0, classes.Length - 1);
+        }
+
         string whsAccessError = ValidateWhsAccess(FromWhsCode, ToWhsCode);
         if (whsAccessError != null)
         {
@@ -374,6 +388,11 @@ public partial class CreateTransfer : BasePage
             string brandFilter = (brands != "'All Brands'")
                 ? " AND replace(d.u_brand, '''','_') IN ({5})"
                 : "";
+            // Only filters what goes into rss_results; the delete above and CreateSAPDraft stay
+            // brand-scoped, so the draft picks up exactly the class-filtered rows inserted here.
+            string classFilter = (classes != "")
+                ? " AND EXISTS (SELECT 1 FROM {0}.dbo.[@DCS_HIERARCHY] h " + Queries.WITH_NOLOCK + " WHERE h.CODE = d.U_Hierarchy AND replace(h.U_PRDCT_CLSS_NM, '''','_') IN (" + classes.Replace("{", "{{").Replace("}", "}}") + "))"
+                : "";
 
             // BaseData CTE computes RawGap, Available, and the per-category rounding multiple (Mult).
             // Requested_Quantity rounds UP the gap; Transfer_Quantity rounds UP min(available,gap).
@@ -410,7 +429,7 @@ public partial class CreateTransfer : BasePage
     WHERE a.whscode = '{3}' AND b.loc = '{2}' AND a.CompanyId = '{0}'
       AND a.OnHand - a.in_transit_out > 0 AND b.hold = 0 AND d.ItmsGrpCod IN ({4})
       AND (c.net_inventory < b.min_qty OR (c.net_inventory + isnull(e.net_inventory,0) < b.max_qty + isnull(e.min_qty,0) AND e.item IS NOT NULL))
-      " + brandFilter + @"
+      " + brandFilter + classFilter + @"
 )
 INSERT INTO rss_results
 SELECT
@@ -730,6 +749,7 @@ WHERE RawGap > 0";
         try
         {
             LoadBrands();
+            LoadClasses();
         }
         catch (Exception)
         {
@@ -739,6 +759,75 @@ WHERE RawGap > 0";
         {
             db.Disconnect();
         }
+    }
+
+    protected void lstItemGroups_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        ValidaSesionNullOrEmpty(new string[] { "UserId", "CompanyId" });
+
+        db.Connect();
+        try
+        {
+            LoadClasses();
+        }
+        finally
+        {
+            db.Disconnect();
+        }
+    }
+
+    // Classes come from [@DCS_HIERARCHY].U_PRDCT_CLSS_NM (joined by OITM.U_Hierarchy),
+    // limited to the selected Item Groups and, when a specific brand is selected, to that brand.
+    // "All Class" is always first and selected by default, so the transfer behaves as before
+    // unless the user picks a specific class.
+    private void LoadClasses()
+    {
+        DataTable dt = new DataTable();
+        string itmsgrpcods = "";
+
+        foreach (ListItem li in drpItemGroups.Items)
+        {
+            if (li.Selected)
+            {
+                itmsgrpcods = itmsgrpcods + li.Value.ToString() + ",";
+            }
+        }
+
+        itmsgrpcods = itmsgrpcods.Remove(itmsgrpcods.Length - 1);
+
+        string brand = lstItemGroups.SelectedItem != null ? lstItemGroups.SelectedValue : "";
+        string brandFilter = (brand != "" && brand != "All Brands")
+            ? " and replace(a.u_brand, '''','_') = @brand"
+            : "";
+
+        try
+        {
+            string sql =
+            @"select ClassName from
+                (
+                select 1 as sortorder, 'All Class' ClassName
+                union
+                select distinct 2 as sortorder, replace(b.U_PRDCT_CLSS_NM, '''','_') ClassName
+                from " + sap_db + @".dbo.oitm a " + Queries.WITH_NOLOCK + @"
+                inner join " + sap_db + @".dbo.[@DCS_HIERARCHY] b " + Queries.WITH_NOLOCK + @" on b.CODE = a.U_Hierarchy
+                where a.itmsgrpcod in (" + itmsgrpcods + @")
+                and b.U_PRDCT_CLSS_NM is not null" + brandFilter + @"
+                ) x
+              order by sortorder, ClassName";
+
+            using (var cmd = new SqlCommand(sql, db.Conn))
+            {
+                if (brandFilter != "") cmd.Parameters.AddWithValue("@brand", brand);
+                new SqlDataAdapter(cmd).Fill(dt);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Caught exception in function LoadClasses. ERROR MESSAGE : " + ex.Message + "itmsgrpcods: " + itmsgrpcods);
+        }
+        lstClasses.DataSource = dt;
+        lstClasses.DataBind();
+        if (lstClasses.Items.Count > 0) lstClasses.SelectedIndex = 0;
     }
 
     private void LoadBrands()

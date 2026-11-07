@@ -25,7 +25,13 @@
                                     <label class="myLabel">Warehouse</label>
                                     <asp:DropDownList ID="drpWhsCode" runat="server"
                                         DataTextField="WHS" DataValueField="WhsCode"
-                                        CssClass="myDdlExtraLarge" />
+                                        CssClass="myDdlExtraLarge"
+                                        onchange="updateGtkVisibility(this);" />
+                                </li>
+                                <li>
+                                    <label class="myLabel">GTK Confirmation</label>
+                                    <asp:TextBox ID="tbGTKHeader" runat="server" Width="150px" MaxLength="50"
+                                        style="background-color:lightgray;" />
                                 </li>
                                 <li>
                                     <label class="myLabel">Excel File</label>
@@ -84,7 +90,8 @@
             </div>
         </div>
 
-        <asp:HiddenField ID="hdnAction" runat="server" Value="" />
+        <asp:HiddenField ID="hdnAction"  runat="server" Value="" />
+        <asp:HiddenField ID="hfWhsUType" runat="server" Value="" />
 
         <div class="row">&nbsp;</div>
         <div class="row">
@@ -123,6 +130,21 @@
                 }
             });
         })();
+
+        function updateGtkVisibility(ddl) {
+            if (!ddl) ddl = document.getElementById('<%= drpWhsCode.ClientID %>');
+            var tb = document.getElementById('<%= tbGTKHeader.ClientID %>');
+            var hf = document.getElementById('<%= hfWhsUType.ClientID %>');
+            if (!ddl || !tb) return;
+            var opt = ddl.options[ddl.selectedIndex];
+            var utype = opt ? (opt.getAttribute('data-utype') || '') : '';
+            var isDutyFree = utype.toLowerCase() === 'duty free';
+            tb.readOnly = !isDutyFree;
+            tb.style.backgroundColor = isDutyFree ? 'white' : 'lightgray';
+            if (!isDutyFree) tb.value = '';
+            if (hf) hf.value = utype;
+        }
+        updateGtkVisibility(null);
     </script>
 
 </asp:Content>

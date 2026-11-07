@@ -608,6 +608,7 @@ public partial class StoreMinMax3Multiple : BasePage
                 dt.Columns.Add("Item", typeof(string));
                 dt.Columns.Add("Description", typeof(string));
                 dt.Columns.Add("Case Pack", typeof(string));
+                dt.Columns.Add("CSKU ID", typeof(string));
                 dt.Columns.Add("OnHand", typeof(string));
                 dt.Columns.Add("Min", typeof(string));
                 dt.Columns.Add("Max", typeof(string));
@@ -623,7 +624,6 @@ public partial class StoreMinMax3Multiple : BasePage
                     HiddenField hdnMarca = (HiddenField)row.FindControl("hdnMarca");
                     HiddenField hdnItem = (HiddenField)row.FindControl("hdnItem");
                     HiddenField hdnItemDesc = (HiddenField)row.FindControl("hdnItemDesc");
-                    HiddenField hdnCasePack = (HiddenField)row.FindControl("hdnCasePack");
                     HiddenField hdnOnHand = (HiddenField)row.FindControl("hdnOnHand");
                     HiddenField hdnMin = (HiddenField)row.FindControl("hdnMin");
                     HiddenField hdnMax = (HiddenField)row.FindControl("hdnMax");
@@ -635,7 +635,10 @@ public partial class StoreMinMax3Multiple : BasePage
                     dr["Marca"] = hdnMarca != null ? hdnMarca.Value : "";
                     dr["Item"] = hdnItem != null ? hdnItem.Value : "";
                     dr["Description"] = hdnItemDesc != null ? hdnItemDesc.Value : "";
-                    dr["Case Pack"] = hdnCasePack != null ? hdnCasePack.Value : "";
+                    HiddenField hdnCskuId = (HiddenField)row.FindControl("hdnCskuId");
+                    dr["CSKU ID"] = hdnCskuId != null ? hdnCskuId.Value : "";
+                    HiddenField hdnUnitsPerCase = (HiddenField)row.FindControl("hdnUnitsPerCase");
+                    dr["Case Pack"] = hdnUnitsPerCase != null ? hdnUnitsPerCase.Value : "";
                     dr["OnHand"] = hdnOnHand != null ? hdnOnHand.Value : "";
                     dr["Min"] = hdnMin != null ? hdnMin.Value : "";
                     dr["Max"] = hdnMax != null ? hdnMax.Value : "";
@@ -853,7 +856,9 @@ public class WhsItemTemplate : ITemplate
         { "hdnMin",             "MIN_QTY" },
         { "hdnMax",             "MAX_QTY" },
         { "hdnReplacementItem", "replacement_item" },
-        { "hdnComment",         "COMMENT" }
+        { "hdnComment",         "COMMENT" },
+        { "hdnCskuId",          "U_CSKU_ID" },
+        { "hdnUnitsPerCase",    "UnitsPerCase" }
     };
 
     public WhsItemTemplate(DataTable ciaWhs)

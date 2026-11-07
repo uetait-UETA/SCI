@@ -275,7 +275,11 @@ public partial class TransferDetailsPrint : System.Web.UI.Page
             + "<td style=\"text-align:left;\">" + brand + "</td>"
             + "<td style=\"text-align:left;\">" + row["Description"] + "</td>"
             + "<td style=\"text-align:right;\">" + String.Format("{0:N2}", row["Price"]) + "</td>"
-            + "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["Qty"]) + "</td>";
+            // Formato #,##0 y no #,###: con almohadilla una cantidad 0 se imprimia
+            // como celda VACIA. En un papel que acompana mercancia, un hueco se lee
+            // como "no lo revise" y un cero como "de este articulo no va ninguna
+            // unidad", que es justo lo que hay que ver cuando el DC no despacho nada.
+            + "<td style=\"text-align:center;\">" + String.Format("{0:#,##0}", row["Qty"]) + "</td>";
         if (order_multiple == "C")
             str += "<td style=\"text-align:center;\">" + String.Format("{0:#,###}", row["Cases"]) + "</td>";
         str += "<td style=\"text-align:center;\">&nbsp;</td>"

@@ -44,7 +44,11 @@
                                 </li>
                                 <li>
                                     <label class="myLabel" style="vertical-align:top;">Brand</label>
-                                    <asp:ListBox ID="lstItemGroups" runat="server" CssClass="myDdlLarge" DataTextField="Brand" DataValueField="Brand" Height="105px" /> 
+                                    <asp:ListBox ID="lstItemGroups" runat="server" CssClass="myDdlLarge" DataTextField="Brand" DataValueField="Brand" Height="105px" AutoPostBack="True" OnSelectedIndexChanged="lstItemGroups_SelectedIndexChanged" />
+                                </li>
+                                <li>
+                                    <label class="myLabel" style="vertical-align:top;">Class</label>
+                                    <asp:ListBox ID="lstClasses" runat="server" CssClass="myDdlLarge" DataTextField="ClassName" DataValueField="ClassName" Height="105px" />
                                 </li>
                                 <li>
                                     <label class="myLabel">&nbsp;</label>

@@ -463,7 +463,7 @@ ORDER BY T.CompanySortNumber,T.cia,d.WhsCodeSortNumber,T.WhsCode,T.ItmsGrpNam,T.
         {
             Connect();
 
-            cmd.CommandText = "select 'TODAS' u_Brand union all select distinct u_Brand from " + CompanyId + ".dbo.oitm " + Queries.WITH_NOLOCK + " where ItmsGrpCod in (" + v_Grupo + ") and u_Brand <> '' order by u_Brand";
+            cmd.CommandText = "select distinct u_Brand from " + CompanyId + ".dbo.oitm " + Queries.WITH_NOLOCK + " where ItmsGrpCod in (" + v_Grupo + ") and u_Brand <> '' order by u_Brand";
             cmd.CommandType = CommandType.Text;
             dt.Load(cmd.ExecuteReader());
         }

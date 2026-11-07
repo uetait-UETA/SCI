@@ -10,6 +10,7 @@ using System.Collections;
 using System.Configuration;
 using System.Drawing;
 using System.Data.SqlClient;
+using System.Text;
 
 public partial class LoginEdit : BasePage
 {
@@ -60,19 +61,155 @@ public partial class LoginEdit : BasePage
 		if (strAccessType == "F")
 		{
 			labelForm.InnerText = "Credentials (Full Access)";
-		}	
+		}
 
         ///////////////End  New Control de acceso por Roles
+
+        // Los desplegables de filtro se llenan una sola vez; en los postbacks
+        // sus elementos y la seleccion se conservan por ViewState.
+        if (!IsPostBack)
+        {
+            PoblarDesplegable(ddlFRole,    "Role");
+            PoblarDesplegable(ddlFTypeWhs, "TypeWhs");
+        }
     }
 
     protected void gridLogins_NeedDataSource(object sender, Telerik.Web.UI.GridNeedDataSourceEventArgs e)
     {
         DataTable dt = Admin.GetLogins();
-        gridLogins.DataSource = dt;
 
+        // IMPORTANTE: en la sesion se guarda la tabla COMPLETA, sin filtrar.
+        // Los flujos de edicion e insercion la usan para localizar la fila
+        // por LoginID; si aqui se guardara la tabla filtrada, editar con un
+        // filtro puesto dejaria de encontrar el registro.
         this.Session["Logins"] = dt;
         this.Logins.PrimaryKey = new DataColumn[] { this.Logins.Columns["LoginID"] };
+
+        // A la rejilla solo se le entregan las filas que pasan el filtro.
+        DataTable filtrados = AplicarFiltro(dt);
+        gridLogins.DataSource = filtrados;
+
+        lblResultado.Text = (filtrados.Rows.Count == dt.Rows.Count)
+            ? string.Format("{0} registros", dt.Rows.Count)
+            : string.Format("{0} de {1} registros", filtrados.Rows.Count, dt.Rows.Count);
+
         gridLogins.MasterTableView.EditFormSettings.EditFormType = GridEditFormType.WebUserControl;
+    }
+
+    // ── Busqueda ────────────────────────────────────────────────────────────
+    // No se usa el filtrado nativo de Telerik (AllowFilteringByColumn y
+    // compania) porque altera el aspecto de la rejilla en esta aplicacion.
+    // En su lugar se filtra el DataTable antes de asignarlo.
+
+    private DataTable AplicarFiltro(DataTable dt)
+    {
+        List<string> condiciones = new List<string>();
+
+        AgregarContiene(condiciones, "LoginID",      txtFLoginID.Text);
+        AgregarContiene(condiciones, "UserFullName", txtFUserFullName.Text);
+
+        // Role y WHS Type: valor exacto elegido en el desplegable
+        if (!string.IsNullOrEmpty(ddlFRole.SelectedValue))
+            condiciones.Add("ISNULL(Role,'') = '" + EscaparRowFilter(ddlFRole.SelectedValue) + "'");
+
+        if (!string.IsNullOrEmpty(ddlFTypeWhs.SelectedValue))
+            condiciones.Add("ISNULL(TypeWhs,'') = '" + EscaparRowFilter(ddlFTypeWhs.SelectedValue) + "'");
+
+        // NumPrints es numerico: igualdad exacta, y solo si es un numero valido
+        string numPrints = (txtFNumPrints.Text ?? "").Trim();
+        if (numPrints != "")
+        {
+            int n;
+            if (int.TryParse(numPrints, out n))
+                condiciones.Add("NumPrints = " + n);
+            else
+                condiciones.Add("1 = 0");   // texto no numerico: no coincide con nada
+        }
+
+        // Active y Active_Pdt llegan como texto 'true'/'false' desde Admin.GetLogins()
+        if (!string.IsNullOrEmpty(ddlFActive.SelectedValue))
+            condiciones.Add("ISNULL(Active,'') = '" + ddlFActive.SelectedValue + "'");
+
+        if (!string.IsNullOrEmpty(ddlFActivePdt.SelectedValue))
+            condiciones.Add("ISNULL(Active_Pdt,'') = '" + ddlFActivePdt.SelectedValue + "'");
+
+        if (condiciones.Count == 0) return dt;
+
+        DataView vista = new DataView(dt);
+        vista.RowFilter = string.Join(" AND ", condiciones.ToArray());
+        return vista.ToTable();
+    }
+
+    private void AgregarContiene(List<string> condiciones, string columna, string valor)
+    {
+        valor = (valor ?? "").Trim();
+        if (valor == "") return;
+        condiciones.Add("ISNULL(" + columna + ",'') LIKE '%" + EscaparRowFilter(valor) + "%'");
+    }
+
+    /// <summary>
+    /// Escapa los caracteres con significado especial en RowFilter de DataTable.
+    /// Se recorre caracter a caracter para no reescapar lo ya escapado.
+    /// </summary>
+    private static string EscaparRowFilter(string valor)
+    {
+        StringBuilder sb = new StringBuilder(valor.Length + 8);
+        foreach (char c in valor)
+        {
+            switch (c)
+            {
+                case '\'': sb.Append("''");  break;
+                case '[':  sb.Append("[[]"); break;
+                case ']':  sb.Append("[]]"); break;
+                case '%':  sb.Append("[%]"); break;
+                case '*':  sb.Append("[*]"); break;
+                default:   sb.Append(c);     break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Puebla un desplegable de filtro con los valores distintos que existen
+    /// de verdad en una columna, para no cablear la lista. Solo se ofrecen
+    /// opciones que devuelven al menos una fila.
+    /// </summary>
+    private void PoblarDesplegable(DropDownList ddl, string columna)
+    {
+        ddl.Items.Clear();
+        ddl.Items.Add(new ListItem("(Todos)", ""));
+
+        DataTable dt = this.Logins;
+        if (dt == null || !dt.Columns.Contains(columna)) return;
+
+        List<string> valores = new List<string>();
+        foreach (DataRow row in dt.Rows)
+        {
+            string v = row[columna] == DBNull.Value ? "" : row[columna].ToString().Trim();
+            if (v != "" && !valores.Contains(v)) valores.Add(v);
+        }
+        valores.Sort();
+        foreach (string v in valores) ddl.Items.Add(new ListItem(v, v));
+    }
+
+    protected void btnBuscar_Click(object sender, EventArgs e)
+    {
+        gridLogins.CurrentPageIndex = 0;
+        gridLogins.Rebind();
+    }
+
+    protected void btnLimpiar_Click(object sender, EventArgs e)
+    {
+        txtFLoginID.Text      = "";
+        txtFUserFullName.Text = "";
+        txtFNumPrints.Text    = "";
+        ddlFRole.SelectedIndex      = 0;
+        ddlFTypeWhs.SelectedIndex   = 0;
+        ddlFActive.SelectedIndex    = 0;
+        ddlFActivePdt.SelectedIndex = 0;
+
+        gridLogins.CurrentPageIndex = 0;
+        gridLogins.Rebind();
     }
 
     protected void gridLogins_UpdateCommand(object source, GridCommandEventArgs e)
@@ -93,7 +230,16 @@ public partial class LoginEdit : BasePage
         //Update new values
         Hashtable newValues = new Hashtable();
 
-        newValues["PassWd"] = (userControl.FindControl("txtPassWd") as TextBox).Text;
+        // El campo de contrasena es TextMode="Password" y no recibe el valor
+        // actual, asi que al editar llega vacio. Vacio significa "no cambiar":
+        // no se anade a newValues, y la fila conserva la contrasena que ya
+        // traia de la base de datos a traves de Session["Logins"].
+        // SIN esta comprobacion, cualquier edicion de otro campo borraria la
+        // contrasena del usuario y lo dejaria sin poder acceder.
+        string nuevaPass = (userControl.FindControl("txtPassWd") as TextBox).Text;
+        if (!string.IsNullOrEmpty(nuevaPass))
+            newValues["PassWd"] = nuevaPass;
+
         newValues["NumPrints"] = (userControl.FindControl("txtNumPrints") as TextBox).Text;
         newValues["TypeWhs"] = (userControl.FindControl("drpTypeWhs") as DropDownList).SelectedItem.Value;
         newValues["RoleID"] = (userControl.FindControl("drpRoles") as DropDownList).SelectedItem.Value;
@@ -140,8 +286,17 @@ public partial class LoginEdit : BasePage
         //Update new values
         Hashtable newValues = new Hashtable();
 
+        // Al crear no hay contrasena previa que conservar, asi que es obligatoria.
+        string nuevaPass = (userControl.FindControl("txtPassWd") as TextBox).Text;
+        if (string.IsNullOrEmpty(nuevaPass))
+        {
+            AddLabel("ERROR!  La contrasena es obligatoria al crear una credencial.");
+            e.Canceled = true;
+            return;
+        }
+
         newValues["LoginID"] = (userControl.FindControl("txtLoginID") as TextBox).Text;
-        newValues["PassWd"] = (userControl.FindControl("txtPassWd") as TextBox).Text;
+        newValues["PassWd"] = nuevaPass;
         newValues["UserID"] = (userControl.FindControl("drpUsers") as DropDownList).SelectedItem.Value;
         newValues["RoleID"] = (userControl.FindControl("drpRoles") as DropDownList).SelectedItem.Value;
         newValues["TypeWhs"] = (userControl.FindControl("drpTypeWhs") as DropDownList).SelectedItem.Value;

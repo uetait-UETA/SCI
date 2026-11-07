@@ -501,7 +501,10 @@ public class TransferRepository
                 FROM SMM_ODRF AS a WITH(NOLOCK)
                 INNER JOIN SMM_DRF1 AS b WITH(NOLOCK) ON a.DocEntry=b.DocEntry AND a.CompanyId=b.CompanyId
                 INNER JOIN {0}.dbo.OWHS AS f WITH(NOLOCK) ON b.WhsCode=f.WhsCode
-                LEFT JOIN  {0}.dbo.ITM1 AS e WITH(NOLOCK) ON b.ItemCode=e.ItemCode AND e.PriceList=1
+                LEFT JOIN  {0}.dbo.ITM1 AS e WITH(NOLOCK) ON b.ItemCode=e.ItemCode
+                    AND e.PriceList = ISNULL(
+                        (SELECT TOP 1 CASE ow.BPLId WHEN 4 THEN 2 ELSE 1 END
+                         FROM {0}.dbo.OWHS ow WITH(NOLOCK) WHERE ow.WhsCode = b.WhsCode), 1)
                 WHERE a.DocEntry={1} AND a.CompanyId='{0}'", companyId, docEntry);
 
             using (SqlCommand cmd = new SqlCommand(sqlLines, _db.Conn))

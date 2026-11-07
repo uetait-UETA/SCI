@@ -105,10 +105,13 @@ public partial class R_InventarioDeTiendasTocumen : BasePage
         {
             DataTable dtMarca = db.GetMarcas(AnyPourpuse.GetSelectedItems(rcbGrupo), sap_db);
 
+            rcbMarca.Items.Clear();
             rcbMarca.DataSource = dtMarca;
             rcbMarca.DataValueField = "u_Brand";
             rcbMarca.DataTextField = "u_Brand";
             rcbMarca.DataBind();
+            rcbMarca.Items.Insert(0, new RadComboBoxItem("All brands", "TODAS"));
+            rcbMarca.SelectedIndex = 0;
         }
         catch (Exception)
         {
@@ -140,7 +143,7 @@ public partial class R_InventarioDeTiendasTocumen : BasePage
         }
         else
         {
-            ShowMasterPageMessage("Error", "Failed to Get data", "Select Grupo & Marca");
+            ShowMasterPageMessage("Error", "Failed to Get data", "Select a group and a brand");
         }
     }
 

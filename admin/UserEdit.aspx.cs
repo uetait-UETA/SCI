@@ -4,6 +4,8 @@ using System.Web.UI;
 using System.Web.UI.WebControls;
 using Telerik.Web.UI;
 using System.Collections;
+using System.Collections.Generic;
+using System.Text;
 
 
 public partial class UserEdit : BasePage
@@ -66,11 +68,98 @@ public partial class UserEdit : BasePage
     protected void gridUsers_NeedDataSource(object sender, Telerik.Web.UI.GridNeedDataSourceEventArgs e)
     {
         DataTable dt = Admin.GetUsers();
-        gridUsers.DataSource = dt;
 
+        // IMPORTANTE: en la sesion se guarda la tabla COMPLETA, sin filtrar.
+        // Los flujos de edicion e insercion la usan para localizar la fila
+        // por UserId; si aqui se guardara la tabla filtrada, editar con un
+        // filtro puesto dejaria de encontrar el registro.
         this.Session["Users"] = dt;
         this.Users.PrimaryKey = new DataColumn[] { this.Users.Columns["UserID"] };
+
+        // A la rejilla solo se le entregan las filas que pasan el filtro.
+        DataTable filtrados = AplicarFiltro(dt);
+        gridUsers.DataSource = filtrados;
+
+        lblResultado.Text = (filtrados.Rows.Count == dt.Rows.Count)
+            ? string.Format("{0} registros", dt.Rows.Count)
+            : string.Format("{0} de {1} registros", filtrados.Rows.Count, dt.Rows.Count);
+
         gridUsers.MasterTableView.EditFormSettings.EditFormType = GridEditFormType.WebUserControl;
+    }
+
+    // ── Busqueda ────────────────────────────────────────────────────────────
+    // No se usa el filtrado nativo de Telerik (AllowFilteringByColumn y
+    // compania) porque altera el aspecto de la rejilla en esta aplicacion.
+    // En su lugar se filtra el DataTable antes de asignarlo.
+
+    private DataTable AplicarFiltro(DataTable dt)
+    {
+        List<string> condiciones = new List<string>();
+
+        AgregarContiene(condiciones, "FirstName",      txtFFirstName.Text);
+        AgregarContiene(condiciones, "OtherNames",     txtFOtherNames.Text);
+        AgregarContiene(condiciones, "LastName1",      txtFLastName1.Text);
+        AgregarContiene(condiciones, "LastName2",      txtFLastName2.Text);
+        AgregarContiene(condiciones, "AdditionalInfo", txtFAdditionalInfo.Text);
+
+        // Active llega como texto 'true'/'false' desde Admin.GetUsers()
+        string activo = ddlFActive.SelectedValue;
+        if (!string.IsNullOrEmpty(activo))
+            condiciones.Add("ISNULL(Active,'') = '" + activo + "'");
+
+        if (condiciones.Count == 0) return dt;
+
+        DataView vista = new DataView(dt);
+        vista.RowFilter = string.Join(" AND ", condiciones.ToArray());
+        return vista.ToTable();
+    }
+
+    private void AgregarContiene(List<string> condiciones, string columna, string valor)
+    {
+        valor = (valor ?? "").Trim();
+        if (valor == "") return;
+        condiciones.Add("ISNULL(" + columna + ",'') LIKE '%" + EscaparRowFilter(valor) + "%'");
+    }
+
+    /// <summary>
+    /// Escapa los caracteres con significado especial en RowFilter de DataTable.
+    /// Se recorre caracter a caracter para no reescapar lo ya escapado.
+    /// </summary>
+    private static string EscaparRowFilter(string valor)
+    {
+        StringBuilder sb = new StringBuilder(valor.Length + 8);
+        foreach (char c in valor)
+        {
+            switch (c)
+            {
+                case '\'': sb.Append("''");  break;
+                case '[':  sb.Append("[[]"); break;
+                case ']':  sb.Append("[]]"); break;
+                case '%':  sb.Append("[%]"); break;
+                case '*':  sb.Append("[*]"); break;
+                default:   sb.Append(c);     break;
+            }
+        }
+        return sb.ToString();
+    }
+
+    protected void btnBuscar_Click(object sender, EventArgs e)
+    {
+        gridUsers.CurrentPageIndex = 0;
+        gridUsers.Rebind();
+    }
+
+    protected void btnLimpiar_Click(object sender, EventArgs e)
+    {
+        txtFFirstName.Text      = "";
+        txtFOtherNames.Text     = "";
+        txtFLastName1.Text      = "";
+        txtFLastName2.Text      = "";
+        txtFAdditionalInfo.Text = "";
+        ddlFActive.SelectedIndex = 0;
+
+        gridUsers.CurrentPageIndex = 0;
+        gridUsers.Rebind();
     }
 
     protected void gridUsers_UpdateCommand(object source, GridCommandEventArgs e)

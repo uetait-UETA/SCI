@@ -47,6 +47,9 @@ public class Delivery
                     b.id AS sales_id,
 	                a.transnum,
                     b.TicketNo,
+                    LEFT(b.TicketNo, 3) AS TicketSite,
+                    SUBSTRING(b.TicketNo, 4, 3) AS TicketRegNo,
+                    SUBSTRING(b.TicketNo, 7, 50) AS TicketDfsNo,
 	                a.itemnum,
 	                (select TOP 1 bb.whsname
                         from dbo.ADR_TIENDAS_VW aa,
@@ -191,9 +194,10 @@ public class Delivery
         }
     }
 
-    public DataTable GetDeliveryErrorsItems(string companyId)
+    public DataTable GetDeliveryErrorsItems(string companyId, string filterMode = "PROBLEM", string itemFilter = null)
     {
         sap_db = companyId;
+        bool onlyProblems = filterMode != "ALL";
         DataTable dt = new DataTable();
         string sql = "";
 
@@ -204,36 +208,43 @@ public class Delivery
                 with ErrosDel as
 (
 select 
-                    OldBarCode=STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 with(nolock) WHERE a1.ItemCode=a.skunum FOR XML PATH ('')), 1, 3, ''),
-	                a.skunum,  
-                    NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1  with(nolock) WHERE a1.ItemCode=b.skunum FOR XML PATH ('')), 1, 3, '')),
+                    OldBarCode=STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1 with(nolock) WHERE a1.ItemCode = a.skunum COLLATE SQL_Latin1_General_CP850_CI_AS FOR XML PATH ('')), 1, 3, ''),
+	                a.skunum,
+                    NewBarCode=IIF(b.skunum=a.skunum, '', STUFF((SELECT ' - ' + RIGHT(BcdCode, 5) FROM " + sap_db + @".dbo.OBCD a1  with(nolock) WHERE a1.ItemCode = b.skunum COLLATE SQL_Latin1_General_CP850_CI_AS FOR XML PATH ('')), 1, 3, '')),
                     case when b.skunum = a.skunum then '' else b.skunum end new_sku,
                     [dbo].[InitCap] (case when d.itemcode is not null then d.itemname else a.pludesc end) description,
-	                a.qty sale_qty, 
+	                a.qty sale_qty,
                       isnull(c.onhand,0)  whs_qty,
-                    tt.WhsCode whs_code,
+                    ISNULL(b.WhsCode, tt.WhsCode) whs_code,
                     tt.STORENUM
 
                 from
 	                dbo.la_delivery_errors a  with(nolock)
-				inner join dbo.la_store_sales b  with(nolock)  on a.id = b.id
+				inner join dbo.la_store_sales b  with(nolock)  on a.transnum = b.transnum and a.itemnum = b.itemnum and a.storenum = b.storenum
 				outer apply (SELECT TOP 1 WHSCODE AS WhsCode, NUMSTORE AS STORENUM FROM ADR_TIENDA_SERIE with(nolock) WHERE NUMSERIE = b.NUMSERIE AND NUMSTORE = TRY_CAST(a.storenum AS INT) AND DUTYTYPE = ISNULL(b.DutyType,'DF')) tt
-				left outer join " + sap_db + @".dbo.oitw c  with(nolock)  on b.skunum = c.itemcode and c.WhsCode = tt.WhsCode COLLATE SQL_Latin1_General_CP850_CI_AS
+				left outer join " + sap_db + @".dbo.oitw c  with(nolock)  on b.skunum COLLATE DATABASE_DEFAULT = c.itemcode and c.WhsCode = ISNULL(b.WhsCode, tt.WhsCode) COLLATE SQL_Latin1_General_CP850_CI_AS
 				left outer join " + sap_db + @".dbo.oitm d  with(nolock)  on c.itemcode = d.itemcode
                 where
 	                ISNULL(b.DeliveryDocNum,-1) < 0
-                    and a.CompanyId =  '" + branchId + @"'" +
+                    and a.CompanyId =  '" + branchId + @"'
+                    and b.CompanyId =  '" + branchId + @"'" +
                     (string.IsNullOrEmpty(deeeItemCode) ? "" : @"
-                    and a.skunum <> '" + deeeItemCode + @"'") + @"
+                    and a.skunum <> '" + deeeItemCode + @"'") +
+                    (string.IsNullOrEmpty(itemFilter) ? "" : @"
+                    and a.skunum LIKE @ItemFilter") + @"
 			   )
 
 			   select OldBarCode,	skunum,	NewBarCode,	new_sku,	description,	sum(sale_qty) sale_qty,	sum(whs_qty) whs_qty,	whs_code,STORENUM
 			   from ErrosDel
-			   group by OldBarCode,	skunum,	NewBarCode,	new_sku,	description,	whs_code,STORENUM
+			   group by OldBarCode,	skunum,	NewBarCode,	new_sku,	description,	whs_code,STORENUM" +
+                    (onlyProblems ? @"
+			   having sum(whs_qty) < sum(sale_qty)" : "") + @"
                 ";
 
 
             db.adapter = new SqlDataAdapter(sql, db.Conn);
+            if (!string.IsNullOrEmpty(itemFilter))
+                db.adapter.SelectCommand.Parameters.AddWithValue("@ItemFilter", "%" + itemFilter.Trim() + "%");
             db.adapter.Fill(dt);
         }
         catch (Exception ex)

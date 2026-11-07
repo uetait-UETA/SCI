@@ -15,7 +15,7 @@ public partial class ProductLocator : BasePage
                     <div class=""row"" style=""margin-left:2px;"">Active Promos: {1}</div>
                 </div>";
     protected string lCurUser;
-    private int _ftSoh = 0, _ftReserved = 0, _ftSohAvail = 0;
+    private int _ftSoh = 0, _ftCommitted = 0, _ftReserved = 0, _ftSohAvail = 0;
     private int _ftLocalTransit = 0, _ftColonTransit = 0, _ftTotalTransit = 0;
     private int _ftNetInventory = 0, _ftMin = 0, _ftMax = 0;
     protected void Page_Load(object sender, EventArgs e)
@@ -282,6 +282,7 @@ public partial class ProductLocator : BasePage
         if (ItemList.SelectedValue != "-")
         {
             rtbItem.Text = ItemList.SelectedValue;
+            ClearStyleColorSize();
             ItemList.Visible = false;
             rbtnCancel.Visible = false;
             rbtnCancel1.Visible = false;
@@ -291,6 +292,15 @@ public partial class ProductLocator : BasePage
             GetData();
             BindGrid();
         }
+    }
+
+    // Once a search resolves to a specific item, clear the Style/Color/Size filters so
+    // they don't look like they're still part of the active search.
+    private void ClearStyleColorSize()
+    {
+        rtbStyle.Text = "";
+        rtbColor.Text = "";
+        rtbSize.Text  = "";
     }
 
     //2019-ABR-09: Agregado por Aldo Reina, para la búsqueda por código de barras:
@@ -314,14 +324,27 @@ public partial class ProductLocator : BasePage
         {
             // Always include the default branch (BPLId=1) plus the user's selected branch.
             string bplIds = bplId > 1 ? "1, " + bplId : "1";
+
+            // Warehouses hidden via Web.config "ProductLocatorExcludeWhs" (comma-separated codes).
+            string excludeWhsClause = "";
+            string excludeCfg = System.Configuration.ConfigurationManager.AppSettings["ProductLocatorExcludeWhs"] ?? "";
+            string excludeList = "";
+            foreach (string w in excludeCfg.Split(','))
+            {
+                string code = w.Trim();
+                if (code.Length == 0) continue;
+                excludeList += (excludeList.Length > 0 ? "," : "") + "'" + code.Replace("'", "''") + "'";
+            }
+            if (excludeList.Length > 0)
+                excludeWhsClause = "\nAND loc NOT IN (" + excludeList.Replace("{", "{{").Replace("}", "}}") + ")";
             //string sql = @"select loc, loc_name, category_name category, item, item_desc, soh, reserved, soh_avail, local_in_transit, colon_in_transit, total_in_transit, net_inventory, min, max 
             //from dfatocumen_stock_locator_vw where item = '{0}' 
             //order by loc_name";
 
             string sql = Queries.With_SmmReserved() + @"
-select loc, loc_name, pos_code, u_sap_store, item_type, category_name category, item, item_desc, soh, reserved, soh_avail, local_in_transit, colon_in_transit, total_in_transit, net_inventory, min, max
+select loc, loc_name, pos_code, u_sap_store, item_type, category_name category, item, item_desc, soh, committed, reserved, soh_avail, local_in_transit, colon_in_transit, total_in_transit, net_inventory, min, max
 from (
-    select '{0}' company, a.WhsCode loc, dbo.InitCap(c.WhsName) loc_name, ISNULL(c.U_POSCode, '') AS pos_code, ISNULL(c.U_SAP_Store, '') AS u_sap_store, c.BPLId, b.ItmsGrpCod category_id, dbo.InitCap(d.ItmsGrpNam) category_name, a.ItemCode item, dbo.InitCap(b.ItemName) item_desc, cast(a.OnHand as int)soh, cast(isnull(f.reserved,0) as int) reserved, cast(a.OnHand - isnull(f.reserved,0) as int) soh_avail, cast(isnull(e.in_transit,0) as int)local_in_transit, cast(isnull(g.Quantity,0) as int) colon_in_transit, cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) total_in_transit, cast(a.OnHand - isnull(f.reserved,0) as int) + cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) net_inventory, cast(isnull(h.Min_Qty,0) as int) min, cast(isnull(h.Max_qty,0) as int) max,
+    select '{0}' company, a.WhsCode loc, dbo.InitCap(c.WhsName) loc_name, ISNULL(c.U_POSCode, '') AS pos_code, ISNULL(c.U_SAP_Store, '') AS u_sap_store, c.BPLId, b.ItmsGrpCod category_id, dbo.InitCap(d.ItmsGrpNam) category_name, a.ItemCode item, dbo.InitCap(b.ItemName) item_desc, cast(a.OnHand as int)soh, cast(isnull(a.IsCommited,0) as int) committed,cast(isnull(f.reserved,0) as int) reserved, cast(a.OnHand - isnull(f.reserved,0) as int) soh_avail, cast(isnull(e.in_transit,0) as int)local_in_transit, cast(isnull(g.Quantity,0) as int) colon_in_transit, cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) total_in_transit, cast(a.OnHand - isnull(f.reserved,0) as int) + cast(isnull(e.in_transit,0) as int) + cast(isnull(g.Quantity,0) as int) net_inventory, cast(isnull(h.Min_Qty,0) as int) min, cast(isnull(h.Max_qty,0) as int) max,
         ISNULL(b.U_Type,'') AS item_type, ISNULL(c.U_Type,'') AS whs_type
     from {0}..oitw a " + Queries.WITH_NOLOCK + @"  join {0}..oitm b " + Queries.WITH_NOLOCK + @"  on a.itemCode = b.itemCode 
     join {0}..owhs c " + Queries.WITH_NOLOCK + @" on a.WhsCode = c.WhsCode 
@@ -364,7 +387,7 @@ from (
 ) T1
 where item = '{1}'
 AND loc IN (SELECT WhsCode FROM {0}..OWHS " + Queries.WITH_NOLOCK + @" WHERE BPLId IN (" + bplIds + @"))
-AND (item_type IN ('', 'NON SELL') OR item_type = whs_type)
+AND (item_type IN ('', 'NON SELL') OR item_type = whs_type)" + excludeWhsClause + @"
 order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
 
             sql = string.Format(sql, v_CompanyID, v_Item);
@@ -379,14 +402,108 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
     }
     protected void rbtnSearch_Click(object sender, EventArgs e)
     {
-        bool goToRebind;
         ulData.Visible = false;
-        goToRebind = ValidateByBarCode("", rtbItem.Text);
+
+        // If Item/Barcode is empty but any of Style/Color/Size was filled, search by
+        // those instead — they aren't a unique key, so this can land on a picker list
+        // just like the barcode/CSKU fallback in BindGrid() does.
+        if (string.IsNullOrWhiteSpace(rtbItem.Text) &&
+            (!string.IsNullOrWhiteSpace(rtbStyle.Text) || !string.IsNullOrWhiteSpace(rtbColor.Text) || !string.IsNullOrWhiteSpace(rtbSize.Text)))
+        {
+            string v_CompanyID = (string)Session["CompanyId"];
+            DataTable dtMatch = SearchByStyleColorSize(
+                rtbStyle.Text.Trim(), rtbColor.Text.Trim(), rtbSize.Text.Trim(), v_CompanyID);
+            HandleMultiItemResult(dtMatch, "No items found for the given Style/Color/Size.");
+            return;
+        }
+
+        bool goToRebind = ValidateByBarCode("", rtbItem.Text);
         if (goToRebind)
         {
             GetData();
             BindGrid();
         }
+    }
+
+    // Shared 0/1/many-matches branching, same UX as the barcode/CSKU fallback in
+    // BindGrid(): none found → message; exactly one → go straight to it; several →
+    // populate the ItemList picker.
+    private void HandleMultiItemResult(DataTable dtResult, string notFoundMessage)
+    {
+        bool isEn = !string.Equals((string)Session["Language"], "es", StringComparison.OrdinalIgnoreCase);
+        string selectItemText = isEn ? "SELECT ITEM" : "SELECCIONE ARTICULO";
+
+        if (dtResult.Rows.Count == 0)
+        {
+            ItemList.Visible = false;
+            rbtnCancel.Visible = false;
+            rgHead.Visible = false;
+            ShowMasterPageMessage("Standard", "No Data", notFoundMessage);
+        }
+        else if (dtResult.Rows.Count == 1)
+        {
+            rtbItem.Text = dtResult.Rows[0]["ItemCode"].ToString();
+            ClearStyleColorSize();
+            ItemList.Visible = false;
+            rbtnCancel.Visible = false;
+            GetData();
+            BindGrid();
+        }
+        else
+        {
+            DataRow dtRow = dtResult.NewRow();
+            dtRow["ItemCode"] = "-";
+            dtRow["ItemName"] = selectItemText;
+            dtResult.Rows.InsertAt(dtRow, 0);
+
+            ItemList.DataSource = dtResult;
+            ItemList.DataMember = "ItemCode";
+            ItemList.DataValueField = "ItemCode";
+            ItemList.DataTextField = "ItemName";
+            ItemList.DataBind();
+            ItemList.Visible = true;
+            ItemList.Width = 177;
+            ItemList.Focus();
+            ItemList.ToolTip = selectItemText;
+            rbtnCancel1.Visible = true;
+            rtbItem.Visible = false;
+            rbtnSearch.Enabled = false;
+        }
+    }
+
+    private DataTable SearchByStyleColorSize(string style, string color, string size, string companyId)
+    {
+        var dtResult = new DataTable();
+        var localDb = new SqlDb();
+        localDb.Connect();
+        try
+        {
+            string sql =
+                "SELECT ItemCode, " +
+                "LTRIM(RTRIM(ItemCode)) + ' | ' + LTRIM(RTRIM(ItemName)) " +
+                "+ ' | CSKU: '  + ISNULL(U_CSKU_ID,'') " +
+                "+ ' | Style: ' + ISNULL(U_VendorRefNum,'') " +
+                "+ ' | Color: ' + ISNULL(U_VendorColorDesc,'') " +
+                "+ ' | Size: '  + ISNULL(U_VendorSizeDesc,'') AS ItemName " +
+                "FROM " + companyId + "..OITM WITH(NOLOCK) WHERE 1=1" +
+                (string.IsNullOrEmpty(style) ? "" : " AND U_VendorRefNum   LIKE @style") +
+                (string.IsNullOrEmpty(color) ? "" : " AND U_VendorColorDesc LIKE @color") +
+                (string.IsNullOrEmpty(size)  ? "" : " AND U_VendorSizeDesc  LIKE @size");
+
+            using (var cmd = new SqlCommand(sql, localDb.Conn))
+            {
+                if (!string.IsNullOrEmpty(style)) cmd.Parameters.AddWithValue("@style", "%" + style + "%");
+                if (!string.IsNullOrEmpty(color)) cmd.Parameters.AddWithValue("@color", "%" + color + "%");
+                if (!string.IsNullOrEmpty(size))  cmd.Parameters.AddWithValue("@size",  "%" + size  + "%");
+                new SqlDataAdapter(cmd).Fill(dtResult);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMasterPageMessage("Error", "Failed to Get data", ex.Message);
+        }
+        finally { localDb.Disconnect(); }
+        return dtResult;
     }
 
     protected void rgHead_PageIndexChanged(object sender, GridPageChangedEventArgs e)
@@ -432,12 +549,31 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
             om.ItemCode AS CodigoSap,
             om.ItemName AS Description,
             ISNULL(om.U_Type,'') AS ItemType,
-            ISNULL(grp.ItmsGrpNam,'') AS ItmsGrpNam
+            ISNULL(grp.ItmsGrpNam,'') AS ItmsGrpNam,
+            ISNULL(om.U_CSKU_ID,'') AS Csku_ID,
+            ISNULL(om.U_VendorRefNum,'') AS Style,
+            ISNULL(om.U_VendorColorDesc,'') AS ColorDesc,
+            ISNULL(om.U_VendorSizeDesc,'') AS SizeDesc,
+            ISNULL(LEFT(om.U_Hierarchy, CHARINDEX(' - ', om.U_Hierarchy + ' - ') - 1), '') AS SubclassValue,
+            ISNULL(dcs.U_PRDCT_CLSS_NM,'') AS ClassValue,
+            ISNULL(om.U_HSCODE,'') AS HsCode,
+            ISNULL(org.Name,'') AS OriginName,
+            ISNULL(om.U_Bot, 0) AS UnitsPerCase,
+            ISNULL(pl.Price, 0) AS RetailPrice
         from {0}..OITM AS om " + Queries.WITH_NOLOCK + @"
         left join {0}..OITB AS grp " + Queries.WITH_NOLOCK + @" on grp.ItmsGrpCod = om.ItmsGrpCod
+        left join {0}..ITM1 AS pl " + Queries.WITH_NOLOCK + @" on pl.ItemCode = om.ItemCode and pl.PriceList = {2}
+        left join {0}..[@ORIGIN] AS org " + Queries.WITH_NOLOCK + @" on org.Code = om.U_Origin
+        left join {0}..[@DCS_HIERARCHY] AS dcs " + Queries.WITH_NOLOCK + @" on dcs.CODE = om.U_Hierarchy
         where om.itemcode = '{1}' ";
 
-            v_Sql = string.Format(v_Sql, v_CompanyID, v_Item);
+            // Retail price list by branch: 4 (SFO) → list 2 "SFO Retail Price";
+            // anything else, incl. 3 (LAX) → list 1 "LAX Retail Price".
+            int bplId = 0;
+            int.TryParse(Session["BranchId"] as string, out bplId);
+            int priceList = bplId == 4 ? 2 : 1;
+
+            v_Sql = string.Format(v_Sql, v_CompanyID, v_Item, priceList);
 
             db.Connect();
             db.adapter = new SqlDataAdapter(v_Sql, db.Conn);
@@ -450,6 +586,16 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
                 lblItemType.InnerHtml = dtData.Rows[0]["ItemType"].ToString();
                 lblItmsGrpNam.InnerHtml = dtData.Rows[0]["ItmsGrpNam"].ToString();
                 lblBarCode.InnerHtml = dtData.Rows[0]["Posibles_CodigoBarras"].ToString();
+                lblCskuId.InnerHtml = dtData.Rows[0]["Csku_Id"].ToString();
+                lblStyle.InnerHtml = dtData.Rows[0]["Style"].ToString();
+                lblColor.InnerHtml = dtData.Rows[0]["ColorDesc"].ToString();
+                lblSize.InnerHtml = dtData.Rows[0]["SizeDesc"].ToString();
+                lblClass.InnerHtml = dtData.Rows[0]["ClassValue"].ToString();
+                lblSubclass.InnerHtml = dtData.Rows[0]["SubclassValue"].ToString();
+                lblHsCode.InnerHtml = dtData.Rows[0]["HsCode"].ToString();
+                lblOrigin.InnerHtml = dtData.Rows[0]["OriginName"].ToString();
+                lblUnitsPerCase.InnerHtml = Convert.ToInt32(dtData.Rows[0]["UnitsPerCase"]).ToString();
+                lblRetailPrice.InnerHtml = Convert.ToDecimal(dtData.Rows[0]["RetailPrice"]).ToString("N2");
                 ulData.Visible = true;
             }
             else
@@ -572,6 +718,7 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
         {
             var drv = (DataRowView)e.Item.DataItem;
             _ftSoh          += Convert.ToInt32(drv["soh"]);
+            _ftCommitted    += Convert.ToInt32(drv["committed"]);
             _ftReserved     += Convert.ToInt32(drv["reserved"]);
             _ftSohAvail     += Convert.ToInt32(drv["soh_avail"]);
             _ftLocalTransit += Convert.ToInt32(drv["local_in_transit"]);
@@ -586,6 +733,7 @@ order by CASE WHEN BPLId = 1 THEN 0 ELSE 1 END, pos_code, loc_name";
             var footer = (GridFooterItem)e.Item;
             footer["pos_code"].Text         = "Total";
             footer["soh"].Text              = _ftSoh.ToString("N0");
+            footer["committed"].Text        = _ftCommitted.ToString("N0");
             footer["reserved"].Text         = _ftReserved.ToString("N0");
             footer["soh_avail"].Text        = _ftSohAvail.ToString("N0");
             footer["local_in_transit"].Text = _ftLocalTransit.ToString("N0");

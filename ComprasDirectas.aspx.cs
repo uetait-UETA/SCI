@@ -11,11 +11,16 @@ public partial class ComprasDirectas : BasePage
     private readonly GoodsReceipt _gr = new GoodsReceipt();
     private bool _allowReceive = false;
 
-    private static string CdDocType
+    private string CdDocType
     {
-        get { return System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH"; }
+        get
+        {
+            string s = Session["CdDocType"] as string;
+            if (!string.IsNullOrEmpty(s)) return s;
+            return System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH";
+        }
     }
-    private static int CdBaseType { get { return CdDocType == "OPOR" ? 22 : 18; } }
+    private int CdBaseType { get { return CdDocType == "OPOR" ? 22 : 18; } }
 
     protected void Page_Load(object sender, EventArgs e)
     {
@@ -52,6 +57,11 @@ public partial class ComprasDirectas : BasePage
             rdpFromDate.SelectedDate = DateTime.Today.AddMonths(-3);
             rdpToDate.SelectedDate   = DateTime.Today;
             LoadToLocations();
+
+            // Initialize doc type selector from Session (or appSettings default)
+            if (Session["CdDocType"] == null)
+                Session["CdDocType"] = System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH";
+            rblDocType.SelectedValue = (string)Session["CdDocType"];
         }
     }
 
@@ -94,6 +104,12 @@ public partial class ComprasDirectas : BasePage
                         row["WhsDisplay"].ToString(), row["WhsCode"].ToString()));
         }
         finally { db.Disconnect(); }
+    }
+
+    protected void rblDocType_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        Session["CdDocType"] = rblDocType.SelectedValue;
+        rgInvoices.Rebind();
     }
 
     protected void rbtnSearch_Click(object sender, EventArgs e)
@@ -186,7 +202,7 @@ public partial class ComprasDirectas : BasePage
         int    docEntry   = Convert.ToInt32(keys["DocEntry"]);
 
         // Safety check — do not re-receive an already received invoice
-        if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry))
+        if (_gr.IsAlreadyReceived((string)Session["CompanyId"], docEntry, CdBaseType))
         {
             ShowMessage("Warning", "Already Received",
                 "This invoice has already been received.");
@@ -203,9 +219,9 @@ public partial class ComprasDirectas : BasePage
         int bplId = (hdr != null && hdr["BPLId"] != DBNull.Value)
             ? Convert.ToInt32(hdr["BPLId"]) : BranchId;
 
-        // For OPOR: validate that U_ToWhsCode exists and belongs to the session branch
+        // Validate that U_ToWhsCode exists and belongs to the session branch
         string toWhsCode = hdr != null ? hdr["ToWhsCode"].ToString() : "";
-        if (CdDocType == "OPOR")
+        if (!string.IsNullOrEmpty(toWhsCode))
         {
             string whsErr;
             if (!_gr.IsWhsValidForBranch(sapDb, toWhsCode, BranchId, out whsErr))
@@ -219,7 +235,7 @@ public partial class ComprasDirectas : BasePage
         // Duty Paid items present → detail page for quantity entry
         if (_gr.HasDutyPaidLines(sapDb, docEntry, CdDocType))
         {
-            Response.Redirect("ComprasDirectasDetail.aspx?docEntry=" + docEntry, false);
+            Response.Redirect("ComprasDirectasDetail.aspx?docEntry=" + docEntry + "&docType=" + CdDocType, false);
             Context.ApplicationInstance.CompleteRequest();
             return;
         }
@@ -236,21 +252,11 @@ public partial class ComprasDirectas : BasePage
                 return;
             }
 
-            System.Collections.Generic.Dictionary<int, decimal> allQtys = null;
-            string payload;
-            if (CdDocType == "OPOR")
-            {
-                allQtys = new System.Collections.Generic.Dictionary<int, decimal>();
-                foreach (System.Data.DataRow r in dtLines.Rows)
-                    allQtys[Convert.ToInt32(r["LineNum"])] = Convert.ToDecimal(r["Quantity"]);
-                payload = _gr.BuildGrpoFromOpchWithQty(cardCode, bplId,
-                    docEntry, opchDocNum, dtLines, allQtys, baseType: CdBaseType);
-            }
-            else
-            {
-                payload = _gr.BuildGrpoFromOpch(cardCode, bplId,
-                    docEntry, opchDocNum, dtLines);
-            }
+            var allQtys = new System.Collections.Generic.Dictionary<int, decimal>();
+            foreach (System.Data.DataRow r in dtLines.Rows)
+                allQtys[Convert.ToInt32(r["LineNum"])] = Convert.ToDecimal(r["Quantity"]);
+            string payload = _gr.BuildGrpoFromOpchWithQty(cardCode, bplId,
+                docEntry, opchDocNum, dtLines, allQtys, baseType: CdBaseType);
 
             var sl = new SapServiceLayer();
             int grpoEntry = 0, grpoDocNum = 0;
@@ -273,8 +279,8 @@ public partial class ComprasDirectas : BasePage
                 string successMsg = "Goods Receipt PO #" + grpoDocNum + " created in SAP B1.";
                 bool   owtrFailed = false;
 
-                // For OPOR: create OWTR from receipt warehouse to U_ToWhsCode
-                if (CdDocType == "OPOR" && allQtys != null && !string.IsNullOrEmpty(toWhsCode))
+                // Create OWTR from receipt warehouse to U_ToWhsCode
+                if (allQtys != null && !string.IsNullOrEmpty(toWhsCode))
                 {
                     string fromWhs     = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
                     string destWhsType = _gr.GetWhsUType(sapDb, toWhsCode);

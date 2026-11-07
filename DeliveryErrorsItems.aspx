@@ -18,6 +18,23 @@
             <div class="col-md-12">
                 <asp:Panel ID="pnlHeader" runat="server" CssClass="Panel">
                     <label id="labelForm" runat="server" class="PanelHeading">Delivery Errors by Items</label>
+                    <div style="padding:6px 0 10px 4px;">
+                        <label class="myLabel">Show:</label>&nbsp;
+                        <asp:DropDownList ID="drpFilter" runat="server" AutoPostBack="true"
+                            OnSelectedIndexChanged="drpFilter_SelectedIndexChanged" CssClass="form-control"
+                            style="display:inline-block;width:220px;vertical-align:middle;">
+                            <asp:ListItem Value="PROBLEM" Text="Inventory Problem Only" />
+                            <asp:ListItem Value="ALL"     Text="All" />
+                        </asp:DropDownList>
+                        &nbsp;&nbsp;
+                        <label class="myLabel">Item Code:</label>&nbsp;
+                        <asp:TextBox ID="txtItemFilter" runat="server" CssClass="form-control"
+                            Width="150px" style="display:inline-block;vertical-align:middle;" />
+                        &nbsp;
+                        <asp:Button ID="btnItemFilter" runat="server" Text="Search" OnClick="btnItemFilter_Click" CausesValidation="false"
+                            style="font-weight:bold;padding:6px 18px;" />
+                        <asp:Button ID="btnClearItemFilter" runat="server" Text="Clear" OnClick="btnClearItemFilter_Click" CausesValidation="false" Visible="false" />
+                    </div>
                     <tel:RadGrid ID="rgHead" runat="server" Width="100%" ShowStatusBar="true" AutoGenerateColumns="False" MasterTableView-NoDetailRecordsText="No delivery errors found"
                         AllowSorting="true" AllowMultiRowSelection="False" AllowPaging="True" PageSize="15" DataSourceID="ObjectDataSource1" OnUpdateCommand="rgHead_UpdateCommand" Style="margin-left: 0px;">
                         <PagerStyle Mode="Slider"></PagerStyle>
@@ -67,6 +84,8 @@
     <asp:ObjectDataSource ID="ObjectDataSource1" runat="server" SelectMethod="GetDeliveryErrorsItems" TypeName="Delivery" UpdateMethod="UpdateDeliveryItemCode">
         <SelectParameters>
             <asp:ControlParameter ControlID="CompanyIdLabel" Name="CompanyId" PropertyName="Text" Type="String" />
+            <asp:ControlParameter ControlID="drpFilter" Name="filterMode" PropertyName="SelectedValue" Type="String" />
+            <asp:ControlParameter ControlID="txtItemFilter" Name="itemFilter" PropertyName="Text" Type="String" />
         </SelectParameters>
         <UpdateParameters>
             <asp:Parameter Name="skunum" Type="String" />

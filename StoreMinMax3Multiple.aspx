@@ -5,6 +5,10 @@
 <asp:Content ID="Content2" ContentPlaceHolderID="cphMain" runat="Server">
 
     <style>
+        div[id$="GridView1"] .rgHeader, div[id$="GridView1"] .rgHeader a {
+            text-decoration: none;
+        }
+
         .myLabelMedium, .myLabelSmall {
             padding-left: 5px;
         }
@@ -128,7 +132,7 @@
         <div class="row">&nbsp;</div>
         <div class="row">
             <div class="col-md-12">
-                <tel:RadGrid ID="GridView1" runat="server" Width="100%" ShowStatusBar="true" AutoGenerateColumns="False" HeaderStyle-Font-Underline="true"
+                <tel:RadGrid ID="GridView1" runat="server" Width="100%" ShowStatusBar="true" AutoGenerateColumns="False"
                     AllowSorting="true" AllowMultiRowSelection="False" AllowPaging="false" PageSize="15" CssClass="Panel"
                     DataSourceID="ObjectDataSource1">
                     <PagerStyle Mode="Slider"></PagerStyle>
@@ -147,6 +151,8 @@
                             </tel:GridTemplateColumn>
                             <tel:GridBoundColumn SortExpression="BarCode" HeaderText="Bar Code" HeaderButtonType="TextButton" DataField="BarCode" UniqueName="BarCode" HeaderStyle-Width="100px" />
                             <tel:GridBoundColumn SortExpression="ITEMNAME" HeaderText="Description" HeaderButtonType="TextButton" DataField="ITEMNAME" UniqueName="ITEMNAME" HeaderStyle-Width="400px" />
+                            <tel:GridBoundColumn SortExpression="UnitsPerCase" HeaderText="Case Pack" HeaderTooltip="Units Per Case (OITM.U_Bot)" HeaderButtonType="TextButton" DataField="UnitsPerCase" UniqueName="UnitsPerCase" DataFormatString="{0:N0}" HeaderStyle-Width="60px" />
+                            <tel:GridBoundColumn SortExpression="U_CSKU_ID" HeaderText="CSKU ID" HeaderButtonType="TextButton" DataField="U_CSKU_ID" UniqueName="U_CSKU_ID" HeaderStyle-Width="90px" />
                             <tel:GridBoundColumn SortExpression="CASE_PACK" HeaderText="Items per Box" HeaderButtonType="TextButton" DataField="CASE_PACK" UniqueName="CASE_PACK" Display="false" />
                             <tel:GridBoundColumn SortExpression="OnHand" HeaderText="OnHand" HeaderButtonType="TextButton" DataField="OnHand" UniqueName="OnHand" DataFormatString="{0:N0}" HeaderStyle-Width="58px" />
                             <tel:GridBoundColumn SortExpression="MIN_QTY" HeaderText="Minimum" HeaderButtonType="TextButton" DataField="MIN_QTY" UniqueName="MIN_QTY" DataFormatString="{0:N0}" HeaderStyle-Width="58px" />

@@ -81,49 +81,87 @@ public partial class TransferDelete : BasePage
 
     protected void DeleteBtn_Click(object sender, EventArgs e)
     {
-        //In order to get the current index code:
-
         GridViewRow gridViewRow = (GridViewRow)(sender as Control).Parent.Parent;
         int index = gridViewRow.RowIndex;
 
-        //In order to get the control code:
-
-        HiddenField lhdnDocEntry = (HiddenField)this.GridView1.Rows[index].FindControl("hdnDocEntry");   //row.FindControl("HiddenDocentry");
+        HiddenField lhdnDocEntry = (HiddenField)this.GridView1.Rows[index].FindControl("hdnDocEntry");
         string sDocEntry = lhdnDocEntry.Value;
+        int docEntryInt = Convert.ToInt32(sDocEntry);
 
-        
         db.Connect();
-
-        DataSet lDataSet = new DataSet();
-        //SqlCommand sqlCommand = new SqlCommand();
-
-        db.cmd.Parameters.Clear();
-        db.cmd.CommandText = "SMM_DELETE_DRAFT_TRANSFER";
-        db.cmd.CommandType = CommandType.StoredProcedure;
-
-        db.cmd.Parameters.Add(new SqlParameter("@iDocEntry", SqlDbType.Int));
-        db.cmd.Parameters["@iDocEntry"].Value = Convert.ToInt32(sDocEntry);
-
-        db.cmd.Parameters.Add(new SqlParameter("@UserDelete", SqlDbType.NVarChar));
-        db.cmd.Parameters["@UserDelete"].Value = appUserName;
-
-        db.cmd.Parameters.Add(new SqlParameter("@CompanyId", SqlDbType.NVarChar));
-        db.cmd.Parameters["@CompanyId"].Value = sap_db;
-
-        db.cmd.Connection = db.Conn;
-
         try
         {
+            // Check if draft is TIENDA→TIENDA and get its OWTQ DocEntryITR
+            int owtqDocEntry = 0;
+            bool isTiendaToTienda = false;
+            string sqlCheck = @"
+                SELECT
+                    ISNULL(o.DocEntryITR, 0) AS DocEntryITR,
+                    ISNULL(fw.TYPEWHS, '') AS FromWhsType,
+                    ISNULL(tw.TYPEWHS, '') AS ToWhsType
+                FROM smm_Transdiscrep_odrf o WITH(NOLOCK)
+                LEFT JOIN SMM_WHSTYPE fw WITH(NOLOCK)
+                    ON fw.WHSCODE = o.FromWhsCode AND fw.COMPANYID = @CompanyId
+                LEFT JOIN (
+                    SELECT TOP 1 d.DocEntry, d.CompanyId, d.ToWhsCode
+                    FROM smm_Transdiscrep_drf1 d WITH(NOLOCK)
+                    WHERE d.DocEntry = @DocEntry AND d.CompanyId = @CompanyId
+                ) AS firstLine ON firstLine.DocEntry = o.DocEntry AND firstLine.CompanyId = o.CompanyId
+                LEFT JOIN SMM_WHSTYPE tw WITH(NOLOCK)
+                    ON tw.WHSCODE = firstLine.ToWhsCode AND tw.COMPANYID = @CompanyId
+                WHERE o.DocEntry = @DocEntry AND o.CompanyId = @CompanyId";
+
+            using (var cmd = new SqlCommand(sqlCheck, db.Conn))
+            {
+                cmd.Parameters.AddWithValue("@DocEntry", docEntryInt);
+                cmd.Parameters.AddWithValue("@CompanyId", sap_db);
+                using (var reader = cmd.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        owtqDocEntry = Convert.ToInt32(reader["DocEntryITR"]);
+                        string fromType = reader["FromWhsType"].ToString();
+                        string toType   = reader["ToWhsType"].ToString();
+                        isTiendaToTienda = string.Equals(fromType, "TIENDA", StringComparison.OrdinalIgnoreCase)
+                                        && string.Equals(toType,   "TIENDA", StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+            }
+
+            // Cancel OWTQ in SAP B1 when TIENDA→TIENDA and an ITR exists
+            if (isTiendaToTienda && owtqDocEntry > 0)
+            {
+                var sl = new SapServiceLayer();
+                try
+                {
+                    sl.Login(sap_db);
+                    sl.CloseInventoryTransferRequest(owtqDocEntry);
+                }
+                catch (Exception slEx)
+                {
+                    db.Disconnect();
+                    Response.Write("Error canceling SAP Transfer Request (DocEntry=" + owtqDocEntry + "): " + slEx.Message);
+                    return;
+                }
+                finally
+                {
+                    sl.Logout();
+                }
+            }
+
+            db.cmd.Parameters.Clear();
+            db.cmd.CommandText = "SMM_DELETE_DRAFT_TRANSFER";
+            db.cmd.CommandType = CommandType.StoredProcedure;
+            db.cmd.Parameters.Add(new SqlParameter("@iDocEntry",  SqlDbType.Int))    .Value = docEntryInt;
+            db.cmd.Parameters.Add(new SqlParameter("@UserDelete", SqlDbType.NVarChar)).Value = appUserName;
+            db.cmd.Parameters.Add(new SqlParameter("@CompanyId",  SqlDbType.NVarChar)).Value = sap_db;
+            db.cmd.Connection = db.Conn;
+
             db.cmd.ExecuteNonQuery();
-            //Response.Write("<script>window.close()</script>");
-	        string message = "Order " + sDocEntry + " has been deleted.";
-	    	        string url = "/TransferDelete.aspx";
-	    	        string script = "{ alert('";
-	    	        script += message;
-	    	        script += "');";
-	    	        script += "window.location = '";
-	    	        script += url;
-	    	        script += "'; }";
+
+            string message = "Order " + sDocEntry + " has been deleted.";
+            string url     = "/TransferDelete.aspx";
+            string script  = "{ alert('" + message + "'); window.location = '" + url + "'; }";
             ScriptManager.RegisterStartupScript(this.Page, Page.GetType(), "alert", script, true);
         }
         catch (Exception ex)
@@ -137,7 +175,6 @@ public partial class TransferDelete : BasePage
         }
 
         GridView1.DataBind();
-
     }
 
     protected void lnkbDocEntry_Click(object sender, EventArgs e)

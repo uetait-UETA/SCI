@@ -881,4 +881,159 @@ public class Admin
 
         return Result;
     }
+
+    // ── Roles & Screen Access ─────────────────────────────────────────────────────
+
+    public static DataTable GetRoles()
+    {
+        SqlDb db = new SqlDb();
+        DataTable dt = new DataTable();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = @"
+                SELECT ROLEID, ROLE_NAME, ROLE_DESCRIPTION
+                FROM dbo.SISINV_ROLES
+                ORDER BY ROLE_DESCRIPTION";
+            db.adapter.SelectCommand = db.cmd;
+            db.adapter.Fill(dt);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.GetRoles.  MESSAGE :" + ex.Message);
+        }
+        finally { db.Disconnect(); }
+        return dt;
+    }
+
+    public static void UpdateRole(string roleId, string roleName, string roleDescription)
+    {
+        SqlDb db = new SqlDb();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = @"
+                UPDATE dbo.SISINV_ROLES
+                SET ROLE_NAME = @Name, ROLE_DESCRIPTION = @Desc
+                WHERE ROLEID = @Id";
+            db.cmd.Parameters.AddWithValue("@Name", roleName);
+            db.cmd.Parameters.AddWithValue("@Desc", roleDescription);
+            db.cmd.Parameters.AddWithValue("@Id", roleId);
+            db.cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.UpdateRole.  MESSAGE :" + ex.Message);
+        }
+        finally { db.Disconnect(); }
+    }
+
+    public static string CreateRole(string roleName, string roleDescription)
+    {
+        SqlDb db = new SqlDb();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = @"
+                SELECT ISNULL(MAX(TRY_CAST(ROLEID AS INT)), 0) + 1
+                FROM dbo.SISINV_ROLES WHERE ISNUMERIC(ROLEID) = 1";
+            object nextIdObj = db.cmd.ExecuteScalar();
+            string newId = Convert.ToInt32(nextIdObj).ToString();
+
+            db.cmd.Parameters.Clear();
+            db.cmd.CommandText = @"
+                INSERT INTO dbo.SISINV_ROLES (ROLEID, ROLE_NAME, ROLE_DESCRIPTION)
+                VALUES (@Id, @Name, @Desc)";
+            db.cmd.Parameters.AddWithValue("@Id", newId);
+            db.cmd.Parameters.AddWithValue("@Name", roleName);
+            db.cmd.Parameters.AddWithValue("@Desc", roleDescription);
+            db.cmd.ExecuteNonQuery();
+            return newId;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.CreateRole.  MESSAGE :" + ex.Message);
+        }
+        finally { db.Disconnect(); }
+    }
+
+    public static string CreateControl(string controlName, string controlDesc, string createdBy)
+    {
+        SqlDb db = new SqlDb();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = "SELECT COUNT(*) FROM dbo.SISINV_CONTROLS WHERE ControlName = @Name";
+            db.cmd.Parameters.AddWithValue("@Name", controlName);
+            if ((int)db.cmd.ExecuteScalar() > 0)
+                return "A screen with that name is already registered.";
+
+            db.cmd.Parameters.Clear();
+            db.cmd.CommandText = @"
+                INSERT INTO dbo.SISINV_CONTROLS (ControlName, ControlType, ControlDesc, Date_Created, Created_By)
+                VALUES (@Name, 'FORM', @Desc, GETDATE(), @CreatedBy)";
+            db.cmd.Parameters.AddWithValue("@Name", controlName);
+            db.cmd.Parameters.AddWithValue("@Desc", controlDesc);
+            db.cmd.Parameters.AddWithValue("@CreatedBy", createdBy ?? "");
+            db.cmd.ExecuteNonQuery();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.CreateControl.  MESSAGE :" + ex.Message);
+        }
+        finally { db.Disconnect(); }
+    }
+
+    public static DataTable GetControlsForRole(string roleId)
+    {
+        SqlDb db = new SqlDb();
+        DataTable dt = new DataTable();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = @"
+                SELECT c.ControlName, c.ControlDesc,
+                       ISNULL(rc.AccessType, 'N') AS AccessType
+                FROM dbo.SISINV_CONTROLS c
+                LEFT JOIN dbo.SISINV_ROLE_CONTROL rc
+                    ON rc.ControlName = c.ControlName AND rc.RoleID = @RoleId
+                ORDER BY c.ControlName";
+            db.cmd.Parameters.AddWithValue("@RoleId", roleId);
+            db.adapter.SelectCommand = db.cmd;
+            db.adapter.Fill(dt);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.GetControlsForRole.  MESSAGE :" + ex.Message);
+        }
+        finally { db.Disconnect(); }
+        return dt;
+    }
+
+    public static void SetRoleControlAccess(string roleId, string controlName, string accessType, string createdBy)
+    {
+        SqlDb db = new SqlDb();
+        try
+        {
+            db.Connect();
+            db.cmd.CommandText = @"
+                IF EXISTS (SELECT 1 FROM dbo.SISINV_ROLE_CONTROL WHERE RoleID = @RoleId AND ControlName = @ControlName)
+                    UPDATE dbo.SISINV_ROLE_CONTROL SET AccessType = @AccessType
+                    WHERE RoleID = @RoleId AND ControlName = @ControlName
+                ELSE
+                    INSERT INTO dbo.SISINV_ROLE_CONTROL (RoleID, ControlName, AccessType, Date_Created, Created_By)
+                    VALUES (@RoleId, @ControlName, @AccessType, GETDATE(), @CreatedBy)";
+            db.cmd.Parameters.AddWithValue("@RoleId", roleId);
+            db.cmd.Parameters.AddWithValue("@ControlName", controlName);
+            db.cmd.Parameters.AddWithValue("@AccessType", accessType);
+            db.cmd.Parameters.AddWithValue("@CreatedBy", createdBy ?? "");
+            db.cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            throw new Exception("Exception in function Admin.SetRoleControlAccess.  MESSAGE :" + ex.Message);
+        }
+        finally { db.Disconnect(); }
+    }
 }

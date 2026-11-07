@@ -15,11 +15,20 @@ public partial class ComprasDirectasDetail : BasePage
     private Dictionary<int, decimal>  _receivedQtyByLine    = null;
     private Dictionary<string, decimal> _excessQtyByItemCode = null;
 
-    private static string CdDocType
+    private string CdDocType
     {
-        get { return System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH"; }
+        get
+        {
+            // URL querystring takes priority (set by the Receive-button redirect from ComprasDirectas)
+            string qs = Request.QueryString["docType"];
+            if (!string.IsNullOrEmpty(qs)) return qs;
+            // Session set when user selects doc type in the list screen
+            string s = Session["CdDocType"] as string;
+            if (!string.IsNullOrEmpty(s)) return s;
+            return System.Configuration.ConfigurationManager.AppSettings["ComprasDirectasDocType"] ?? "OPCH";
+        }
     }
-    private static int CdBaseType { get { return CdDocType == "OPOR" ? 22 : 18; } }
+    private int CdBaseType { get { return CdDocType == "OPOR" ? 22 : 18; } }
 
     private int DocEntry
     {
@@ -61,18 +70,21 @@ public partial class ComprasDirectasDetail : BasePage
 
         _allowReceive = (accessType == "F");
 
-        // For OPOR: validate U_ToWhsCode exists and belongs to the session branch
-        if (CdDocType == "OPOR" && _allowReceive)
+        // Validate U_ToWhsCode belongs to the session branch (applies to both OPOR and OPCH)
+        if (_allowReceive)
         {
             var hdrCheck = _gr.GetApReserveInvoiceHeader((string)Session["CompanyId"], docEntry, CdDocType);
             string toWhsCheck = hdrCheck != null ? hdrCheck["ToWhsCode"].ToString() : "";
-            string whsErr;
-            if (!_gr.IsWhsValidForBranch((string)Session["CompanyId"], toWhsCheck, BranchId, out whsErr))
+            if (!string.IsNullOrEmpty(toWhsCheck))
             {
-                _allowReceive      = false;
-                btnConfirm.Enabled = false;
-                btnConfirm.Text    = "Invalid Destination";
-                ShowMessage("Error", "Invalid Destination Warehouse", whsErr);
+                string whsErr;
+                if (!_gr.IsWhsValidForBranch((string)Session["CompanyId"], toWhsCheck, BranchId, out whsErr))
+                {
+                    _allowReceive      = false;
+                    btnConfirm.Enabled = false;
+                    btnConfirm.Text    = "Invalid Destination";
+                    ShowMessage("Error", "Invalid Destination Warehouse", whsErr);
+                }
             }
         }
 
@@ -279,9 +291,9 @@ public partial class ComprasDirectasDetail : BasePage
             bool   owtrFailed = false;
 
             // Resolve transfer fields once (used for both main and excess OWTRs)
-            string toWhsCode   = CdDocType == "OPOR" ? header["ToWhsCode"].ToString() : "";
+            string toWhsCode   = header["ToWhsCode"].ToString();
             string fromWhs     = dtLines.Rows.Count > 0 ? dtLines.Rows[0]["WhsCode"].ToString() : "";
-            string destWhsType = CdDocType == "OPOR" ? _gr.GetWhsUType(sapDb, toWhsCode) : "";
+            string destWhsType = !string.IsNullOrEmpty(toWhsCode) ? _gr.GetWhsUType(sapDb, toWhsCode) : "";
 
             // Excess receipt (standalone, no base doc)
             if (excessQtys.Count > 0)
@@ -305,8 +317,8 @@ public partial class ComprasDirectasDetail : BasePage
 
                     successMsg += " Over-receipt: Goods Receipt PO #" + exDocNum + " also created.";
 
-                    // For OPOR: create OWTR for the excess quantities as well
-                    if (CdDocType == "OPOR" && !string.IsNullOrEmpty(toWhsCode))
+                    // Create OWTR for the excess quantities as well
+                    if (!string.IsNullOrEmpty(toWhsCode))
                     {
                         string exOwtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode,
                             dtLines, excessQtys,
@@ -345,8 +357,8 @@ public partial class ComprasDirectasDetail : BasePage
                 }
             }
 
-            // For OPOR: create OWTR for the main (capped) quantities
-            if (CdDocType == "OPOR" && !string.IsNullOrEmpty(toWhsCode))
+            // Create OWTR for the main (capped) quantities
+            if (!string.IsNullOrEmpty(toWhsCode))
             {
                 string owtrPayload = _gr.BuildOwtrPayload(bplId, fromWhs, toWhsCode, dtLines, cappedQtys,
                     receiveUser: userId, destWhsType: destWhsType, sourceDocNum: opchDocNum);

@@ -99,7 +99,13 @@ public class Queries
 	FROM smm_Transdiscrep_odrf a " + WITH_NOLOCK + @" 
 	WHERE a.CompanyId = '{0}' AND a.DocEntry = {1}
 ), TransdiscrepODRF2 AS (
-	SELECT a.CompanyId AS CompanyId, a.DocEntry, a.DocDate, a.DocStatus, a.FromWhsCode AS FromLoc, b.ToWhsCode AS ToLoc, b.LineNum AS LineNumber, c.ItmsGrpCod AS DeptCode, f.ItmsGrpNam AS DeptName, b.ItemCode, b.ItemName, b.DraftQuantity AS Qty, a.DocNum, -1 AS TargetType, b.DraftQuantity, d.WhsName AS ToLocName, e.WhsName AS FromLocName, f.ItmsGrpNam AS Category, f.ItmsGrpCod, c.U_BOT
+	-- Cantidad efectiva: una vez despachado el documento manda DispatchQuantity,
+	-- no DraftQuantity. Si el DC encontro 4 de las 6 pedidas, el papel debe decir 4.
+	-- Se aplica a las DOS columnas a proposito:
+	--   Qty           -> lo que se imprime en cada linea
+	--   DraftQuantity -> lo que suma SmmDraftHeader para el total del pie
+	-- Si solo se cambiara Qty, el total dejaria de cuadrar con las lineas.
+	SELECT a.CompanyId AS CompanyId, a.DocEntry, a.DocDate, a.DocStatus, a.FromWhsCode AS FromLoc, b.ToWhsCode AS ToLoc, b.LineNum AS LineNumber, c.ItmsGrpCod AS DeptCode, f.ItmsGrpNam AS DeptName, b.ItemCode, b.ItemName, CASE WHEN ISNULL(a.dispatched,'N') = 'Y' THEN ISNULL(b.DispatchQuantity, b.DraftQuantity) ELSE b.DraftQuantity END AS Qty, a.DocNum, -1 AS TargetType, CASE WHEN ISNULL(a.dispatched,'N') = 'Y' THEN ISNULL(b.DispatchQuantity, b.DraftQuantity) ELSE b.DraftQuantity END AS DraftQuantity, d.WhsName AS ToLocName, e.WhsName AS FromLocName, f.ItmsGrpNam AS Category, f.ItmsGrpCod, c.U_BOT
 	FROM TransdiscrepODRF AS a " + WITH_NOLOCK + @" 
     INNER JOIN smm_Transdiscrep_drf1 AS b " + WITH_NOLOCK + @" ON a.DocEntry = b.DocEntry AND a.CompanyId = b.CompanyId 
     INNER JOIN {0}.dbo.OITM AS c " + WITH_NOLOCK + @" ON b.ItemCode = c.ItemCode 
@@ -173,16 +179,28 @@ public class Queries
     WHERE NOT EXISTS (select 1 from SmmODRF b " + WITH_NOLOCK + @" where a.DocEntry = b.DocEntry)
     GROUP BY a.CompanyId, a.DocEntry, a.DocDate, a.DocStatus, a.ToLoc, a.FromLoc, a.ToLocName, a.FromLocName, a.Category, a.ItmsGrpCod
 ), SmmDraftDetail AS (
-    SELECT t1.CompanyId, t1.DocEntry, t1.DocDate, t1.FromLoc, t1.ToLoc, t1.LineNumber, t1.DeptCode, t1.DeptName, t1.ItemCode, t1.Dscription, t1.Qty, t1.DocNum, t1.DocStatus, t1.TargetType, e.Price, t1.ToLocName, t1.FromLocName, t1.U_BOT
+    SELECT t1.CompanyId, t1.DocEntry, t1.DocDate, t1.FromLoc, t1.ToLoc, t1.LineNumber, t1.DeptCode, t1.DeptName, t1.ItemCode, t1.Dscription, t1.Qty, t1.DocNum, t1.DocStatus, t1.TargetType, ISNULL(e.Price, 0) AS Price, t1.ToLocName, t1.FromLocName, t1.U_BOT
     FROM (
         SELECT a.CompanyId, a.DocEntry, a.DocDate, a.FromLoc, a.ToLoc, a.LineNumber, a.DeptCode, a.DeptName, a.ItemCode, a.Dscription, a.Qty, a.DocNum, a.DocStatus, a.TargetType, a.ToLocName, a.FromLocName, a.U_BOT
         FROM SmmODRF2 a
+        -- Si el documento ya paso a la tabla de discrepancias, esa es la unica
+        -- fuente valida: es la que lleva el estado real del despacho. Sin este
+        -- filtro el UNION devolvia DOS filas por articulo (una con la cantidad
+        -- del borrador y otra con la de discrepancias) y el informe duplicaba
+        -- todas las lineas. Es la misma condicion que SmmDraftHeader ya aplica
+        -- mas arriba; faltaba aqui, por eso el total del pie si cuadraba y el
+        -- detalle no.
+        WHERE NOT EXISTS (SELECT 1 FROM TransdiscrepODRF b
+                          WHERE b.DocEntry = a.DocEntry AND b.CompanyId = a.CompanyId)
         UNION
         SELECT a.CompanyId, a.DocEntry, a.DocDate, a.FromLoc, a.ToLoc, a.LineNumber, a.DeptCode, a.DeptName, a.ItemCode, a.ItemName AS Dscription, a.Qty, a.DocNum, a.DocStatus, a.TargetType, a.ToLocName, a.FromLocName, a.U_BOT
         FROM TransdiscrepODRF2 a
     ) t1
-    INNER JOIN {0}.dbo.ITM1 AS e " + WITH_NOLOCK + @" ON t1.ItemCode = e.ItemCode AND e.PriceList = 1
-    WHERE t1.CompanyId = '{0}' AND t1.DocEntry = {1} 
+    LEFT JOIN {0}.dbo.ITM1 AS e " + WITH_NOLOCK + @" ON t1.ItemCode = e.ItemCode
+        AND e.PriceList = ISNULL(
+            (SELECT TOP 1 CASE ow.BPLId WHEN 4 THEN 2 ELSE 1 END
+             FROM {0}.dbo.OWHS ow " + WITH_NOLOCK + @" WHERE ow.WhsCode = t1.ToLoc), 1)
+    WHERE t1.CompanyId = '{0}' AND t1.DocEntry = {1}
 )";
     }
 

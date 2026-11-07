@@ -259,15 +259,20 @@ select docstatus from SmmDraftHeader where docentry = {1}";
 
     protected void GridView2_DataBound(object sender, EventArgs e)
     {
-        bool isDutyPaid = string.Equals(GetFromWhsType(), "Duty Paid", StringComparison.OrdinalIgnoreCase);
+        string fromWhsUType = GetFromWhsType();
+        bool isDutyPaid = string.Equals(fromWhsUType, "Duty Paid", StringComparison.OrdinalIgnoreCase);
+        bool isDutyFree = string.Equals(fromWhsUType, "Duty Free", StringComparison.OrdinalIgnoreCase);
 
         string lvDispatched = GridView1.Rows.Count > 0 ? GridView1.Rows[0].Cells[6].Text : "Y";
         bool isDispatch = lvDispatched == "N";
         string fromSmType = isDispatch ? GetFromWhsSmType() : "";
-        // Dispatch: editable only for Duty Paid origin (Duty Free must dispatch full draft qty)
-        bool isDispatchEditable = isDispatch && isDutyPaid && (
-            string.Equals(fromSmType, "TIENDA", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(fromSmType, "BODEGA", StringComparison.OrdinalIgnoreCase)
+        bool isTienda = string.Equals(fromSmType, "TIENDA", StringComparison.OrdinalIgnoreCase);
+        bool isBodega = string.Equals(fromSmType, "BODEGA", StringComparison.OrdinalIgnoreCase);
+        // Dispatch: editable for Duty Paid (TIENDA or BODEGA origin) and for Duty Free TIENDA→TIENDA.
+        // Duty Free shortage produces no research document; Duty Paid shortage creates OWTR to research whs.
+        bool isDispatchEditable = isDispatch && (
+            (isDutyPaid && (isTienda || isBodega)) ||
+            (isDutyFree && isTienda)
         );
         // Receive: editable only for Duty Paid origin
         bool isReceiveEditable = !isDispatch && isDutyPaid;
