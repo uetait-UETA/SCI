@@ -140,6 +140,8 @@
                                     <asp:Label ID="lblTipo" runat="server" />
                                 </ItemTemplate>
                             </tel:GridTemplateColumn>
+                            <tel:GridBoundColumn SortExpression="TransType" HeaderText="DF/DP" HeaderButtonType="TextButton"
+                                DataField="TransType" UniqueName="TransType" HeaderStyle-Width="55px" />
                             <tel:GridBoundColumn SortExpression="ItemCount" HeaderText="Items" HeaderButtonType="TextButton"
                                 DataField="ItemCount" UniqueName="ItemCount" HeaderStyle-Width="60px" DataFormatString="{0:N0}" />
                             <tel:GridBoundColumn SortExpression="InvoiceTotal" HeaderText="Total (SAP)" HeaderButtonType="TextButton"
@@ -245,6 +247,8 @@
                                 DataField="CardCode" UniqueName="CardCode" HeaderStyle-Width="100px" />
                             <tel:GridBoundColumn SortExpression="FechaDoc" HeaderText="Date" HeaderButtonType="TextButton"
                                 DataField="FechaDoc" UniqueName="FechaDoc" HeaderStyle-Width="90px" DataFormatString="{0:MM/dd/yyyy}" />
+                            <tel:GridBoundColumn SortExpression="TransType" HeaderText="DF/DP" HeaderButtonType="TextButton"
+                                DataField="TransType" UniqueName="TransType" HeaderStyle-Width="55px" />
                             <tel:GridBoundColumn SortExpression="RequestedBy" HeaderText="Requested By" HeaderButtonType="TextButton"
                                 DataField="RequestedBy" UniqueName="RequestedBy" HeaderStyle-Width="110px" />
                             <tel:GridBoundColumn SortExpression="RequestedAt" HeaderText="Requested At" HeaderButtonType="TextButton"
