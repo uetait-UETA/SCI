@@ -507,7 +507,12 @@ public partial class sapInventory : BasePage
                         tab = "";
                         for (i = 0; i < dt.Columns.Count; i++)
                         {
-                            Response.Write(tab + dr[i].ToString());
+                            // Cells[].Text viene codificado en HTML (&amp;, &nbsp;): decodificar para Excel
+                            string val = Server.HtmlDecode(dr[i].ToString()).Replace((char)160, ' ').Trim();
+                            // Bar Code: forzar texto para que Excel no lo muestre en notacion cientifica (8.0588E+12)
+                            if (dt.Columns[i].ColumnName == "Bar Code" && val != "")
+                                val = "=\"" + val.Replace("\"", "\"\"") + "\"";
+                            Response.Write(tab + val);
                             tab = "\t";
                         }
                         Response.Write("\n");
